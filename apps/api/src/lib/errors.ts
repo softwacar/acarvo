@@ -5,6 +5,8 @@ export class AppError extends Error {
     readonly code: string,
     message: string,
     readonly fields?: Record<string, string>,
+    /** Extra machine-readable context, e.g. the conflicting record. */
+    readonly details?: unknown,
   ) {
     super(message)
   }

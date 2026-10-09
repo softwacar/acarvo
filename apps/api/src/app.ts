@@ -5,6 +5,7 @@ import type { Env } from './env'
 import { authRoutes } from './modules/auth/routes'
 import { sessionStore } from './modules/auth/sessions'
 import { branchRoutes } from './modules/branches/routes'
+import { vehicleClassRoutes, vehicleRoutes } from './modules/vehicles/routes'
 import { registerAuth } from './plugins/auth'
 import { registerSecurity } from './plugins/security'
 
@@ -23,5 +24,7 @@ export async function buildApp({ env, database, logger = true }: { env: Env; dat
   })
   await app.register(authRoutes, { prefix: '/api/auth' })
   await app.register(branchRoutes, { prefix: '/api/branches' })
+  await app.register(vehicleRoutes, { prefix: '/api/vehicles' })
+  await app.register(vehicleClassRoutes, { prefix: '/api/vehicle-classes' })
   return app
 }

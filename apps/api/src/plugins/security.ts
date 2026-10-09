@@ -45,7 +45,7 @@ export async function registerSecurity(app: FastifyInstance, env: Env) {
 
   app.setErrorHandler((err: FastifyError | AppError | ZodError, req, reply) => {
     if (err instanceof AppError) {
-      return reply.code(err.status).send({ error: { code: err.code, message: err.message, fields: err.fields } })
+      return reply.code(err.status).send({ error: { code: err.code, message: err.message, fields: err.fields, details: err.details } })
     }
     if (err instanceof ZodError) {
       const fields = Object.fromEntries(err.issues.map((i) => [i.path.join('.'), i.message]))

@@ -5,6 +5,7 @@ import { drizzle } from 'drizzle-orm/node-postgres'
 import type { FastifyInstance } from 'fastify'
 import pg from 'pg'
 import { loadDevData } from '../seed/dev-data'
+import { ensureDevFleet } from '../seed/dev-fleet'
 import { buildApp } from '../src/app'
 import { createDatabase } from '../src/db/client'
 import * as schema from '../src/db/schema'
@@ -52,9 +53,11 @@ export async function resetDatabase(): Promise<DevData> {
   await ensureTestDatabase()
   passwordHash ??= await hash(PASSWORD, ARGON2_OPTIONS)
   await ownerDb.execute(
-    sql`truncate audit_log, membership_branches, membership_roles, memberships, roles, branches, sessions, users, companies restart identity cascade`,
+    sql`truncate vehicle_location_events, odometer_readings, vehicles, vehicle_classes, audit_log, membership_branches, membership_roles, memberships, roles, branches, sessions, users, companies restart identity cascade`,
   )
-  return loadDevData(ownerDb, passwordHash)
+  const data = await loadDevData(ownerDb, passwordHash)
+  await ensureDevFleet(ownerDb)
+  return data
 }
 
 /** Runs SQL as the owner inside a company context (RLS is forced for the owner too). */
@@ -109,12 +112,12 @@ export class Client {
     private origin = env.WEB_ORIGIN,
   ) {}
 
-  async request(method: 'GET' | 'POST', url: string, body?: unknown, headers: Record<string, string> = {}) {
+  async request(method: 'GET' | 'POST' | 'PUT', url: string, body?: unknown, headers: Record<string, string> = {}) {
     const res = await this.app.inject({
       method,
       url,
-      payload: method === 'POST' ? (body ?? {}) : undefined,
-      headers: { origin: this.origin, ...(method === 'POST' && this.csrf ? { 'x-csrf-token': this.csrf } : {}), ...headers },
+      payload: method === 'GET' ? undefined : (body ?? {}),
+      headers: { origin: this.origin, ...(method !== 'GET' && this.csrf ? { 'x-csrf-token': this.csrf } : {}), ...headers },
       cookies: Object.fromEntries(this.jar),
     })
     const raw = res.headers['set-cookie']
@@ -128,6 +131,7 @@ export class Client {
 
   get = (url: string) => this.request('GET', url)
   post = (url: string, body?: unknown, headers?: Record<string, string>) => this.request('POST', url, body, headers)
+  put = (url: string, body?: unknown) => this.request('PUT', url, body)
 
   async prepare() {
     this.csrf = (await this.get('/api/auth/csrf')).json().token

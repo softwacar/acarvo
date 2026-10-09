@@ -1,8 +1,12 @@
 import { sql } from 'drizzle-orm'
 import {
+  bigint,
+  check,
+  date,
   foreignKey,
   index,
   inet,
+  integer,
   jsonb,
   pgTable,
   primaryKey,
@@ -146,4 +150,123 @@ export const auditLog = pgTable(
     createdAt: createdAt(),
   },
   (t) => [index('audit_company_created_idx').on(t.companyId, t.createdAt)],
+)
+
+// ---------------------------------------------------------------------------
+// Vehicles module (spec §13, §59BL, §59BM, §59U). Vehicles are never hard-deleted;
+// current odometer and physical location are derived from append-only event tables.
+
+export const vehicleClasses = pgTable(
+  'vehicle_classes',
+  {
+    id: id(),
+    companyId: uuid('company_id').notNull().references(() => companies.id),
+    name: text('name').notNull(),
+    sortOrder: integer('sort_order').notNull().default(0),
+    createdAt: createdAt(),
+  },
+  (t) => [unique('vehicle_classes_company_name_key').on(t.companyId, t.name), unique('vehicle_classes_company_id_key').on(t.companyId, t.id)],
+)
+
+export const FUEL_TYPES = ['petrol', 'diesel', 'hybrid', 'plug_in_hybrid', 'electric', 'lpg'] as const
+export const TRANSMISSIONS = ['manual', 'automatic'] as const
+export const VEHICLE_SOURCES = ['internal', 'external'] as const
+export const VEHICLE_STATUSES = ['active', 'out_of_service', 'sold', 'disposed'] as const
+export const ACQUISITION_TYPES = ['purchase', 'lease', 'long_term_rent', 'other'] as const
+
+export const vehicles = pgTable(
+  'vehicles',
+  {
+    id: id(),
+    companyId: uuid('company_id').notNull().references(() => companies.id),
+    plate: text('plate').notNull(),
+    plateNormalized: text('plate_normalized').notNull(),
+    vehicleCode: text('vehicle_code'),
+    make: text('make').notNull(),
+    model: text('model').notNull(),
+    trim: text('trim'),
+    modelYear: integer('model_year'),
+    classId: uuid('class_id').notNull(),
+    color: text('color'),
+    vin: text('vin'),
+    fuelType: text('fuel_type', { enum: FUEL_TYPES }).notNull(),
+    transmission: text('transmission', { enum: TRANSMISSIONS }).notNull(),
+    seats: integer('seats'),
+    source: text('source', { enum: VEHICLE_SOURCES }).notNull().default('internal'),
+    homeBranchId: uuid('home_branch_id').notNull(),
+    status: text('status', { enum: VEHICLE_STATUSES }).notNull().default('active'),
+    acquisitionType: text('acquisition_type', { enum: ACQUISITION_TYPES }),
+    acquisitionDate: date('acquisition_date'),
+    acquisitionSeller: text('acquisition_seller'),
+    acquisitionCostMinor: bigint('acquisition_cost_minor', { mode: 'number' }),
+    acquisitionCurrency: text('acquisition_currency'),
+    acquisitionReference: text('acquisition_reference'),
+    notes: text('notes'),
+    version: integer('version').notNull().default(1),
+    createdAt: createdAt(),
+    createdBy: uuid('created_by').references(() => users.id),
+    updatedAt: updatedAt(),
+    updatedBy: uuid('updated_by').references(() => users.id),
+  },
+  (t) => [
+    unique('vehicles_company_id_key').on(t.companyId, t.id),
+    unique('vehicles_company_plate_key').on(t.companyId, t.plateNormalized),
+    uniqueIndex('vehicles_company_code_key').on(t.companyId, sql`lower(${t.vehicleCode})`).where(sql`${t.vehicleCode} is not null`),
+    index('vehicles_company_branch_idx').on(t.companyId, t.homeBranchId),
+    foreignKey({ columns: [t.companyId, t.classId], foreignColumns: [vehicleClasses.companyId, vehicleClasses.id] }),
+    foreignKey({ columns: [t.companyId, t.homeBranchId], foreignColumns: [branches.companyId, branches.id] }),
+    check('vehicles_model_year_check', sql`${t.modelYear} is null or ${t.modelYear} between 1950 and 2100`),
+    check('vehicles_seats_check', sql`${t.seats} is null or ${t.seats} between 1 and 99`),
+    check('vehicles_cost_check', sql`(${t.acquisitionCostMinor} is null) = (${t.acquisitionCurrency} is null) and (${t.acquisitionCostMinor} is null or ${t.acquisitionCostMinor} >= 0)`),
+    check('vehicles_currency_check', sql`${t.acquisitionCurrency} is null or ${t.acquisitionCurrency} ~ '^[A-Z]{3}$'`),
+    check('vehicles_version_check', sql`${t.version} >= 1`),
+  ],
+)
+
+export const ODOMETER_EVENTS = ['initial', 'correction'] as const
+
+/** Append-only. The latest reading (by time) is the vehicle's current odometer. */
+export const odometerReadings = pgTable(
+  'odometer_readings',
+  {
+    id: id(),
+    companyId: uuid('company_id').notNull().references(() => companies.id),
+    vehicleId: uuid('vehicle_id').notNull(),
+    km: integer('km').notNull(),
+    eventType: text('event_type', { enum: ODOMETER_EVENTS }).notNull(),
+    occurredAt: timestamp('occurred_at', { withTimezone: true }).notNull(),
+    note: text('note'),
+    recordedBy: uuid('recorded_by').references(() => users.id),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    index('odometer_vehicle_time_idx').on(t.companyId, t.vehicleId, t.occurredAt),
+    foreignKey({ columns: [t.companyId, t.vehicleId], foreignColumns: [vehicles.companyId, vehicles.id] }),
+    check('odometer_km_check', sql`${t.km} between 0 and 3000000`),
+  ],
+)
+
+export const LOCATION_TYPES = ['branch', 'in_transit', 'with_customer', 'service_provider', 'supplier'] as const
+
+/** Append-only physical location history. Not live GPS. */
+export const vehicleLocationEvents = pgTable(
+  'vehicle_location_events',
+  {
+    id: id(),
+    companyId: uuid('company_id').notNull().references(() => companies.id),
+    vehicleId: uuid('vehicle_id').notNull(),
+    locationType: text('location_type', { enum: LOCATION_TYPES }).notNull(),
+    branchId: uuid('branch_id'),
+    description: text('description'),
+    eventType: text('event_type').notNull(),
+    occurredAt: timestamp('occurred_at', { withTimezone: true }).notNull(),
+    recordedBy: uuid('recorded_by').references(() => users.id),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    index('location_vehicle_time_idx').on(t.companyId, t.vehicleId, t.occurredAt),
+    foreignKey({ columns: [t.companyId, t.vehicleId], foreignColumns: [vehicles.companyId, vehicles.id] }),
+    foreignKey({ columns: [t.companyId, t.branchId], foreignColumns: [branches.companyId, branches.id] }),
+    check('location_branch_check', sql`${t.locationType} <> 'branch' or ${t.branchId} is not null`),
+  ],
 )

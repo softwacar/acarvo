@@ -44,5 +44,7 @@ export interface SessionInfo {
 }
 
 export interface ApiError {
-  error: { code: string; message: string; fields?: Record<string, string> }
+  error: { code: string; message: string; fields?: Record<string, string>; details?: unknown }
 }
+
+export * from './vehicles'

@@ -15,6 +15,20 @@
       "when": 1791565073850,
       "tag": "0001_rls",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1791572553817,
+      "tag": "0002_vehicles",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1791572555833,
+      "tag": "0003_vehicles_rls",
+      "breakpoints": true
     }
   ]
 }

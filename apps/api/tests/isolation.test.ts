@@ -41,7 +41,18 @@ describe('runtime database role', () => {
         and exists (select 1 from information_schema.columns col
                     where col.table_schema = 'public' and col.table_name = c.relname and col.column_name = 'company_id')
       order by 1`)
-    expect(rows.map((r) => r.table)).toEqual(['audit_log', 'branches', 'membership_branches', 'membership_roles', 'memberships', 'roles'])
+    expect(rows.map((r) => r.table)).toEqual([
+      'audit_log',
+      'branches',
+      'membership_branches',
+      'membership_roles',
+      'memberships',
+      'odometer_readings',
+      'roles',
+      'vehicle_classes',
+      'vehicle_location_events',
+      'vehicles',
+    ])
     for (const r of rows) {
       expect(r, r.table).toMatchObject({ enabled: true, forced: true, cmds: ['DELETE', 'INSERT', 'SELECT', 'UPDATE'] })
     }
