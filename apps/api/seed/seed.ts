@@ -4,6 +4,7 @@ import pg from 'pg'
 import * as s from '../src/db/schema'
 import { ARGON2_OPTIONS } from '../src/modules/auth/password'
 import { loadDevData } from './dev-data'
+import { ensureDevDocumentSettings } from './dev-documents'
 import { ensureDevFleet } from './dev-fleet'
 
 /**
@@ -28,4 +29,6 @@ if (existing.length) {
 }
 const fleet = await ensureDevFleet(db)
 console.log(fleet.length ? `Added: ${fleet.join('; ')}.` : 'Vehicle classes and fleets already present; nothing added.')
+const docSettings = await ensureDevDocumentSettings(db)
+console.log(docSettings.length ? `Required document types (development example): ${docSettings.join('; ')}.` : 'Document type settings already present; nothing added.')
 await pool.end()

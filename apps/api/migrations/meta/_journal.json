@@ -50,6 +50,20 @@
       "when": 1791581699005,
       "tag": "0006_photo_attribution",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1791583001251,
+      "tag": "0007_vehicle_documents",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1791583002778,
+      "tag": "0008_vehicle_documents_rls",
+      "breakpoints": true
     }
   ]
 }

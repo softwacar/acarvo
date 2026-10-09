@@ -321,3 +321,109 @@ export const vehiclePromoPhotos = pgTable(
     check('promo_photos_position_check', sql`${t.position} between 0 and 5`),
   ],
 )
+
+// ---------------------------------------------------------------------------
+// Vehicle documents (docs/TEKNIK_UYGULAMA.md §8.4). Separate from promotional photos:
+// own storage records, own tables. No physical deletion; file versions are immutable.
+
+/** Global system document types (not company data). */
+export const documentTypes = pgTable('document_types', {
+  code: text('code').primaryKey(),
+  name: text('name').notNull(),
+  requiresExpiry: boolean('requires_expiry').notNull(),
+  sortOrder: integer('sort_order').notNull(),
+})
+
+/** A company's decision for a type. No row = not required, warn 30 days. */
+export const companyDocumentTypeSettings = pgTable(
+  'company_document_type_settings',
+  {
+    companyId: uuid('company_id').notNull().references(() => companies.id),
+    typeCode: text('type_code').notNull().references(() => documentTypes.code),
+    required: boolean('required').notNull().default(false),
+    warnDays: integer('warn_days').notNull().default(30),
+    updatedBy: uuid('updated_by').references(() => users.id),
+    updatedAt: updatedAt(),
+  },
+  (t) => [primaryKey({ columns: [t.companyId, t.typeCode] }), check('doc_settings_warn_days_check', sql`${t.warnDays} between 1 and 365`)],
+)
+
+export const documentFiles = pgTable(
+  'document_files',
+  {
+    id: id(),
+    companyId: uuid('company_id').notNull().references(() => companies.id),
+    storageKey: text('storage_key').notNull().unique(),
+    mimeType: text('mime_type').notNull(),
+    sizeBytes: integer('size_bytes').notNull(),
+    sha256: text('sha256').notNull(),
+    pageCount: integer('page_count'),
+    displayName: text('display_name').notNull(),
+    uploadedBy: uuid('uploaded_by').references(() => users.id),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    unique('document_files_company_id_key').on(t.companyId, t.id),
+    check('document_files_mime_check', sql`${t.mimeType} in ('application/pdf', 'image/jpeg', 'image/png')`),
+    check('document_files_size_check', sql`${t.sizeBytes} > 0`),
+  ],
+)
+
+export const vehicleDocuments = pgTable(
+  'vehicle_documents',
+  {
+    id: id(),
+    companyId: uuid('company_id').notNull().references(() => companies.id),
+    vehicleId: uuid('vehicle_id').notNull(),
+    typeCode: text('type_code').notNull().references(() => documentTypes.code),
+    documentNumber: text('document_number'),
+    issuer: text('issuer'),
+    issuedOn: date('issued_on'),
+    validFrom: date('valid_from'),
+    validUntil: date('valid_until'),
+    notes: text('notes'),
+    recordState: text('record_state', { enum: ['draft', 'active', 'voided'] }).notNull(),
+    renewsId: uuid('renews_id'),
+    voidedReason: text('voided_reason'),
+    voidedBy: uuid('voided_by').references(() => users.id),
+    voidedAt: timestamp('voided_at', { withTimezone: true }),
+    /** Set when a rental pins this period (later phase); locked periods cannot be corrected. */
+    lockedAt: timestamp('locked_at', { withTimezone: true }),
+    version: integer('version').notNull().default(1),
+    createdAt: createdAt(),
+    createdBy: uuid('created_by').references(() => users.id),
+    updatedAt: updatedAt(),
+    updatedBy: uuid('updated_by').references(() => users.id),
+  },
+  (t) => [
+    unique('vehicle_documents_company_id_key').on(t.companyId, t.id),
+    index('vehicle_documents_vehicle_idx').on(t.companyId, t.vehicleId, t.typeCode),
+    uniqueIndex('vehicle_documents_renews_once_key').on(t.renewsId).where(sql`${t.renewsId} is not null and ${t.recordState} <> 'voided'`),
+    foreignKey({ columns: [t.companyId, t.vehicleId], foreignColumns: [vehicles.companyId, vehicles.id] }),
+    foreignKey({ columns: [t.companyId, t.renewsId], foreignColumns: [t.companyId, t.id] }),
+    check('vehicle_documents_dates_check', sql`${t.validFrom} is null or ${t.validUntil} is null or ${t.validFrom} <= ${t.validUntil}`),
+    check('vehicle_documents_state_check', sql`${t.recordState} in ('draft', 'active', 'voided')`),
+    check('vehicle_documents_void_check', sql`(${t.recordState} = 'voided') = (${t.voidedAt} is not null and ${t.voidedReason} is not null)`),
+    check('vehicle_documents_version_check', sql`${t.version} >= 1`),
+  ],
+)
+
+export const vehicleDocumentFiles = pgTable(
+  'vehicle_document_files',
+  {
+    id: id(),
+    companyId: uuid('company_id').notNull().references(() => companies.id),
+    documentId: uuid('document_id').notNull(),
+    fileId: uuid('file_id').notNull(),
+    versionNo: integer('version_no').notNull(),
+    uploadedBy: uuid('uploaded_by').references(() => users.id),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    unique('vehicle_document_files_file_key').on(t.fileId),
+    unique('vehicle_document_files_version_key').on(t.documentId, t.versionNo),
+    foreignKey({ columns: [t.companyId, t.documentId], foreignColumns: [vehicleDocuments.companyId, vehicleDocuments.id] }),
+    foreignKey({ columns: [t.companyId, t.fileId], foreignColumns: [documentFiles.companyId, documentFiles.id] }),
+    check('vehicle_document_files_version_check', sql`${t.versionNo} >= 1`),
+  ],
+)

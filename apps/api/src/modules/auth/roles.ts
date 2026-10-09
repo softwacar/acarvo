@@ -1,8 +1,35 @@
 import type { Permission } from '@acarvo/shared'
 
-/** Default roles created for each company. Companies can edit or add roles later (Roller ve Yetkiler module). */
+/** Default roles created for each new company. Companies can edit or add roles later (Roller ve Yetkiler module). */
 export const ROLE_PRESETS: Record<string, readonly Permission[]> = {
-  Sahip: ['vehicles.read', 'vehicles.create', 'vehicles.update', 'vehicles.documents.manage', 'vehicles.photos.manage', 'branches.read', 'users.read', 'roles.read', 'audit.read'],
-  Yönetici: ['vehicles.read', 'vehicles.create', 'vehicles.update', 'vehicles.documents.manage', 'vehicles.photos.manage', 'branches.read', 'users.read'],
-  Operasyon: ['vehicles.read', 'vehicles.documents.manage', 'vehicles.photos.manage', 'branches.read'],
+  Sahip: [
+    'vehicles.read',
+    'vehicles.create',
+    'vehicles.update',
+    'vehicles.documents.read',
+    'vehicles.documents.manage',
+    'vehicles.photos.manage',
+    'branches.read',
+    'users.read',
+    'roles.read',
+    'audit.read',
+  ],
+  Yönetici: ['vehicles.read', 'vehicles.create', 'vehicles.update', 'vehicles.documents.read', 'vehicles.documents.manage', 'vehicles.photos.manage', 'branches.read', 'users.read'],
+  Operasyon: ['vehicles.read', 'vehicles.documents.read', 'vehicles.documents.manage', 'vehicles.photos.manage', 'branches.read'],
 }
+
+/**
+ * Earlier versions of the presets, newest last. A role is upgraded only when its name matches a
+ * preset AND its permission set is exactly an earlier version of that preset, i.e. nobody has
+ * changed it. Custom roles and edited presets are never touched.
+ */
+export const ROLE_PRESET_HISTORY: { version: number; presets: Record<string, readonly Permission[]> }[] = [
+  {
+    version: 1,
+    presets: {
+      Sahip: ['vehicles.read', 'vehicles.create', 'vehicles.update', 'vehicles.documents.manage', 'vehicles.photos.manage', 'branches.read', 'users.read', 'roles.read', 'audit.read'],
+      Yönetici: ['vehicles.read', 'vehicles.create', 'vehicles.update', 'vehicles.documents.manage', 'vehicles.photos.manage', 'branches.read', 'users.read'],
+      Operasyon: ['vehicles.read', 'vehicles.documents.manage', 'vehicles.photos.manage', 'branches.read'],
+    },
+  },
+]

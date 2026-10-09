@@ -39,3 +39,6 @@ Thumbs.db
 
 # local Claude Code settings
 .claude/settings.local.json
+
+# Database backups (contain personal data and password hashes)
+backups/

@@ -13,6 +13,10 @@ const schema = z.object({
   TEST_DATABASE_OWNER_URL: z.string().min(1).optional(),
   /** Private file storage root. Defaults to <repo>/storage (ignored by Git, never served directly). */
   STORAGE_DIR: z.string().min(1).optional(),
+  /** Malware scanner for document uploads. In production, uploads stay closed while this is 'none'. */
+  MALWARE_SCANNER: z.enum(['none', 'clamav']).default('none'),
+  CLAMAV_HOST: z.string().default('127.0.0.1'),
+  CLAMAV_PORT: z.coerce.number().int().default(3310),
   /** Signs the CSRF secret cookie. */
   COOKIE_SECRET: z.string().min(32),
 })

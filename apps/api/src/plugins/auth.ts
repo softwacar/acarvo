@@ -2,6 +2,7 @@ import type { Permission } from '@acarvo/shared'
 import type { FastifyInstance, FastifyRequest } from 'fastify'
 import type { Database, Tx } from '../db/client'
 import type { Env } from '../env'
+import type { MalwareScanner } from '../lib/malware'
 import type { Storage } from '../lib/storage'
 import { AppError, forbidden, unauthorized } from '../lib/errors'
 import { loadAccess, type CompanyAccess } from '../modules/auth/context'
@@ -15,6 +16,7 @@ declare module 'fastify' {
     database: Database
     sessions: SessionStore
     storage: Storage
+    scanner: MalwareScanner
   }
   interface FastifyRequest {
     auth: ValidSession | null

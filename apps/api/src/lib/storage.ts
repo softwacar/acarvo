@@ -9,7 +9,7 @@ import path from 'node:path'
  * server only, so user input never becomes part of a path. Swapping this module is the
  * route to S3-compatible storage later.
  */
-const KEY_PATTERN = /^[0-9a-f-]{36}\/\d{4}\/[0-9a-f-]{36}(-thumb)?\.webp$/
+const KEY_PATTERN = /^(?:[0-9a-f-]{36}\/\d{4}\/[0-9a-f-]{36}(-thumb)?\.webp|documents\/[0-9a-f-]{36}\/\d{4}\/[0-9a-f-]{36}\.(?:pdf|jpg|png))$/
 
 export function createStorage(root: string) {
   const resolve = (key: string) => {
@@ -24,6 +24,10 @@ export function createStorage(root: string) {
       const id = randomUUID()
       const dir = `${companyId}/${new Date().getUTCFullYear()}`
       return { main: `${dir}/${id}.webp`, thumb: `${dir}/${id}-thumb.webp` }
+    },
+    /** Vehicle documents live under their own prefix, apart from promotional photos. */
+    newDocumentKey(companyId: string, ext: 'pdf' | 'jpg' | 'png') {
+      return `documents/${companyId}/${new Date().getUTCFullYear()}/${randomUUID()}.${ext}`
     },
     async put(key: string, data: Buffer) {
       const file = resolve(key)

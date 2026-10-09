@@ -44,6 +44,8 @@ describe('runtime database role', () => {
     expect(rows.map((r) => r.table)).toEqual([
       'audit_log',
       'branches',
+      'company_document_type_settings',
+      'document_files',
       'files',
       'membership_branches',
       'membership_roles',
@@ -51,6 +53,8 @@ describe('runtime database role', () => {
       'odometer_readings',
       'roles',
       'vehicle_classes',
+      'vehicle_document_files',
+      'vehicle_documents',
       'vehicle_location_events',
       'vehicle_promo_photos',
       'vehicles',
