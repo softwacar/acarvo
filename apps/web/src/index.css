@@ -1,0 +1,94 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "@fontsource-variable/outfit/wght.css";
+
+/*
+  ACARVO visual language (from the approved Araç 360° V5 prototype).
+  Cool neutral ground, white working surfaces, deep ink type, one ACARVO blue for
+  actions and selection. Status colour is only ever paired with words or icons.
+*/
+:root {
+  --ac-ink: #101828;
+  --ac-ink-2: #475467;
+  --ac-ink-3: #667085;
+  --ac-line: #e4e7ec;
+  --ac-line-soft: #f0f2f5;
+  --ac-ground: #f3f4f7;
+  --ac-surface: #ffffff;
+  --ac-rail: #fbfbfc;
+  --ac-blue: #2f4cdd;
+  --ac-blue-ink: #1f36b0;
+  --ac-blue-soft: #eef1fd;
+  --ac-ok: #067647;
+  --ac-ok-soft: #ecfdf3;
+  --ac-hold: #b54708;
+  --ac-hold-soft: #fffaeb;
+  --ac-alert: #c4320a;
+  --ac-alert-soft: #fef3f2;
+}
+
+@theme inline {
+  --font-sans: "Outfit Variable", system-ui, sans-serif;
+  --color-ink: var(--ac-ink);
+  --color-ink-2: var(--ac-ink-2);
+  --color-ink-3: var(--ac-ink-3);
+  --color-line: var(--ac-line);
+  --color-line-soft: var(--ac-line-soft);
+  --color-ground: var(--ac-ground);
+  --color-surface: var(--ac-surface);
+  --color-rail: var(--ac-rail);
+  --color-blue: var(--ac-blue);
+  --color-blue-ink: var(--ac-blue-ink);
+  --color-blue-soft: var(--ac-blue-soft);
+  --color-ok: var(--ac-ok);
+  --color-ok-soft: var(--ac-ok-soft);
+  --color-hold: var(--ac-hold);
+  --color-hold-soft: var(--ac-hold-soft);
+  --color-alert: var(--ac-alert);
+  --color-alert-soft: var(--ac-alert-soft);
+  --radius-sm: 0.375rem;
+  --radius-md: 0.5rem;
+  --radius-lg: 0.625rem;
+
+  --ease-out-quint: cubic-bezier(0.22, 1, 0.36, 1);
+  --animate-fade: fade 0.35s var(--ease-out-quint) both;
+
+  @keyframes fade {
+    from { opacity: 0; transform: translateY(4px); }
+    to { opacity: 1; transform: none; }
+  }
+}
+
+@layer base {
+  * {
+    border-color: var(--ac-line);
+  }
+  body {
+    background: var(--ac-ground);
+    color: var(--ac-ink);
+    font-family: var(--font-sans);
+    font-size: 14px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
+  :focus-visible {
+    outline: 2px solid var(--ac-blue);
+    outline-offset: 2px;
+  }
+  button:not(:disabled) {
+    cursor: pointer;
+  }
+}
+
+@utility tnum {
+  font-variant-numeric: tabular-nums;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition: none !important;
+    animation: none !important;
+  }
+}
