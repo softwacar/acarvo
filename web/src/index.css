@@ -1,0 +1,146 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+@import "@fontsource-variable/instrument-sans/wdth.css";
+
+@custom-variant dark (&:is(.dark *));
+
+/*
+  ACARVO tokens. shadcn variable names are kept so stock components inherit
+  the ACARVO palette; ACARVO-specific tokens are prefixed --ac-.
+*/
+:root {
+  --ac-ink: #14171a;
+  --ac-graphite: #5b6168;
+  --ac-faint: #656b72;
+  --ac-rule: #dcdfdb;
+  --ac-rule-soft: #e8eae6;
+  --ac-ground: #f3f4f1;
+  --ac-surface: #ffffff;
+  --ac-plate: #1a3d96;
+  --ac-plate-soft: #e7ecf7;
+  --ac-signal: #b4321f;
+  --ac-signal-soft: #f8e9e6;
+  --ac-amber: #94600f;
+  --ac-amber-soft: #f6eedf;
+
+  --background: var(--ac-surface);
+  --foreground: var(--ac-ink);
+  --card: var(--ac-surface);
+  --card-foreground: var(--ac-ink);
+  --popover: var(--ac-surface);
+  --popover-foreground: var(--ac-ink);
+  --primary: var(--ac-plate);
+  --primary-foreground: #ffffff;
+  --secondary: var(--ac-ground);
+  --secondary-foreground: var(--ac-ink);
+  --muted: var(--ac-ground);
+  --muted-foreground: var(--ac-graphite);
+  --accent: #eceee9;
+  --accent-foreground: var(--ac-ink);
+  --destructive: var(--ac-signal);
+  --border: var(--ac-rule);
+  --input: var(--ac-rule);
+  --ring: var(--ac-plate);
+  --radius: 0.375rem;
+  --sidebar: var(--ac-ground);
+  --sidebar-foreground: var(--ac-ink);
+  --sidebar-primary: var(--ac-plate);
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #e7e9e4;
+  --sidebar-accent-foreground: var(--ac-ink);
+  --sidebar-border: var(--ac-rule);
+  --sidebar-ring: var(--ac-plate);
+}
+
+@theme inline {
+  --font-sans: "Instrument Sans Variable", system-ui, sans-serif;
+  --font-heading: var(--font-sans);
+  --color-ink: var(--ac-ink);
+  --color-graphite: var(--ac-graphite);
+  --color-faint: var(--ac-faint);
+  --color-rule: var(--ac-rule);
+  --color-rule-soft: var(--ac-rule-soft);
+  --color-ground: var(--ac-ground);
+  --color-surface: var(--ac-surface);
+  --color-plate: var(--ac-plate);
+  --color-plate-soft: var(--ac-plate-soft);
+  --color-signal: var(--ac-signal);
+  --color-signal-soft: var(--ac-signal-soft);
+  --color-amber: var(--ac-amber);
+  --color-amber-soft: var(--ac-amber-soft);
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --radius-sm: 0.25rem;
+  --radius-md: 0.375rem;
+  --radius-lg: 0.5rem;
+  --radius-xl: 0.5rem;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-family: var(--font-sans);
+    font-size: 13px;
+    line-height: 1.45;
+  }
+  :focus-visible {
+    outline: 2px solid var(--ac-plate);
+    outline-offset: 1px;
+  }
+}
+
+/* Condensed tabular figures for plates, km, dates and counts. */
+@utility figures {
+  font-variant-numeric: tabular-nums;
+  font-stretch: 82%;
+}
+
+/* Hatched fills: distinguish booking kinds without relying on colour. */
+@utility hatch-amber {
+  background-color: var(--ac-amber-soft);
+  background-image: repeating-linear-gradient(-45deg, var(--ac-amber) 0 1.5px, transparent 1.5px 5px);
+}
+@utility hatch-signal {
+  background-color: var(--ac-signal-soft);
+  background-image: repeating-linear-gradient(-45deg, var(--ac-signal) 0 1.5px, transparent 1.5px 5px);
+}
+@utility hatch-graphite {
+  background-color: #eceee9;
+  background-image: repeating-linear-gradient(90deg, var(--ac-graphite) 0 1.5px, transparent 1.5px 4px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition: none !important;
+    animation: none !important;
+  }
+}

@@ -1,0 +1,41 @@
+# secrets and local configuration
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# dependencies and build output
+node_modules/
+dist/
+build/
+*.tsbuildinfo
+.vite/
+
+# local file storage and databases
+storage/
+pgdata/
+*.dump
+*.sql.gz
+*.sqlite
+*.db
+
+# logs and test output
+*.log
+npm-debug.log*
+coverage/
+playwright-report/
+test-results/
+.playwright-mcp/
+
+# editor and OS
+.vscode/*
+!.vscode/extensions.json
+.idea/
+.DS_Store
+Thumbs.db
+*.swp
+*.tmp
+
+# local Claude Code settings
+.claude/settings.local.json
