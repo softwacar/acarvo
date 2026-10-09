@@ -364,3 +364,55 @@ describe('response format', () => {
     expect(v.location!.at).toMatch(/Z$/)
   })
 })
+
+describe('vehicle 360 read endpoints', () => {
+  it('returns odometer and location history from the event tables', async () => {
+    const id = await findId(adnan, 'K40-M-526')
+    const res = await adnan.get(`/api/vehicles/${id}/history`)
+    expect(res.statusCode).toBe(200)
+    const h = res.json()
+    expect(h.odometer).toHaveLength(1)
+    expect(h.odometer[0]).toMatchObject({ km: 18960, eventType: 'initial', recordedByName: 'Adnan Kovač' })
+    expect(h.locations[0]).toMatchObject({ type: 'branch', branchName: 'Sarajevo Centar', branchCode: 'SAC', eventType: 'initial' })
+    expect(h.odometer[0].occurredAt).toMatch(/Z$/)
+  })
+
+  it('returns an empty odometer history when no reading exists', async () => {
+    const id = await findId(adnan, 'O03-J-874')
+    expect((await adnan.get(`/api/vehicles/${id}/history`)).json().odometer).toEqual([])
+  })
+
+  it('keeps another company vehicle details and history hidden, even by id', async () => {
+    const nId = await findId(lejla, 'M21-O-650')
+    for (const path of ['', '/history', '/activity']) {
+      const res = await adnan.get(`/api/vehicles/${nId}${path}`)
+      expect(res.statusCode, path).toBe(404)
+      expect(res.body).not.toContain('M21-O-650')
+    }
+  })
+
+  it('keeps vehicles of other branches hidden from a branch-limited user', async () => {
+    const sacId = await findId(adnan, 'T09-A-781')
+    expect((await selma.get(`/api/vehicles/${sacId}/history`)).statusCode).toBe(404)
+    const sjjId = await findId(selma, 'A12-K-345')
+    expect((await selma.get(`/api/vehicles/${sjjId}/history`)).statusCode).toBe(200)
+  })
+
+  it('answers invalid or unknown ids with 404 and no detail', async () => {
+    for (const id of ['abc', '00000000-0000-4000-8000-000000000000', "1' or '1'='1"]) {
+      const res = await adnan.get(`/api/vehicles/${encodeURIComponent(id)}`)
+      expect(res.statusCode, id).toBe(404)
+      expect((await adnan.get(`/api/vehicles/${encodeURIComponent(id)}/history`)).statusCode, id).toBe(404)
+    }
+  })
+
+  it('shows the change history only with the audit permission', async () => {
+    const id = await findId(adnan, 'K71-J-904')
+    const res = await adnan.get(`/api/vehicles/${id}/activity`)
+    expect(res.statusCode).toBe(200)
+    const actions = (res.json().items as { action: string }[]).map((a) => a.action)
+    expect(actions).toContain('vehicle.update')
+    const sjjId = await findId(selma, 'A12-K-345')
+    expect((await selma.get(`/api/vehicles/${sjjId}/activity`)).statusCode).toBe(403)
+  })
+})

@@ -1,3 +1,4 @@
+import { VEHICLE_TABS, type VehicleTab } from '@acarvo/shared'
 import type { QueryClient } from '@tanstack/react-query'
 import { createRootRouteWithContext, createRoute, createRouter, Outlet, redirect, useParams } from '@tanstack/react-router'
 import { AppLayout } from './components/AppLayout'
@@ -8,6 +9,7 @@ import { LoginPage } from './pages/LoginPage'
 import { ModulePage } from './pages/ModulePage'
 import { NotFoundPage } from './pages/NotFoundPage'
 import { ProfilePage } from './pages/ProfilePage'
+import { Vehicle360Page } from './pages/vehicles/Vehicle360Page'
 import { VehicleFormPage } from './pages/vehicles/VehicleFormPage'
 import { VehiclesPage } from './pages/vehicles/VehiclesPage'
 import { validateVehicleSearch } from './pages/vehicles/search'
@@ -54,9 +56,17 @@ const indexRoute = createRoute({ getParentRoute: () => appRoute, path: '/', comp
 const branchesRoute = createRoute({ getParentRoute: () => appRoute, path: '/subeler', component: BranchesPage })
 const vehiclesRoute = createRoute({ getParentRoute: () => appRoute, path: '/araclar', validateSearch: validateVehicleSearch, component: VehiclesPage })
 const vehicleNewRoute = createRoute({ getParentRoute: () => appRoute, path: '/araclar/yeni', component: () => <VehicleFormPage mode="create" /> })
+const vehicle360Route = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/araclar/$vehicleId',
+  validateSearch: (s: Record<string, unknown>): { sekme?: VehicleTab } =>
+    (VEHICLE_TABS as readonly string[]).includes(s.sekme as string) && s.sekme !== 'genel' ? { sekme: s.sekme as VehicleTab } : {},
+  component: Vehicle360Page,
+})
 const vehicleEditRoute = createRoute({
   getParentRoute: () => appRoute,
   path: '/araclar/$vehicleId/duzenle',
+  validateSearch: (s: Record<string, unknown>): { geri?: 'arac' } => (s.geri === 'arac' ? { geri: 'arac' } : {}),
   component: function EditVehicle() {
     const { vehicleId } = useParams({ from: '/app/araclar/$vehicleId/duzenle' })
     return <VehicleFormPage key={vehicleId} mode="edit" />
@@ -72,7 +82,7 @@ const moduleRoute = createRoute({
   },
 })
 
-const routeTree = rootRoute.addChildren([loginRoute, appRoute.addChildren([indexRoute, branchesRoute, vehiclesRoute, vehicleNewRoute, vehicleEditRoute, profileRoute, moduleRoute])])
+const routeTree = rootRoute.addChildren([loginRoute, appRoute.addChildren([indexRoute, branchesRoute, vehiclesRoute, vehicleNewRoute, vehicle360Route, vehicleEditRoute, profileRoute, moduleRoute])])
 
 export function createAppRouter(queryClient: QueryClient) {
   return createRouter({ routeTree, context: { queryClient }, defaultPreload: 'intent', scrollRestoration: true })

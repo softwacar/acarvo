@@ -170,7 +170,7 @@ export function VehiclesPage() {
   const pages = data ? Math.max(1, Math.ceil(data.total / pageSize)) : 1
   const from = data && data.total ? (page - 1) * pageSize + 1 : 0
   const to = data ? Math.min(page * pageSize, data.total) : 0
-  const goEdit = (id: string) => navigate({ to: '/araclar/$vehicleId/duzenle', params: { vehicleId: id } })
+  const open360 = (id: string) => navigate({ to: '/araclar/$vehicleId', params: { vehicleId: id } })
 
   return (
     <div className="space-y-5">
@@ -308,18 +308,24 @@ export function VehiclesPage() {
                       return (
                         <tr
                           key={v.id}
-                          onClick={canEdit ? () => goEdit(v.id) : undefined}
-                          className={cn('group h-[56px]', canEdit && 'cursor-pointer hover:bg-blue-soft/35', v.status !== 'active' && 'bg-hold-soft/30')}
+                          onClick={() => open360(v.id)}
+                          className={cn('group h-[56px] cursor-pointer hover:bg-blue-soft/35', v.status !== 'active' && 'bg-hold-soft/30')}
                         >
                           <td className="py-2 pr-3 pl-5">
                             <Plate plate={v.plate} country={session.company?.country} className="flex w-fit" />
                             {v.vehicleCode && <span className="tnum mt-0.5 block text-[12px] leading-4 text-ink-2">{v.vehicleCode}</span>}
                           </td>
                           <td className="px-3 py-2">
-                            <span className="block truncate font-medium text-ink group-hover:text-blue-ink" title={[name, v.modelYear].filter(Boolean).join(' · ')}>
+                            <Link
+                              to="/araclar/$vehicleId"
+                              params={{ vehicleId: v.id }}
+                              onClick={(e) => e.stopPropagation()}
+                              className="block truncate font-medium text-ink group-hover:text-blue-ink hover:underline focus-visible:underline"
+                              title={[name, v.modelYear].filter(Boolean).join(' · ')}
+                            >
                               {name}
                               {v.modelYear && <span className="tnum font-normal text-ink-2"> · {v.modelYear}</span>}
-                            </span>
+                            </Link>
                             <span className="mt-0.5 block truncate text-[13px] text-ink-2" title={[v.className, v.homeBranch.name, v.trim].filter(Boolean).join(' · ')}>
                               <span className="xl:hidden">
                                 {v.className} · {v.homeBranch.code}

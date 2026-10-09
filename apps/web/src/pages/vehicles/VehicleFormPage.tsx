@@ -10,7 +10,7 @@ import {
 import { zodResolver } from '@hookform/resolvers/zod'
 import { ArrowLeft, ArrowsClockwise, Buildings, Info, LockSimple, SpinnerGap, Truck, WarningCircle } from '@phosphor-icons/react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Link, useBlocker, useNavigate, useParams } from '@tanstack/react-router'
+import { Link, useBlocker, useNavigate, useParams, useSearch } from '@tanstack/react-router'
 import { Dialog } from 'radix-ui'
 import { type ReactNode, useEffect, useMemo, useState } from 'react'
 import { type FieldErrors, type Resolver, useForm } from 'react-hook-form'
@@ -218,6 +218,8 @@ function VehicleForm({ mode, vehicle, classes }: { mode: 'create' | 'edit'; vehi
   const [conflict, setConflict] = useState<ConflictState | null>(null)
   const [version, setVersion] = useState(vehicle?.version ?? 1)
   const [saved, setSaved] = useState(false)
+  const { geri } = useSearch({ strict: false }) as { geri?: 'arac' }
+  const fromVehicle = mode === 'edit' && geri === 'arac'
 
   const defaults = useMemo<FormValues>(
     () =>
@@ -246,10 +248,14 @@ function VehicleForm({ mode, vehicle, classes }: { mode: 'create' | 'edit'; vehi
     onSuccess: async (v) => {
       setSaved(true)
       qc.removeQueries({ queryKey: ['vehicles'] })
+      void qc.invalidateQueries({ queryKey: ['vehicle-activity'] })
+      void qc.invalidateQueries({ queryKey: ['vehicle-history'] })
       qc.setQueryData(['vehicle', session.company?.id, v.id], v)
       toast(mode === 'create' ? `${v.plate} filoya eklendi.` : `${v.plate} kaydedildi.`)
       // A new vehicle may not match the previous filters, so show it directly; edits return to where the user was.
-      await navigate({ to: '/araclar', search: mode === 'create' ? { q: v.plate } : listSearchToReturnTo() })
+      // A new vehicle opens in Araç 360°; edits return to where the user came from.
+      if (mode === 'create' || fromVehicle) await navigate({ to: '/araclar/$vehicleId', params: { vehicleId: v.id } })
+      else await navigate({ to: '/araclar', search: listSearchToReturnTo() })
     },
     onError: (e, body) => {
       if (!(e instanceof ApiRequestError)) return setServerError({ message: 'Kaydedilemedi. Bağlantınızı kontrol edip tekrar deneyin.' })
@@ -304,10 +310,17 @@ function VehicleForm({ mode, vehicle, classes }: { mode: 'create' | 'edit'; vehi
     <form onSubmit={submit} noValidate className="space-y-5 pb-24 lg:pb-0">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div className="min-w-0">
-          <Link to="/araclar" search={listSearchToReturnTo()} className="mb-2 inline-flex items-center gap-1.5 text-[13px] font-medium text-ink-3 hover:text-ink">
-            <ArrowLeft size={14} />
-            Araçlar
-          </Link>
+          {fromVehicle && vehicle ? (
+            <Link to="/araclar/$vehicleId" params={{ vehicleId: vehicle.id }} className="mb-2 inline-flex items-center gap-1.5 text-[13px] font-medium text-ink-3 hover:text-ink">
+              <ArrowLeft size={14} />
+              {vehicle.plate} · Araç 360°
+            </Link>
+          ) : (
+            <Link to="/araclar" search={listSearchToReturnTo()} className="mb-2 inline-flex items-center gap-1.5 text-[13px] font-medium text-ink-3 hover:text-ink">
+              <ArrowLeft size={14} />
+              Araçlar
+            </Link>
+          )}
           <div className="flex flex-wrap items-center gap-3">
             <h1 className="text-[24px] font-semibold tracking-[-0.025em]">{title}</h1>
             {mode === 'edit' && vehicle && <Plate plate={vehicle.plate} country={session.company?.country} size="md" />}
@@ -649,13 +662,23 @@ function VehicleForm({ mode, vehicle, classes }: { mode: 'create' | 'edit'; vehi
                 {save.isPending && <SpinnerGap size={17} className="animate-spin" />}
                 {save.isPending ? 'Kaydediliyor' : mode === 'create' ? 'Aracı kaydet' : 'Değişiklikleri kaydet'}
               </button>
-              <Link
-                to="/araclar"
-                search={listSearchToReturnTo()}
-                className="flex h-10 flex-1 items-center justify-center rounded-lg border border-line px-4 font-medium text-ink-2 hover:bg-ground hover:text-ink lg:flex-none"
-              >
-                Vazgeç
-              </Link>
+              {fromVehicle && vehicle ? (
+                <Link
+                  to="/araclar/$vehicleId"
+                  params={{ vehicleId: vehicle.id }}
+                  className="flex h-10 flex-1 items-center justify-center rounded-lg border border-line px-4 font-medium text-ink-2 hover:bg-ground hover:text-ink lg:flex-none"
+                >
+                  Vazgeç
+                </Link>
+              ) : (
+                <Link
+                  to="/araclar"
+                  search={listSearchToReturnTo()}
+                  className="flex h-10 flex-1 items-center justify-center rounded-lg border border-line px-4 font-medium text-ink-2 hover:bg-ground hover:text-ink lg:flex-none"
+                >
+                  Vazgeç
+                </Link>
+              )}
             </div>
             <p className="mt-2.5 hidden text-center text-[12px] text-ink-3 lg:block">
               Kısayol: <kbd className="rounded border border-line bg-ground px-1 font-sans">Ctrl</kbd> + <kbd className="rounded border border-line bg-ground px-1 font-sans">S</kbd>

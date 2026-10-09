@@ -246,3 +246,55 @@ export function mapUniqueViolation(e: unknown): never {
   }
   throw e
 }
+
+/** Odometer and physical location events of one vehicle, newest first. Append-only sources. */
+export async function vehicleHistory(tx: Tx, vehicleId: string) {
+  const odometer = await tx.execute(sql`
+    select r.id, r.km, r.event_type, r.occurred_at, r.note, u.name as recorded_by_name
+    from odometer_readings r left join users u on u.id = r.recorded_by
+    where r.vehicle_id = ${vehicleId}
+    order by r.occurred_at desc, r.created_at desc limit 200`)
+  const locations = await tx.execute(sql`
+    select e.id, e.location_type, e.event_type, e.description, e.occurred_at, b.name as branch_name, b.code as branch_code, u.name as recorded_by_name
+    from vehicle_location_events e
+    left join branches b on b.company_id = e.company_id and b.id = e.branch_id
+    left join users u on u.id = e.recorded_by
+    where e.vehicle_id = ${vehicleId}
+    order by e.occurred_at desc, e.created_at desc limit 200`)
+  return {
+    odometer: (odometer.rows as Row[]).map((r) => ({
+      id: r.id as string,
+      km: Number(r.km),
+      eventType: r.event_type as string,
+      occurredAt: iso(r.occurred_at),
+      note: (r.note as string) ?? null,
+      recordedByName: (r.recorded_by_name as string) ?? null,
+    })),
+    locations: (locations.rows as Row[]).map((r) => ({
+      id: r.id as string,
+      type: r.location_type as LocationSummary['type'],
+      eventType: r.event_type as string,
+      description: (r.description as string) ?? null,
+      branchName: (r.branch_name as string) ?? null,
+      branchCode: (r.branch_code as string) ?? null,
+      occurredAt: iso(r.occurred_at),
+      recordedByName: (r.recorded_by_name as string) ?? null,
+    })),
+  }
+}
+
+/** Audit entries about one vehicle, newest first. */
+export async function vehicleActivity(tx: Tx, vehicleId: string) {
+  const result = await tx.execute(sql`
+    select a.id, a.action, a.summary, a.created_at, u.name as actor_name
+    from audit_log a left join users u on u.id = a.actor_user_id
+    where a.entity = 'vehicle' and a.entity_id = ${vehicleId}
+    order by a.created_at desc limit 100`)
+  return (result.rows as Row[]).map((r) => ({
+    id: r.id as string,
+    action: r.action as string,
+    summary: (r.summary as Record<string, unknown>) ?? null,
+    at: iso(r.created_at),
+    actorName: (r.actor_name as string) ?? null,
+  }))
+}

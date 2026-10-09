@@ -1,4 +1,4 @@
-import type { ApiError, SessionInfo, VehicleClassSummary, VehicleDetail, VehicleListResponse } from '@acarvo/shared'
+import type { ApiError, SessionInfo, VehicleActivityItem, VehicleClassSummary, VehicleDetail, VehicleHistory, VehicleListResponse } from '@acarvo/shared'
 
 export class ApiRequestError extends Error {
   constructor(
@@ -98,4 +98,9 @@ export const vehiclesApi = {
   create: (body: unknown) => api<VehicleDetail>('/vehicles', { method: 'POST', body }),
   update: (id: string, body: unknown) => api<VehicleDetail>(`/vehicles/${id}`, { method: 'PUT', body }),
   classes: () => api<{ items: VehicleClassSummary[] }>('/vehicle-classes'),
+}
+
+export const vehicle360Api = {
+  history: (id: string) => api<VehicleHistory>(`/vehicles/${id}/history`),
+  activity: (id: string) => api<{ items: VehicleActivityItem[] }>(`/vehicles/${id}/activity`),
 }

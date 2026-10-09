@@ -1,9 +1,9 @@
 import { Buildings, CaretDown, Check, Flask, List, MapPin, SignOut, UserCircle, X } from '@phosphor-icons/react'
-import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, Outlet, useNavigate, useRouterState } from '@tanstack/react-router'
 import { DropdownMenu } from 'radix-ui'
 import { useEffect, useState } from 'react'
-import { authApi } from '@/lib/api'
+import { authApi, vehiclesApi } from '@/lib/api'
 import { cn, initials } from '@/lib/utils'
 import { findNavItem, NAV } from '@/nav'
 import { can, sessionQuery, useSession } from '@/session'
@@ -195,6 +195,14 @@ function CompanySwitcher() {
 function TopBar({ onMenu }: { onMenu: () => void }) {
   const session = useSession()
   const current = useCurrentSlug()
+  const pathname = useRouterState({ select: (s) => s.location.pathname })
+  const vehicleMatch = pathname.match(/^\/araclar\/([0-9a-f-]{36})(\/duzenle)?$/i)
+  const vehicle = useQuery({
+    queryKey: ['vehicle', session.company?.id, vehicleMatch?.[1]],
+    queryFn: () => vehiclesApi.get(vehicleMatch![1]!),
+    enabled: !!vehicleMatch,
+    retry: false,
+  })
   const item = current === 'profil' ? { group: 'Hesap', label: 'Profil ve oturum' } : findNavItem(current)
   const branchLabel = session.allBranches ? 'Tüm şubeler' : session.branches.length === 1 ? session.branches[0]!.name : `${session.branches.length} şube`
 
@@ -204,9 +212,29 @@ function TopBar({ onMenu }: { onMenu: () => void }) {
         <List size={20} />
       </button>
       <nav aria-label="Konum" className="flex min-w-0 items-center gap-2 text-ink-3">
-        {item && <span className="hidden sm:inline">{item.group}</span>}
-        {item && <span className="hidden text-line sm:inline">/</span>}
-        <span className="truncate font-medium text-ink">{item?.label ?? 'Sayfa bulunamadı'}</span>
+        {item && !vehicleMatch && <span className="hidden sm:inline">{item.group}</span>}
+        {item && !vehicleMatch && <span className="hidden text-line sm:inline">/</span>}
+        {vehicleMatch ? (
+          <>
+            <Link to="/araclar" className="hidden hover:text-ink sm:inline">
+              Araçlar
+            </Link>
+            <span className="hidden text-line sm:inline">/</span>
+            {vehicleMatch[2] && vehicle.data ? (
+              <>
+                <Link to="/araclar/$vehicleId" params={{ vehicleId: vehicle.data.id }} className="truncate hover:text-ink">
+                  {vehicle.data.plate}
+                </Link>
+                <span className="text-line">/</span>
+                <span className="truncate font-medium text-ink">Düzenle</span>
+              </>
+            ) : (
+              <span className="tnum truncate font-medium text-ink">{vehicle.data?.plate ?? 'Araç'}</span>
+            )}
+          </>
+        ) : (
+          <span className="truncate font-medium text-ink">{item?.label ?? 'Sayfa bulunamadı'}</span>
+        )}
       </nav>
       <div className="ml-auto flex min-w-0 items-center gap-2">
         {session.environment !== 'production' && (
@@ -256,11 +284,18 @@ export function AppLayout() {
       </aside>
       <div className="flex min-w-0 flex-1 flex-col">
         <TopBar onMenu={() => setOpen(true)} />
-        <main className="min-w-0 flex-1 px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
-          <div className="mx-auto max-w-[1200px]">
+        {/^\/araclar\/(?!yeni$)[^/]+$/.test(pathname) ? (
+          // Araç 360° is a full-width workspace with its own sticky bars, like the V5 design.
+          <main className="min-w-0 flex-1">
             <Outlet />
-          </div>
-        </main>
+          </main>
+        ) : (
+          <main className="min-w-0 flex-1 px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
+            <div className="mx-auto max-w-[1200px]">
+              <Outlet />
+            </div>
+          </main>
+        )}
       </div>
     </div>
   )

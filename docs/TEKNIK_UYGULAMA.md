@@ -157,7 +157,23 @@ Parolalar kurulum betiğinde rastgele üretilir ve yalnız yerel `.env` dosyası
 - Kullanım durumu formda yalnız `Aktif` / `Hizmet dışı`. `Satıldı` / `Filodan çıktı` §59BM'deki ayrı, gerekçeli işlemle gelecek.
 - Dış kaynak (tedarikçi) aracı, Araç Tedarikçileri ve tedarik dönemi modülüyle birlikte eklenecek; şimdilik yalnız kendi filo kaydı açılır.
 - Oluşturma ve düzenleme `audit_log`'a yazılır (düzenlemede değişen alanların önceki/sonraki değeri).
-- Sonraki parçalar: Araç 360° detay, belgeler, tanıtım fotoğrafı, kilometre/konum düzeltme kayıtları, filodan çıkış.
+- Sonraki parçalar: belgeler, tanıtım fotoğrafı, kilometre/konum düzeltme kayıtları, filodan çıkış.
+
+### 8.2 Araç 360° — ilk, salt okunur sürüm (uygulandı)
+
+Spec §13.3'e göre ayrım:
+
+| Bölüm | Bu sürümde | Sonra |
+|---|---|---|
+| Üst bölüm | Plaka, araç kodu, marka/model/donanım/yıl/sınıf, kaynak, kullanım durumu, sürüm; bilgi şeridi: konum, kilometre, ana şube, filoya giriş, belgeler, son değişiklik; kaydırınca beliren kompakt durum çubuğu | Müsaitlik, hazırlık, aktif kiralama, sıradaki teslim, anahtar, yakıt (ilgili modüllerden) |
+| Fotoğraf alanı | Tanıtım fotoğrafı için boş durum; teslim/iade kanıt fotoğraflarının ayrı olduğu açıklaması | Tanıtım fotoğrafı yükleme (en fazla 1 aktif); kanıt fotoğrafları kiralama kontrolleriyle |
+| Hızlı işlemler | Aracı düzenle; diğer işlemler menüde “yakında” olarak, nedeniyle | Rezervasyon, kiralama, bakım, hasar, ceza, transfer, belge |
+| 1 Genel bakış | Araç bilgileri, filoya giriş, son kayıtlar (km/konum olayları), notlar, bağlı kayıtlar listesi | Şu an / sıradaki / aksiyon gerektiriyor / kullanım özeti |
+| 2–5, 7 | Dürüst “henüz bağlı değil” paneli ve sekmeye ne geleceği | Müsaitlik, kiralama geçmişi, durum ve kontroller, bakım ve lastikler, finans |
+| 6 Belgeler ve riskler | Standart belge türleri “yüklenmedi”; açık riskler bağlı değil | Belge yükleme, süre takibi, hasar/ceza/olay bağlantıları |
+| 8 Konum ve geçmiş | Kilometre geçmişi, konum geçmişi, kayıt (denetim) geçmişi — değişen alanların eski/yeni değeri | Düzeltme ve transfer kayıtları, tedarik dönemi geçmişi, filodan çıkış |
+
+API: `GET /api/vehicles/:id/history` (vehicles.read) ve `GET /api/vehicles/:id/activity` (audit.read). İkisi de önce aracın şirket ve şube kapsamında görünür olduğunu doğrular; değilse 404. Sekme adres çubuğunda (`?sekme=`) tutulur.
 
 Kiralama, rezervasyon, müsaitlik, bakım ve finans verileri ilgili modüller geliştirilince bağlanır. O zamana kadar Araç 360° bu bölümlerde açık bir "modül henüz geliştirilmedi" durumu gösterir; kirada/müsait durumu uydurulmaz.
 
