@@ -29,6 +29,20 @@
       "when": 1791572555833,
       "tag": "0003_vehicles_rls",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1791580417844,
+      "tag": "0004_promo_photos",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1791580419335,
+      "tag": "0005_promo_photos_rls",
+      "breakpoints": true
     }
   ]
 }

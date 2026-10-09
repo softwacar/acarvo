@@ -52,6 +52,12 @@ export async function registerSecurity(app: FastifyInstance, env: Env) {
       return reply.code(400).send({ error: { code: 'VALIDATION', message: 'Bazı alanlar geçersiz.', fields } })
     }
     const e = err as FastifyError
+    if (e.code === 'FST_REQ_FILE_TOO_LARGE' || e.statusCode === 413) {
+      return reply.code(413).send({ error: { code: 'FILE_TOO_LARGE', message: 'Fotoğraf en fazla 10 MB olabilir.' } })
+    }
+    if (e.code === 'FST_FILES_LIMIT' || e.code === 'FST_PARTS_LIMIT' || e.code === 'FST_FIELDS_LIMIT') {
+      return reply.code(400).send({ error: { code: 'ONE_FILE', message: 'Her istekte tek fotoğraf yüklenebilir.' } })
+    }
     if (e.statusCode === 429) {
       return reply.code(429).send({ error: { code: 'RATE_LIMITED', message: e.message } })
     }

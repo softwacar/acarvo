@@ -1,4 +1,4 @@
-import type { ApiError, SessionInfo, VehicleActivityItem, VehicleClassSummary, VehicleDetail, VehicleHistory, VehicleListResponse } from '@acarvo/shared'
+import type { ApiError, SessionInfo, VehicleActivityItem, VehiclePhoto, VehiclePhotoList, VehicleClassSummary, VehicleDetail, VehicleHistory, VehicleListResponse } from '@acarvo/shared'
 
 export class ApiRequestError extends Error {
   constructor(
@@ -33,7 +33,7 @@ async function toError(res: Response) {
 }
 
 /** JSON request to the API. Mutations carry the CSRF token; an expired token is renewed once. */
-export async function api<T>(path: string, init: { method?: 'GET' | 'POST' | 'PUT'; body?: unknown } = {}): Promise<T> {
+export async function api<T>(path: string, init: { method?: 'GET' | 'POST' | 'PUT' | 'DELETE'; body?: unknown } = {}): Promise<T> {
   const method = init.method ?? 'GET'
   const send = async (retry: boolean): Promise<Response> => {
     const headers: Record<string, string> = {}
@@ -103,4 +103,43 @@ export const vehiclesApi = {
 export const vehicle360Api = {
   history: (id: string) => api<VehicleHistory>(`/vehicles/${id}/history`),
   activity: (id: string) => api<{ items: VehicleActivityItem[] }>(`/vehicles/${id}/activity`),
+}
+
+/** Multipart upload with progress (fetch has no upload progress). Same CSRF and error rules as api(). */
+export function uploadFile<T>(path: string, file: File, onProgress?: (fraction: number) => void): Promise<T> {
+  const send = (token: string, retry: boolean): Promise<T> =>
+    new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest()
+      xhr.open('POST', `/api${path}`)
+      xhr.withCredentials = true
+      xhr.setRequestHeader('x-csrf-token', token)
+      xhr.upload.onprogress = (e) => e.lengthComputable && onProgress?.(e.loaded / e.total)
+      xhr.onload = () => {
+        let body: ApiError | T | null = null
+        try {
+          body = JSON.parse(xhr.responseText)
+        } catch {
+          body = null
+        }
+        if (xhr.status >= 200 && xhr.status < 300) return resolve(body as T)
+        const err = (body as ApiError | null)?.error
+        if (xhr.status === 403 && err?.code === 'CSRF_INVALID' && !retry) {
+          return void csrf(true).then((t) => send(t, true).then(resolve, reject), reject)
+        }
+        reject(new ApiRequestError(xhr.status, err?.code ?? 'NETWORK', err?.message ?? 'Yükleme tamamlanamadı.', err?.fields, err?.details))
+      }
+      xhr.onerror = () => reject(new ApiRequestError(0, 'NETWORK', 'Sunucuya ulaşılamadı. Bağlantınızı kontrol edin.'))
+      const form = new FormData()
+      form.append('file', file)
+      xhr.send(form)
+    })
+  return csrf().then((t) => send(t, false))
+}
+
+export const photosApi = {
+  list: (vehicleId: string) => api<VehiclePhotoList>(`/vehicles/${vehicleId}/photos`),
+  upload: (vehicleId: string, file: File, onProgress?: (f: number) => void) => uploadFile<VehiclePhoto>(`/vehicles/${vehicleId}/photos`, file, onProgress),
+  reorder: (vehicleId: string, photoIds: string[]) => api<VehiclePhotoList>(`/vehicles/${vehicleId}/photos/order`, { method: 'PUT', body: { photoIds } }),
+  makePrimary: (vehicleId: string, photoId: string) => api<VehiclePhotoList>(`/vehicles/${vehicleId}/photos/${photoId}/primary`, { method: 'POST' }),
+  remove: (vehicleId: string, photoId: string) => api<VehiclePhotoList>(`/vehicles/${vehicleId}/photos/${photoId}`, { method: 'DELETE' }),
 }

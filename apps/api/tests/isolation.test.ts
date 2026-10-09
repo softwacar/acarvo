@@ -44,6 +44,7 @@ describe('runtime database role', () => {
     expect(rows.map((r) => r.table)).toEqual([
       'audit_log',
       'branches',
+      'files',
       'membership_branches',
       'membership_roles',
       'memberships',
@@ -51,6 +52,7 @@ describe('runtime database role', () => {
       'roles',
       'vehicle_classes',
       'vehicle_location_events',
+      'vehicle_promo_photos',
       'vehicles',
     ])
     for (const r of rows) {

@@ -173,6 +173,15 @@ Spec §13.3'e göre ayrım:
 | 6 Belgeler ve riskler | Standart belge türleri “yüklenmedi”; açık riskler bağlı değil | Belge yükleme, süre takibi, hasar/ceza/olay bağlantıları |
 | 8 Konum ve geçmiş | Kilometre geçmişi, konum geçmişi, kayıt (denetim) geçmişi — değişen alanların eski/yeni değeri | Düzeltme ve transfer kayıtları, tedarik dönemi geçmişi, filodan çıkış |
 
+### 8.3 Tanıtım fotoğrafları (uygulandı)
+
+- Kullanıcı kararı: araç başına en fazla **6 tanıtım fotoğrafı**, biri **ana fotoğraf**. Spec §13.1/§59X'teki “en fazla 1 aktif profil fotoğrafı” ana fotoğrafla karşılanır; diğerleri aynı tanıtım galerisinin parçasıdır.
+- Tablolar: `files` (yalnız eklenir/silinir, değiştirilmez) ve `vehicle_promo_photos` (sıra 0–5, ertelenmiş tekil sıra kısıtı, araç başına tek ana fotoğraf için kısmi tekil indeks). İkisinde de RLS zorunlu. Teslim/iade kanıt fotoğrafları bu tabloları kullanmayacak; kendi değiştirilemez kayıtlarıyla gelecek.
+- Doğrulama: dosya adı ve tarayıcının bildirdiği tür dikkate alınmaz; içerik `sharp` ile çözülür. Yalnız JPEG/PNG/WebP, en fazla 10 MB, en az 400×300 piksel, en fazla 60 MP; SVG, GIF ve çok sayfalı görseller reddedilir.
+- Temizlik: kamera yönü uygulanır, görsel WebP olarak yeniden kodlanır (ana: en uzun kenar 2400 px, küçük: 480×360). Yeniden kodlama EXIF, GPS, XMP ve yorumları tamamen siler.
+- Depolama: `storage/<company_id>/<yıl>/<uuid>.webp` (Git dışı, `STORAGE_DIR` ile değiştirilebilir). Sunucu dışında hiçbir adresten erişilemez; `GET /api/files/:id` oturum, `vehicles.read`, RLS ve aracın şube kapsamını kontrol ederek akıtır. `Cache-Control: private, no-cache` + ETag: tarayıcı her gösterimde yeniden doğrular, sunucu yetkiyi kontrol etmeden 304 vermez.
+- İşlemler (`vehicles.photos.manage`): yükleme, sıralama, ana fotoğraf seçimi, kaldırma. Araç satırı kilitlenerek 6 sınırı yarış koşulunda da korunur. Ana fotoğraf kaldırılırsa ilk sıradaki ana olur. Her işlem `audit_log`'a yazılır ve Araç 360° kayıt geçmişinde görünür.
+
 API: `GET /api/vehicles/:id/history` (vehicles.read) ve `GET /api/vehicles/:id/activity` (audit.read). İkisi de önce aracın şirket ve şube kapsamında görünür olduğunu doğrular; değilse 404. Sekme adres çubuğunda (`?sekme=`) tutulur.
 
 Kiralama, rezervasyon, müsaitlik, bakım ve finans verileri ilgili modüller geliştirilince bağlanır. O zamana kadar Araç 360° bu bölümlerde açık bir "modül henüz geliştirilmedi" durumu gösterir; kirada/müsait durumu uydurulmaz.

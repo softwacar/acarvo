@@ -1,6 +1,7 @@
 import { sql } from 'drizzle-orm'
 import {
   bigint,
+  boolean,
   check,
   date,
   foreignKey,
@@ -268,5 +269,53 @@ export const vehicleLocationEvents = pgTable(
     foreignKey({ columns: [t.companyId, t.vehicleId], foreignColumns: [vehicles.companyId, vehicles.id] }),
     foreignKey({ columns: [t.companyId, t.branchId], foreignColumns: [branches.companyId, branches.id] }),
     check('location_branch_check', sql`${t.locationType} <> 'branch' or ${t.branchId} is not null`),
+  ],
+)
+
+// ---------------------------------------------------------------------------
+// Files and vehicle promotional photos. Files live outside any public folder and are
+// served only through the API after a permission check. Promotional (catalogue) photos
+// are a separate table from the immutable handover/return evidence that comes later.
+
+export const files = pgTable(
+  'files',
+  {
+    id: id(),
+    companyId: uuid('company_id').notNull().references(() => companies.id),
+    kind: text('kind', { enum: ['vehicle_promo_photo'] }).notNull(),
+    storageKey: text('storage_key').notNull().unique(),
+    thumbKey: text('thumb_key').notNull().unique(),
+    mimeType: text('mime_type').notNull(),
+    sizeBytes: integer('size_bytes').notNull(),
+    width: integer('width').notNull(),
+    height: integer('height').notNull(),
+    sha256: text('sha256').notNull(),
+    uploadedBy: uuid('uploaded_by').references(() => users.id),
+    createdAt: createdAt(),
+  },
+  (t) => [unique('files_company_id_key').on(t.companyId, t.id)],
+)
+
+export const MAX_PROMO_PHOTOS = 6
+
+export const vehiclePromoPhotos = pgTable(
+  'vehicle_promo_photos',
+  {
+    id: id(),
+    companyId: uuid('company_id').notNull().references(() => companies.id),
+    vehicleId: uuid('vehicle_id').notNull(),
+    fileId: uuid('file_id').notNull(),
+    position: integer('position').notNull(),
+    isPrimary: boolean('is_primary').notNull().default(false),
+    createdBy: uuid('created_by').references(() => users.id),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    unique('promo_photos_file_key').on(t.fileId),
+    uniqueIndex('promo_photos_one_primary_key').on(t.vehicleId).where(sql`${t.isPrimary}`),
+    index('promo_photos_vehicle_idx').on(t.companyId, t.vehicleId),
+    foreignKey({ columns: [t.companyId, t.vehicleId], foreignColumns: [vehicles.companyId, vehicles.id] }),
+    foreignKey({ columns: [t.companyId, t.fileId], foreignColumns: [files.companyId, files.id] }),
+    check('promo_photos_position_check', sql`${t.position} between 0 and 5`),
   ],
 )

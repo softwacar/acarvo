@@ -225,3 +225,23 @@ export interface VehicleActivityItem {
 
 export const VEHICLE_TABS = ['genel', 'musaitlik', 'kiralamalar', 'kontroller', 'bakim', 'belgeler', 'finans', 'gecmis'] as const
 export type VehicleTab = (typeof VEHICLE_TABS)[number]
+
+export const MAX_PROMO_PHOTOS = 6
+export const MAX_PHOTO_MB = 10
+
+export interface VehiclePhoto {
+  id: string
+  position: number
+  isPrimary: boolean
+  width: number
+  height: number
+  sizeBytes: number
+  createdAt: string
+  uploadedByName: string | null
+  url: string
+  thumbUrl: string
+}
+export interface VehiclePhotoList {
+  items: VehiclePhoto[]
+  max: number
+}

@@ -1,4 +1,6 @@
 import { randomBytes } from 'node:crypto'
+import os from 'node:os'
+import path from 'node:path'
 import { hash } from '@node-rs/argon2'
 import { sql } from 'drizzle-orm'
 import { drizzle } from 'drizzle-orm/node-postgres'
@@ -21,7 +23,15 @@ if (!base.TEST_DATABASE_URL || !base.TEST_DATABASE_OWNER_URL) {
 assertSeparateDatabases(base.TEST_DATABASE_URL, base.DATABASE_URL, 'TEST_DATABASE_URL')
 assertSeparateDatabases(base.TEST_DATABASE_OWNER_URL, base.DATABASE_OWNER_URL, 'TEST_DATABASE_OWNER_URL')
 
-export const env = { ...base, NODE_ENV: 'test' as const, DATABASE_URL: base.TEST_DATABASE_URL, DATABASE_OWNER_URL: base.TEST_DATABASE_OWNER_URL }
+/** Uploaded test files go to a throwaway folder, never to the development storage. */
+export const TEST_STORAGE = path.join(os.tmpdir(), 'acarvo-test-storage')
+export const env = {
+  ...base,
+  NODE_ENV: 'test' as const,
+  DATABASE_URL: base.TEST_DATABASE_URL,
+  DATABASE_OWNER_URL: base.TEST_DATABASE_OWNER_URL,
+  STORAGE_DIR: TEST_STORAGE,
+}
 
 /** Random per run; never stored anywhere. */
 export const PASSWORD = randomBytes(12).toString('base64url')
@@ -53,7 +63,7 @@ export async function resetDatabase(): Promise<DevData> {
   await ensureTestDatabase()
   passwordHash ??= await hash(PASSWORD, ARGON2_OPTIONS)
   await ownerDb.execute(
-    sql`truncate vehicle_location_events, odometer_readings, vehicles, vehicle_classes, audit_log, membership_branches, membership_roles, memberships, roles, branches, sessions, users, companies restart identity cascade`,
+    sql`truncate vehicle_promo_photos, files, vehicle_location_events, odometer_readings, vehicles, vehicle_classes, audit_log, membership_branches, membership_roles, memberships, roles, branches, sessions, users, companies restart identity cascade`,
   )
   const data = await loadDevData(ownerDb, passwordHash)
   await ensureDevFleet(ownerDb)
@@ -112,7 +122,7 @@ export class Client {
     private origin = env.WEB_ORIGIN,
   ) {}
 
-  async request(method: 'GET' | 'POST' | 'PUT', url: string, body?: unknown, headers: Record<string, string> = {}) {
+  async request(method: 'GET' | 'POST' | 'PUT' | 'DELETE', url: string, body?: unknown, headers: Record<string, string> = {}) {
     const res = await this.app.inject({
       method,
       url,
@@ -132,6 +142,16 @@ export class Client {
   get = (url: string) => this.request('GET', url)
   post = (url: string, body?: unknown, headers?: Record<string, string>) => this.request('POST', url, body, headers)
   put = (url: string, body?: unknown) => this.request('PUT', url, body)
+  del = (url: string) => this.request('DELETE', url)
+
+  /** multipart/form-data with one file, as a browser sends it. */
+  upload(url: string, file: Buffer, filename = 'foto.jpg', type = 'image/jpeg') {
+    const boundary = `----acarvo${randomBytes(8).toString('hex')}`
+    const crlf = String.fromCharCode(13, 10)
+    const head = Buffer.from(`--${boundary}${crlf}Content-Disposition: form-data; name="file"; filename="${filename}"${crlf}Content-Type: ${type}${crlf}${crlf}`)
+    const payload = Buffer.concat([head, file, Buffer.from(`${crlf}--${boundary}--${crlf}`)])
+    return this.request('POST', url, payload, { 'content-type': `multipart/form-data; boundary=${boundary}` })
+  }
 
   async prepare() {
     this.csrf = (await this.get('/api/auth/csrf')).json().token

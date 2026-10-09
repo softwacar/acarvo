@@ -4,7 +4,6 @@ import {
   ArrowRight,
   Buildings,
   CalendarCheck,
-  Camera,
   CarProfile,
   ClipboardText,
   ClockCounterClockwise,
@@ -18,7 +17,6 @@ import {
   LockSimple,
   MapPin,
   PencilSimple,
-  ShieldCheck,
   Tag,
   WarningCircle,
   Wrench,
@@ -44,6 +42,7 @@ import {
 } from '@/lib/vehicle-labels'
 import { can, useSession } from '@/session'
 import { listSearchToReturnTo } from './search'
+import { VehicleGallery } from './VehicleGallery'
 
 // ---------------------------------------------------------------------------
 // Tabs (spec §13.3: 8 fixed tabs inside the vehicle, never sidebar links)
@@ -136,7 +135,7 @@ const btnSecondary =
   'inline-flex h-10 items-center gap-2 rounded-lg border border-line bg-surface px-4 font-medium text-ink shadow-[0_1px_2px_rgb(16_24_40/0.04)] transition-colors hover:bg-line-soft'
 
 /** Spec §13.3 quick actions. Shown so the user knows where they will live; each says why it is not available yet. */
-const LATER_ACTIONS = ['Yeni rezervasyon', 'Kiralama aç', 'Müsaitliği kontrol et', 'Bakım planla', 'Hasar bildir', 'Ceza kaydet', 'Transfer başlat', 'Belge ekle', 'Fotoğraf ekle']
+const LATER_ACTIONS = ['Yeni rezervasyon', 'Kiralama aç', 'Müsaitliği kontrol et', 'Bakım planla', 'Hasar bildir', 'Ceza kaydet', 'Transfer başlat', 'Belge ekle']
 
 function MoreMenu({ vehicleId, canEdit }: { vehicleId: string; canEdit: boolean }) {
   const navigate = useNavigate()
@@ -178,37 +177,6 @@ function MoreMenu({ vehicleId, canEdit }: { vehicleId: string; canEdit: boolean 
 // ---------------------------------------------------------------------------
 // Hero: photo stage + identity, then the facts strip
 
-/** Profile photo area. No upload yet, so it says so instead of showing a stock car. */
-function PhotoStage({ v }: { v: VehicleDetail }) {
-  return (
-    <div className="min-w-0">
-      <div className="relative grid aspect-[16/7] place-items-center overflow-hidden rounded-[14px] border border-line lg:aspect-[16/10] bg-[radial-gradient(120%_80%_at_50%_100%,#e6e9ef_0%,#f3f4f7_55%,#f7f8fa_100%)]">
-        <div aria-hidden className="absolute inset-x-[12%] bottom-[22%] h-px bg-gradient-to-r from-transparent via-ink/10 to-transparent" />
-        <div className="relative max-w-[360px] px-6 text-center">
-          <CarProfile weight="thin" className="mx-auto size-16 text-ink-3/70 lg:size-28" aria-hidden />
-          <p className="mt-2 font-semibold text-ink">Tanıtım fotoğrafı eklenmedi</p>
-          <p className="mt-1 text-[13px] leading-snug text-ink-2">
-            {v.make} {v.model} için en fazla bir tanıtım fotoğrafı tutulur. Fotoğraf yükleme bir sonraki aşamada açılacak; fotoğrafın olmaması aracın kullanımına engel değildir.
-          </p>
-        </div>
-        <span className="absolute bottom-3 left-3 rounded-md bg-surface/92 px-2.5 py-1 text-[12px] font-medium text-ink-2 shadow-[0_0_0_1px_var(--ac-line)]">Tanıtım fotoğrafı</span>
-      </div>
-      <div className="mt-3 grid grid-cols-[88px_1fr] items-stretch gap-3">
-        <div className="grid aspect-[4/3] place-items-center rounded-lg border border-dashed border-line bg-surface text-ink-3" aria-label="Tanıtım fotoğrafı yok">
-          <Camera size={20} />
-        </div>
-        <div className="flex items-start gap-2.5 rounded-lg border border-line bg-surface px-3.5 py-2.5 text-[13px]">
-          <ShieldCheck size={17} weight="fill" className="mt-px shrink-0 text-blue" />
-          <p className="text-ink-2">
-            <span className="font-medium text-ink">Teslim ve iade fotoğrafları</span> kiralama kontrolleriyle oluşur; değiştirilemez kanıt kaydıdır ve tanıtım fotoğrafıyla
-            karıştırılmaz. Henüz kontrol kaydı yok.
-          </p>
-        </div>
-      </div>
-    </div>
-  )
-}
-
 function StatusCard({ v }: { v: VehicleDetail }) {
   const active = v.status === 'active'
   return (
@@ -220,15 +188,10 @@ function StatusCard({ v }: { v: VehicleDetail }) {
         </div>
         <span className="text-[13px] text-ink-3">sürüm {v.version}</span>
       </div>
-      <p className="mt-1 text-[13px] text-ink-2">
-        {active ? 'Araç filoda ve kullanıma açık olarak kayıtlı.' : 'Araç geçici olarak kullanım dışı kayıtlı.'} Bu, aracın varlık durumudur; müsaitlik ve hazırlıktan ayrı izlenir.
-      </p>
-      <div className="mt-4 flex items-start gap-2.5 border-t border-line-soft pt-3.5 text-[13px]">
-        <Info size={16} className="mt-px shrink-0 text-ink-3" />
-        <p className="min-w-0 text-ink-2">
-          <span className="font-medium text-ink">Müsaitlik, aktif kiralama ve sıradaki teslim</span> Rezervasyonlar ve Kiralamalar modülleri bağlandığında burada
-          gösterilecek. Şu an tahmini veya örnek durum gösterilmez.
-        </p>
+      <div className="mt-4 flex items-center gap-2.5 border-t border-line-soft pt-3.5 text-[13px]">
+        <CalendarCheck size={16} className="shrink-0 text-ink-3" />
+        <span className="font-medium text-ink">Müsaitlik ve kiralama</span>
+        <span className="text-ink-2">Rezervasyon ve kiralama modülleriyle gelecek</span>
       </div>
     </div>
   )
@@ -362,7 +325,7 @@ function Hero({ v, canEdit, onTab }: { v: VehicleDetail; canEdit: boolean; onTab
           </Link>
         </div>
         <div className="mx-auto grid max-w-[1400px] gap-x-10 gap-y-6 px-4 pt-4 pb-7 lg:grid-cols-[minmax(0,1.08fr)_minmax(0,1fr)] lg:gap-x-8 lg:px-8 xl:gap-x-10">
-          <PhotoStage v={v} />
+          <VehicleGallery v={v} canManage={can(session, 'vehicles.photos.manage')} />
 
           <div className="flex min-w-0 flex-col">
             <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
@@ -404,10 +367,6 @@ function Hero({ v, canEdit, onTab }: { v: VehicleDetail; canEdit: boolean; onTab
               </button>
               <MoreMenu vehicleId={v.id} canEdit={canEdit} />
             </div>
-            <p className="mt-2.5 flex items-start gap-1.5 text-[12.5px] text-ink-2">
-              <Info size={14} className="mt-[3px] shrink-0 text-ink-3" />
-              Rezervasyon, kiralama, bakım ve belge işlemleri ilgili modüller geliştirildiğinde bu ekrandan başlatılacak.
-            </p>
           </div>
         </div>
 
@@ -478,10 +437,19 @@ function useChangeFormatter() {
   }
 }
 
+const ACTION_TITLES: Record<string, string> = {
+  'vehicle.create': 'Araç kaydı oluşturuldu',
+  'vehicle.update': 'Araç bilgileri güncellendi',
+  'vehicle.photo.add': 'Tanıtım fotoğrafı eklendi',
+  'vehicle.photo.remove': 'Tanıtım fotoğrafı kaldırıldı',
+  'vehicle.photo.primary': 'Ana fotoğraf değiştirildi',
+  'vehicle.photo.reorder': 'Fotoğraf sırası değiştirildi',
+}
+
 function ActivityEntry({ a }: { a: VehicleActivityItem }) {
   const fmt = useChangeFormatter()
   const changes = (a.summary?.changes ?? {}) as Record<string, [unknown, unknown]>
-  const title = a.action === 'vehicle.create' ? 'Araç kaydı oluşturuldu' : a.action === 'vehicle.update' ? 'Araç bilgileri güncellendi' : a.action
+  const title = ACTION_TITLES[a.action] ?? a.action
   return (
     <li className="grid grid-cols-[20px_1fr] gap-3 py-3 first:pt-0 last:pb-0">
       <span className={cn('mt-1.5 size-2.5 rounded-full border-2', a.action === 'vehicle.create' ? 'border-blue bg-blue' : 'border-ink-3 bg-surface')} aria-hidden />
@@ -640,12 +608,11 @@ function Overview({ v, history, onTab, canEdit }: { v: VehicleDetail; history?: 
           )}
           <p className="mt-3 flex items-start gap-1.5 border-t border-line-soft pt-3 text-[12.5px] text-ink-2">
             <Info size={14} className="mt-[3px] shrink-0 text-ink-3" />
-            Edinim bilgisi işletme geliri değildir; finans raporlarına karışmaz.
+            İşletme geliri değildir.
           </p>
         </Panel>
 
         <Panel title="Bağlı kayıtlar">
-          <p className="-mt-2 mb-3 text-[13px] text-ink-2">Bu bölümler ilgili modüller geliştirildiğinde araca bağlanacak. O zamana kadar örnek veri gösterilmez.</p>
           <ul className="-mx-2">
             {links.map(([tab, Ico, label]) => (
               <li key={tab}>
@@ -674,8 +641,7 @@ function Pending({ tab }: { tab: VehicleTab }) {
           </span>
           <h2 className="mt-4 text-[18px] font-semibold tracking-[-0.01em]">{TAB_LABELS[tab]} henüz bağlı değil</h2>
           <p className="mt-1.5 max-w-[460px] text-ink-2">
-            Bu sekme <span className="font-medium text-ink">{p.module}</span> modülü geliştirildiğinde bu aracın gerçek kayıtlarıyla dolacak. Şu an örnek, tahmini veya
-            temsili veri gösterilmez.
+            <span className="font-medium text-ink">{p.module}</span> modülüyle bu aracın gerçek kayıtları burada görünecek.
           </p>
         </div>
         <div className="rounded-lg border border-line-soft bg-ground/50 p-5">
@@ -724,7 +690,7 @@ function Documents() {
         </div>
         <p className="mt-4 flex items-start gap-1.5 text-[13px] text-ink-2">
           <Files size={15} className="mt-0.5 shrink-0 text-ink-3" />
-          Belge yükleme ve süre takibi bir sonraki aşamada açılacak. Satırlar araç için izlenecek standart belge türleridir; kayıtlı belge yoktur.
+          Belge yükleme ve süre takibi sonraki aşamada. Kayıtlı belge yok.
         </p>
       </Panel>
       <Panel title="Açık riskler">
@@ -825,7 +791,7 @@ function HistoryTab({ history, isLoading, vehicleId }: { history?: VehicleHistor
       </div>
       <p className="flex items-start gap-1.5 text-[13px] text-ink-2">
         <LockSimple size={14} className="mt-[3px] shrink-0 text-ink-3" />
-        Kilometre ve konum kayıtları geriye dönük değiştirilmez. Düzeltme ve transfer kayıtları sonraki aşamada, gerekçeli yeni kayıt olarak eklenecek.
+        Kayıtlar geriye dönük değiştirilmez; düzeltme ve transferler gerekçeli yeni kayıt olarak eklenecek.
       </p>
 
       <Panel title="Kayıt geçmişi" action={<span className="text-[12.5px] text-ink-2">Kim, ne zaman, neyi değiştirdi</span>}>

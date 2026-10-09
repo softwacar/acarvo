@@ -11,6 +11,8 @@ const schema = z.object({
   DATABASE_OWNER_URL: z.string().min(1),
   TEST_DATABASE_URL: z.string().min(1).optional(),
   TEST_DATABASE_OWNER_URL: z.string().min(1).optional(),
+  /** Private file storage root. Defaults to <repo>/storage (ignored by Git, never served directly). */
+  STORAGE_DIR: z.string().min(1).optional(),
   /** Signs the CSRF secret cookie. */
   COOKIE_SECRET: z.string().min(32),
 })
