@@ -356,3 +356,11 @@ describe('update', () => {
     expect(res.statusCode).toBe(400)
   })
 })
+
+describe('response format', () => {
+  it('returns timestamps as ISO 8601', async () => {
+    const v = (await list(adnan, 'q=A12-K-345')).items[0]!
+    expect(v.odometer!.at).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/)
+    expect(v.location!.at).toMatch(/Z$/)
+  })
+})

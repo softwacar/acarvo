@@ -147,6 +147,18 @@ Parolalar kurulum betiğinde rastgele üretilir ve yalnız yerel `.env` dosyası
 - `vehicle_documents` (şirket): tür (muayene, trafik sigortası, kasko, ruhsat, diğer), referans no, başlangıç, bitiş, dosya.
 - `vehicle_photos` (şirket): araç, dosya, tür (`profile` / `inspection`), açı, kaynak kayıt.
 
+### 8.1 Birinci parça (uygulandı): liste, ekleme, düzenleme
+
+- Tablolar: `vehicle_classes`, `vehicles`, `odometer_readings`, `vehicle_location_events` (migration 0002–0003). Hepsinde RLS zorunlu ve 4 politika var; araç sınıfı, ana şube ve olay kayıtları şirket içi bileşik yabancı anahtarlarla bağlıdır.
+- Plaka şirket içinde tekildir (`plate_normalized`: büyük harf, yalnız harf ve rakam); araç kodu da şirket içinde tekildir (büyük/küçük harf duyarsız). Başka şirketteki aynı plaka serbesttir.
+- `version` ile iyimser kilit: güncelleme satırı kilitler, sürüm uyuşmazsa 409 ve güncel kayıt döner. Arayüz farkları gösterir; kullanıcı güncel kaydı yükler veya bilerek üzerine yazar.
+- Uygulama rolü araç silemez; kilometre ve konum tabloları yalnız eklenebilir (UPDATE/DELETE yetkisi yok). Güncel kilometre ve son konum en son olaydan türetilir; düzenleme formundan değiştirilmez.
+- Şube yetkisi: şubeyle sınırlı kullanıcı yalnız ana şubesi kendi şubelerinden olan araçları listeler, açar, ekler ve düzenler; aracı yetkisi olmayan şubeye taşıyamaz.
+- Kullanım durumu formda yalnız `Aktif` / `Hizmet dışı`. `Satıldı` / `Filodan çıktı` §59BM'deki ayrı, gerekçeli işlemle gelecek.
+- Dış kaynak (tedarikçi) aracı, Araç Tedarikçileri ve tedarik dönemi modülüyle birlikte eklenecek; şimdilik yalnız kendi filo kaydı açılır.
+- Oluşturma ve düzenleme `audit_log`'a yazılır (düzenlemede değişen alanların önceki/sonraki değeri).
+- Sonraki parçalar: Araç 360° detay, belgeler, tanıtım fotoğrafı, kilometre/konum düzeltme kayıtları, filodan çıkış.
+
 Kiralama, rezervasyon, müsaitlik, bakım ve finans verileri ilgili modüller geliştirilince bağlanır. O zamana kadar Araç 360° bu bölümlerde açık bir "modül henüz geliştirilmedi" durumu gösterir; kirada/müsait durumu uydurulmaz.
 
 ## 9. API kuralları

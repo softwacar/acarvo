@@ -70,7 +70,7 @@ export const NAV: NavGroup[] = [
       { slug: 'kiralamalar', label: 'Kiralamalar', icon: Key },
       { slug: 'takvim', label: 'Takvim', icon: CalendarBlank },
       { slug: 'gorevler', label: 'Görevler', icon: ClipboardText },
-      { slug: 'araclar', label: 'Araçlar', icon: CarProfile, permission: 'vehicles.read' },
+      { slug: 'araclar', label: 'Araçlar', icon: CarProfile, permission: 'vehicles.read', built: true },
       { slug: 'bakim-servis', label: 'Bakım & Servis', icon: Wrench },
       { slug: 'olay-merkezi', label: 'Olay Merkezi', icon: WarningOctagon },
       { slug: 'hasar-kayitlari', label: 'Hasar Kayıtları', icon: Bandaids },

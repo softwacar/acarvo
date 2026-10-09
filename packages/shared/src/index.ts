@@ -35,7 +35,7 @@ export interface MembershipSummary {
 
 export interface SessionInfo {
   user: { id: string; email: string; name: string }
-  company: { id: string; name: string; timezone: string; currency: string; roles: string[] } | null
+  company: { id: string; name: string; country: string; timezone: string; currency: string; roles: string[] } | null
   memberships: MembershipSummary[]
   permissions: Permission[]
   branches: { id: string; name: string; code: string }[]

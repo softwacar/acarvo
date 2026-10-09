@@ -34,7 +34,7 @@ export async function buildSessionInfo(
   const { access, company, branches } = current
   return {
     ...base,
-    company: { id: company.id, name: company.name, timezone: company.timezone, currency: company.currency, roles: access.roleNames },
+    company: { id: company.id, name: company.name, country: company.country, timezone: company.timezone, currency: company.currency, roles: access.roleNames },
     permissions: [...access.permissions].sort(),
     branches,
     allBranches: access.allBranches,

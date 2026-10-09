@@ -1,4 +1,4 @@
-import type { ApiError, SessionInfo } from '@acarvo/shared'
+import type { ApiError, SessionInfo, VehicleClassSummary, VehicleDetail, VehicleListResponse } from '@acarvo/shared'
 
 export class ApiRequestError extends Error {
   constructor(
@@ -6,6 +6,7 @@ export class ApiRequestError extends Error {
     readonly code: string,
     message: string,
     readonly fields?: Record<string, string>,
+    readonly details?: unknown,
   ) {
     super(message)
   }
@@ -27,11 +28,12 @@ async function toError(res: Response) {
     body?.error.code ?? 'NETWORK',
     body?.error.message ?? 'Sunucuya ulaşılamadı. Bağlantınızı kontrol edin.',
     body?.error.fields,
+    body?.error.details,
   )
 }
 
 /** JSON request to the API. Mutations carry the CSRF token; an expired token is renewed once. */
-export async function api<T>(path: string, init: { method?: 'GET' | 'POST'; body?: unknown } = {}): Promise<T> {
+export async function api<T>(path: string, init: { method?: 'GET' | 'POST' | 'PUT'; body?: unknown } = {}): Promise<T> {
   const method = init.method ?? 'GET'
   const send = async (retry: boolean): Promise<Response> => {
     const headers: Record<string, string> = {}
@@ -84,4 +86,16 @@ export interface BranchRow {
 }
 export const branchesApi = {
   list: () => api<{ items: BranchRow[] }>('/branches'),
+}
+
+export const vehiclesApi = {
+  list: (search: Record<string, string | number | undefined>) => {
+    const qs = new URLSearchParams()
+    for (const [k, v] of Object.entries(search)) if (v !== undefined && v !== '') qs.set(k, String(v))
+    return api<VehicleListResponse>(`/vehicles?${qs}`)
+  },
+  get: (id: string) => api<VehicleDetail>(`/vehicles/${id}`),
+  create: (body: unknown) => api<VehicleDetail>('/vehicles', { method: 'POST', body }),
+  update: (id: string, body: unknown) => api<VehicleDetail>(`/vehicles/${id}`, { method: 'PUT', body }),
+  classes: () => api<{ items: VehicleClassSummary[] }>('/vehicle-classes'),
 }

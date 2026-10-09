@@ -8,6 +8,9 @@ import { LoginPage } from './pages/LoginPage'
 import { ModulePage } from './pages/ModulePage'
 import { NotFoundPage } from './pages/NotFoundPage'
 import { ProfilePage } from './pages/ProfilePage'
+import { VehicleFormPage } from './pages/vehicles/VehicleFormPage'
+import { VehiclesPage } from './pages/vehicles/VehiclesPage'
+import { validateVehicleSearch } from './pages/vehicles/search'
 import { sessionQuery } from './session'
 
 const rootRoute = createRootRouteWithContext<{ queryClient: QueryClient }>()({
@@ -49,6 +52,16 @@ const appRoute = createRoute({
 
 const indexRoute = createRoute({ getParentRoute: () => appRoute, path: '/', component: () => <ModulePage slug="" /> })
 const branchesRoute = createRoute({ getParentRoute: () => appRoute, path: '/subeler', component: BranchesPage })
+const vehiclesRoute = createRoute({ getParentRoute: () => appRoute, path: '/araclar', validateSearch: validateVehicleSearch, component: VehiclesPage })
+const vehicleNewRoute = createRoute({ getParentRoute: () => appRoute, path: '/araclar/yeni', component: () => <VehicleFormPage mode="create" /> })
+const vehicleEditRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/araclar/$vehicleId/duzenle',
+  component: function EditVehicle() {
+    const { vehicleId } = useParams({ from: '/app/araclar/$vehicleId/duzenle' })
+    return <VehicleFormPage key={vehicleId} mode="edit" />
+  },
+})
 const profileRoute = createRoute({ getParentRoute: () => appRoute, path: '/profil', component: ProfilePage })
 const moduleRoute = createRoute({
   getParentRoute: () => appRoute,
@@ -59,7 +72,7 @@ const moduleRoute = createRoute({
   },
 })
 
-const routeTree = rootRoute.addChildren([loginRoute, appRoute.addChildren([indexRoute, branchesRoute, profileRoute, moduleRoute])])
+const routeTree = rootRoute.addChildren([loginRoute, appRoute.addChildren([indexRoute, branchesRoute, vehiclesRoute, vehicleNewRoute, vehicleEditRoute, profileRoute, moduleRoute])])
 
 export function createAppRouter(queryClient: QueryClient) {
   return createRouter({ routeTree, context: { queryClient }, defaultPreload: 'intent', scrollRestoration: true })

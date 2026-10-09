@@ -6,7 +6,8 @@ import { NotFoundPage } from './NotFoundPage'
 /** Delivery order agreed for the real application. Shown as-is; nothing here is sample data. */
 const ROADMAP = [
   { label: 'Temel altyapı: giriş, şirket ve şube yetkileri, veri izolasyonu', done: true },
-  { label: 'Araçlar ve Araç 360°', done: false },
+  { label: 'Araçlar: liste, ekleme, düzenleme', done: true },
+  { label: 'Araç 360° detay', done: false },
 ]
 
 /** Honest page for a §4 module that has not been developed yet. */
