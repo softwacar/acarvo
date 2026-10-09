@@ -185,6 +185,85 @@ Spec §13.3'e göre ayrım:
 
 API: `GET /api/vehicles/:id/history` (vehicles.read) ve `GET /api/vehicles/:id/activity` (audit.read). İkisi de önce aracın şirket ve şube kapsamında görünür olduğunu doğrular; değilse 404. Sekme adres çubuğunda (`?sekme=`) tutulur.
 
+### 8.4 Araç belgeleri — uygulama planı (onaylı, henüz uygulanmadı)
+
+Kaynak: spec §59C (türler, alanlar, 30/15/7 gün uyarıları), §13.3 Sekme 6, §33 (Belge Merkezi ikinci depo değildir; belgenin asıl kaydı sahibinin altında kalır), §59F.4 (şirket tanımlı türler), §59D (readiness), §9 (kiralama dosyası belge sürümünü sabitler). Kullanıcı kararları: şirket bazlı zorunluluk, dosyasız kayıt, ayrı görüntüleme yetkisi, görüntüleme/indirme kaydı.
+
+#### 8.4.1 Veri modeli
+
+- `document_types` (global, RLS yok, uygulamaya yalnız SELECT): sistem türleri — `registration` Ruhsat (süresiz), `inspection` Muayene, `liability_insurance` Trafik sigortası, `comprehensive_insurance` Kasko / diğer poliçe, `roadside_assistance` Yol yardım, `other` Diğer. Alanlar: kod, ad, geçerlilik tarihi gerekli mi, sıra. Şirket verisi değildir.
+- `company_document_type_settings` (şirket, RLS): şirketin bir tür için ayarı — zorunlu mu, uyarı günü. **Satır yoksa varsayılan: zorunlu değil, uyarı 30 gün.** Hiçbir türün hiçbir ülkede zorunlu olduğu varsayılmaz. Şirkete özel tür ekleme ve ayar ekranı Yönetim → Ayarlar ile gelecek.
+- `vehicle_documents` (şirket, RLS): bir belge dönemi. Araç, tür, numara, düzenleyen kurum, düzenlenme tarihi, geçerlilik başlangıcı, son geçerlilik (dahil), not, `record_state` (`draft` / `active` / `voided`), `renews_id` (yenilediği önceki dönem, aynı şirket ve araç), geçersiz sayma gerekçesi/kişisi/zamanı, sürüm (iyimser kilit), oluşturan/değiştiren. Uygulama rolüne **DELETE yetkisi verilmez**; fiziksel silme yoktur.
+- `vehicle_document_files` (şirket, RLS): değiştirilemez dosya sürümleri — belge, sürüm no (belge içinde tekil), depolama kaydı, yükleyen, tarih. Uygulama rolüne yalnız SELECT/INSERT.
+- `document_files` (şirket, RLS): belge dosyalarının depolama kaydı (anahtar, gerçek tür, boyut, SHA-256, sayfa sayısı, temizlenmiş görünen ad). Tanıtım fotoğraflarının `files` tablosundan ayrıdır; o tabloya dokunulmaz. Yalnız SELECT/INSERT.
+- Kısıtlar: bileşik şirket içi yabancı anahtarlar; `valid_from ≤ valid_until`; `active` kayıtta geçerlilik tarihi gereken türde `valid_until` dolu (veritabanı kontrolü + API doğrulaması); aynı dönemin iki kez yenilenememesi için `renews_id` üzerinde kısmi tekil indeks (geçersiz sayılmamış kayıtlar için).
+
+#### 8.4.2 Yenileme (konu 1)
+
+- Yenileme **önceki dönemi değiştirmez**. Yeni kayıt kendi tarihleriyle oluşturulur ve `renews_id` ile öncekine bağlanır; önceki dönem `active` kalır ve kendi son geçerlilik tarihine kadar geçerli sayılır. “Güncel belge” hangi kaydın bugünü kapsadığına göre **tarihten** hesaplanır; “yenilendi” bilgisi bir durum alanı olarak yazılmaz. Böylece gelecekte başlayacak yeni poliçe, bugün geçerli olan eskisini erken geçersiz kılamaz.
+- Atomiklik: yenileme tek veritabanı işlemidir — önceki kayıt `FOR UPDATE` ile kilitlenir, aktif ve aynı araçta olduğu doğrulanır, yeni kayıt ve işlem geçmişi yazılır. Aynı dönemin eşzamanlı ikinci yenilemesi kısmi tekil indeksle reddedilir (409). Dosya, işlem tamamlandıktan sonra yeni kayda ayrı sürüm olarak yüklenir; dosya yüklemesi başarısız olsa bile önceki dönem ve yeni kaydın bilgileri bozulmaz (yeni kayıt “Dosya yok” uyarısıyla kalır).
+- Tarihsel kayıtlar: önceki dönemler, tüm dosya sürümleri ve geçersiz sayılan kayıtlar silinmez ve değiştirilmez. Dosya sürümleri hiçbir koşulda güncellenmez. Bilgi düzeltmeleri (yanlış tarih/numara) yalnız `active`/`draft` kayıtta, sürüm kontrolüyle ve eski/yeni değer işlem geçmişine yazılarak yapılır. İleride bir kiralama belge sürümünü sabitlediğinde o kayıt kilitlenecek (`locked_at`), düzeltme yerine yeni dönem gerekecek; şema buna hazır tasarlanır.
+
+#### 8.4.3 Durum hesaplama (konu 2)
+
+Tek bir saf fonksiyonda (`packages/shared`) tanımlanır, API kullanır, arayüz yalnız gösterir. `T` = şirket saat diliminde bugünün tarihi; son geçerlilik günü dahildir.
+
+Tek belge için (öncelik sırasıyla):
+
+| Durum | Koşul | Geçerlilik sayılır mı |
+|---|---|---|
+| Geçersiz sayıldı | `record_state = voided` | Hayır, yalnız geçmişte görünür |
+| Taslak | `record_state = draft` (eksik alanla kaydedildi veya henüz etkinleştirilmedi) | Hayır |
+| — Tarih eksik | Taslağın etkinleşememe nedeni: geçerlilik tarihi gereken türde son tarih yok | Hayır |
+| Henüz başlamadı | `active`, `T < valid_from` | Hayır (gelecek dönem) |
+| Süresi dolmuş | `active`, son tarih var, `T > valid_until` | Hayır |
+| Yaklaşıyor (n gün) | `active`, kalan gün ≤ uyarı günü (varsayılan 30; ≤7 kritik vurgu) | Evet |
+| Geçerli | `active`, aralık içinde (süresiz türde başlangıç geçmişse) | Evet |
+
+- **Dosya yok** ayrı bir uyarıdır; yukarıdaki durumu değiştirmez (ör. “Geçerli · Dosya yok”).
+- Taslak etkinleştirme: geçerlilik tarihi gereken türde son tarih ve tutarlı tarih aralığı zorunlu. Dosya zorunlu değildir (dosyasız kayıt kararı).
+
+Araç × tür özeti (Belgeler tablosundaki satır):
+- **Güncel** = bugünü kapsayan `active` kayıtlar arasında son geçerlilik tarihi en geç olan. **Sıradaki** = başlangıcı ileride olan en erken `active` kayıt.
+- Güncel varsa durum ondan gelir. Güncel “Yaklaşıyor” ise ve sıradaki kayıt güncelin bitişinin ertesi günü veya öncesinde başlıyorsa satır **“Geçerli · yenisi DD.MM’de başlıyor”** gösterir ve uyarı seviyesi düşer. Arada boşluk varsa **“Yaklaşıyor · yenisiyle arasında n gün boşluk”** uyarısı verilir.
+- Güncel yoksa: sıradaki varsa “Henüz başlamadı (DD.MM)” ve tür zorunluysa ek olarak “Şu an geçerli belge yok” uyarısı; yalnız süresi dolmuş kayıt varsa “Süresi dolmuş”; yalnız taslak varsa “Taslak” (zorunluysa “Eksik · taslak var”); hiç kayıt yoksa zorunluysa **Eksik**, değilse **Kayıt yok** (nötr).
+- Aynı fonksiyon araç düzeyinde özet üretir (360 bilgi şeridi, Genel bakış). Testler her satırı ve gün sınırını (son gün, ertesi gün, saat dilimi) kapsar.
+
+#### 8.4.4 Dosya güvenliği (konu 3)
+
+- Kabul: PDF (en fazla 20 MB, 50 sayfa), JPEG/PNG (en fazla 10 MB, 60 MP). Tür içerikten doğrulanır; uzantı ve tarayıcı türü yok sayılır.
+- Görseller yeniden kodlanır (EXIF/GPS silinir; okunabilirlik için JPEG/PNG kalır).
+- PDF içerik doğrulaması: kütüphaneyle yapı açılır; şifreli/parola korumalı, JavaScript, otomatik işlem (`OpenAction`/`AA` ile JS), `Launch`, gömülü dosya, XFA ve zengin medya içerenler reddedilir. Sunucu PDF'i işlemez/görüntüye çevirmez.
+- **Zararlı dosya taraması — üretim koşulu:** yükleme akışında bir tarayıcı arayüzü (`scanFile`) bulunur; dosya yalnız “temiz” sonucundan sonra depoya yazılır. Ayar: `MALWARE_SCANNER=none|clamav`.
+  - `NODE_ENV=production` iken tarayıcı `none` ise veya erişilemiyorsa belge yükleme uçları **503** döner (“Belge yükleme kapalı: zararlı dosya taraması yapılandırılmamış”); uygulama açılışta bunu günlüğe yazar. Kapalı varsayılan (fail-closed) uygulanır; mevcut belgelerin görüntülenmesi etkilenmez.
+  - Tarama “zararlı” derse 422, tarayıcı yanıt vermezse 503; iki durumda da hiçbir şey kaydedilmez.
+  - **Yerel geliştirme sınırlaması:** bu makinede antivirüs motoru yok; geliştirmede `MALWARE_SCANNER=none` ile yükleme açıktır ve dosyalar yalnız içerik doğrulamasından geçer. Bu durum arayüzde yalnız geliştirme ortamında küçük bir notla belirtilir. Üretime geçişte ClamAV (veya eşdeğeri) kurulumu zorunludur.
+  - Testler: üretim + `none` → 503; sahte tarayıcı “zararlı” → 422 ve depoda dosya yok; “erişilemiyor” → 503.
+- Depolama: mevcut özel depolama modülü, ayrı önek `storage/documents/<şirket>/<yıl>/<uuid>`; herkese açık adres yok.
+- Sunum: `GET /api/document-files/:id` her istekte oturum → `vehicles.documents.read` → RLS → aracın şube kapsamı; değilse 404 (oturumsuz 401). Başlıklar: `Cache-Control: private, no-store, max-age=0`, `X-Content-Type-Options: nosniff`, görüntülemede `Content-Security-Policy: sandbox`, indirmede `Content-Disposition: attachment` ve sunucunun ürettiği güvenli ad (ör. `A12-K-345_trafik-sigortasi_2027-03-14.pdf`). Tarayıcı PDF görüntüleyicisi bu başlıklarla çalışmazsa PDF yalnız indirme olarak sunulur. Her görüntüleme/indirme işlem geçmişine yazılır.
+
+#### 8.4.5 Veri bütünlüğü (konu 4)
+
+- **Migration yalnız ekler:** yeni tabloları, RLS'i, kısıtları, yetkileri ve global `document_types` satırlarını oluşturur. Mevcut şirket, rol, araç, fotoğraf veya dosya satırlarını **değiştirmez ve silmez**; mevcut tablolara sütun eklemez. Şirket ayarı satırı oluşturmaz (varsayılan “zorunlu değil”).
+- **Yeni yetki** `vehicles.documents.read`: kod tarafında rol şablonlarına (yeni şirketler) eklenir. Mevcut rollere migration ile eklenmez; geliştirme verisinde seed betiği ekler, gerçek şirketlerde ileride Roller ve Yetkiler ekranından verilir.
+- **Drina'nın örnek zorunlu belge ayarları** (ruhsat, muayene, trafik sigortası) yalnız geliştirme seed'inde oluşturulur: seed yalnız `NODE_ENV !== 'production'` iken ve yalnız geliştirme şirketleri (seed'in oluşturduğu adlar) için çalışır, yalnız ekleme yapar, mevcut ayar satırı varsa dokunmaz. Neretva için ayar oluşturulmaz. Testler kendi verisini `acarvo_test` üzerinde kurar.
+- **Başarısız işlemler mevcut belgeyi bozmaz:**
+  - Yükleme sırası: doğrulama ve tarama → depoya yazma → tek veritabanı işleminde dosya kaydı + sürüm satırı + işlem geçmişi. İşlem başarısız olursa depoya yazılan dosya silinir; belge kaydı, önceki sürümler ve güncel geçerli belge değişmeden kalır. Sürüm numarası belge satırı kilitlenerek verilir.
+  - Yenileme tek işlemdir ve önceki dönemi değiştirmez (8.4.2); başarısız olursa hiçbir şey yazılmaz.
+  - Geçersiz sayma yalnız seçilen kaydı etkiler, gerekçe ister, diğer dönemleri değiştirmez.
+- Sıra: önce migration (ana ve test veritabanı), sonra API, en son arayüz.
+
+#### 8.4.6 API, yetkiler, arayüz, testler
+
+- Uçlar: `GET /api/document-types`; `GET /api/vehicles/:id/documents` (tür özeti + güncel/sıradaki); `GET …/documents/:docId` (detay, sürümler, önceki dönemler); `POST …/documents` (taslak veya aktif); `PUT …/:docId` (düzeltme, sürüm kontrolü); `POST …/:docId/activate`; `POST …/:docId/renew`; `POST …/:docId/void` (gerekçe); `POST …/:docId/files` (yeni sürüm); `GET /api/document-files/:id` (`?indir=1`).
+- Yetkiler: görüntüleme `vehicles.documents.read`, değişiklik `vehicles.documents.manage`; hepsinde şube kapsamı ve CSRF.
+- Arayüz: Araç 360° → Belgeler ve Riskler: V5 “Belgeler ve süreler” tablosu (tür başına satır, durum simge + metin, dosya bağlantıları, “⋯” menüsü), sağdan açılan ekleme/detay paneli, “Açık riskler” bağlı değil olarak kalır; bilgi şeridindeki “Belgeler” ve Genel bakış özeti gerçek veriden; 390 px'te tablo kart listesine döner.
+- Testler: durum fonksiyonu tablosu ve gün sınırları; yenileme (gelecek dönem eskiyi geçersiz kılmaz, eşzamanlı yenileme 409, başarısız yükleme eskiyi bozmaz); PDF/görsel doğrulama ve zararlı içerik reddi; tarama koşulu (503/422); izolasyon (başka şirket/şube 404, oturumsuz 401, yetkisiz 403); `no-store`/`nosniff`; uygulama rolünün silme ve dosya güncelleme yapamaması; migration'ın mevcut satırları değiştirmediği (öncesi/sonrası sayım); işlem geçmişi.
+
+#### 8.4.7 Kapsam
+
+İlk sürüm: sistem türleri, taslak/aktif/geçersiz kayıtlar, yenileme, dosya sürümleri, güvenli görüntüleme/indirme, durum hesabı, 360 sekmesi ve özetleri, işlem geçmişi, tarama koşulu. Sonra: Ayarlar'da tür ve zorunluluk yönetimi, Belge Merkezi arama ekranı, Araçlar listesinde belge filtresi/uyarısı, ana ekran ve bildirim hatırlatmaları, readiness bağlantısı, kiralama dosyasına sürüm sabitleme (`locked_at`), dış kaynak/tedarikçi belgeleri, ClamAV kurulumu, PDF küçük resimleri, OCR, toplu yükleme.
+
 Kiralama, rezervasyon, müsaitlik, bakım ve finans verileri ilgili modüller geliştirilince bağlanır. O zamana kadar Araç 360° bu bölümlerde açık bir "modül henüz geliştirilmedi" durumu gösterir; kirada/müsait durumu uydurulmaz.
 
 ## 9. API kuralları
