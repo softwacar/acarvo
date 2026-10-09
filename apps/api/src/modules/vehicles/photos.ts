@@ -8,6 +8,7 @@ import { AppError, notFound } from '../../lib/errors'
 import { MAX_PHOTO_BYTES, processPromoPhoto } from '../../lib/images'
 import { withCompany } from '../../plugins/auth'
 import type { CompanyAccess } from '../auth/context'
+import type { VehiclePhotoAttribution } from '@acarvo/shared'
 import { inScope } from './repository'
 
 const VEHICLE_NOT_FOUND = 'Araç bulunamadı veya bu araca erişim yetkiniz yok.'
@@ -32,7 +33,7 @@ async function visibleVehicle(tx: Tx, access: CompanyAccess, vehicleId: string, 
 
 async function listPhotos(tx: Tx, vehicleId: string) {
   const rows = await tx.execute(sql`
-    select p.id, p.position, p.is_primary, p.created_at, f.id as file_id, f.width, f.height, f.size_bytes, u.name as uploaded_by_name
+    select p.id, p.position, p.is_primary, p.attribution, p.created_at, f.id as file_id, f.width, f.height, f.size_bytes, u.name as uploaded_by_name
     from vehicle_promo_photos p
     join files f on f.company_id = p.company_id and f.id = p.file_id
     left join users u on u.id = p.created_by
@@ -47,6 +48,7 @@ async function listPhotos(tx: Tx, vehicleId: string) {
     sizeBytes: Number(r.size_bytes),
     createdAt: new Date(String(r.created_at).replace(' ', 'T').replace(/([+-]\d{2})$/, '$1:00')).toISOString(),
     uploadedByName: (r.uploaded_by_name as string) ?? null,
+    attribution: (r.attribution as VehiclePhotoAttribution | null) ?? null,
     url: `/api/files/${r.file_id as string}`,
     thumbUrl: `/api/files/${r.file_id as string}?variant=thumb`,
   }))
@@ -200,26 +202,24 @@ export async function fileRoutes(app: FastifyInstance) {
     const variant = (req.query as { variant?: string }).variant === 'thumb' ? 'thumb' : 'main'
     const file = await withCompany(req, 'vehicles.read', async (tx, access) => {
       const rows = await tx.execute(sql`
-        select f.storage_key, f.thumb_key, f.sha256, v.home_branch_id
+        select f.storage_key, f.thumb_key, v.home_branch_id
         from files f
         join vehicle_promo_photos p on p.company_id = f.company_id and p.file_id = f.id
         join vehicles v on v.company_id = p.company_id and v.id = p.vehicle_id
         where f.id = ${parsed.data.id}`)
-      const r = rows.rows[0] as { storage_key: string; thumb_key: string; sha256: string; home_branch_id: string } | undefined
+      const r = rows.rows[0] as { storage_key: string; thumb_key: string; home_branch_id: string } | undefined
       if (!r || !inScope(access, r.home_branch_id)) throw notFound()
       return r
     })
-    const etag = `"${file.sha256.slice(0, 32)}-${variant}"`
-    if (req.headers['if-none-match'] === etag) return reply.code(304).send()
     const { stream, size } = await app.storage.open(variant === 'thumb' ? file.thumb_key : file.storage_key)
     return reply
       .header('content-type', 'image/webp')
       .header('content-length', size)
-      // Always revalidate: the browser may keep a copy, but every display is re-authorised by
-      // the server (304 only after the permission check), so a company switch or logout cuts access.
-      .header('cache-control', 'private, no-cache')
+      // Never stored by the browser or any proxy: every display is a new request that passes
+      // the session, company and branch checks above, so logout or a company switch cuts access.
+      .header('cache-control', 'private, no-store, max-age=0')
+      .header('pragma', 'no-cache')
       .header('vary', 'Cookie')
-      .header('etag', etag)
       .header('content-disposition', 'inline')
       .send(stream)
   })

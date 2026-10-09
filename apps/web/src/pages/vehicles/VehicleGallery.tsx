@@ -1,4 +1,4 @@
-import { MAX_PHOTO_MB, MAX_PROMO_PHOTOS, type VehicleDetail, type VehiclePhoto, type VehiclePhotoList } from '@acarvo/shared'
+import { MAX_PHOTO_MB, MAX_PROMO_PHOTOS, type VehicleDetail, type VehiclePhoto, type VehiclePhotoAttribution, type VehiclePhotoList } from '@acarvo/shared'
 import {
   ArrowLeft,
   ArrowRight,
@@ -26,6 +26,33 @@ import { cn } from '@/lib/utils'
 import { useSession } from '@/session'
 
 const ACCEPT = 'image/jpeg,image/png,image/webp'
+
+const sourceName = (url: string) => {
+  try {
+    const host = new URL(url).hostname
+    return host.endsWith('wikimedia.org') ? 'Wikimedia Commons' : host.replace(/^www\./, '')
+  } catch {
+    return 'kaynak'
+  }
+}
+
+/** Licence credit for third-party photos: author and source, licence, and what was changed (CC BY-SA 4.0 §3). */
+function Credit({ a, tone = 'page' }: { a: VehiclePhotoAttribution; tone?: 'page' | 'dark' }) {
+  const link = tone === 'dark' ? 'underline decoration-white/40 underline-offset-2 hover:decoration-white' : 'underline decoration-ink-3/40 underline-offset-2 hover:text-ink hover:decoration-ink'
+  return (
+    <span>
+      Fotoğraf:{' '}
+      <a href={a.sourceUrl} target="_blank" rel="noopener noreferrer" className={link}>
+        {a.author}, {sourceName(a.sourceUrl)}
+      </a>
+      {' · '}
+      <a href={a.licenseUrl} target="_blank" rel="noopener noreferrer license" className={link}>
+        {a.license}
+      </a>
+      {a.changes && ` · ${a.changes}`}
+    </span>
+  )
+}
 
 interface UploadItem {
   key: string
@@ -121,12 +148,17 @@ function Lightbox({ photos, index, onIndex, onClose, title }: { photos: VehicleP
         <Dialog.Overlay className="fixed inset-0 z-[60] bg-ink/92" />
         <Dialog.Content className="fixed inset-0 z-[61] grid place-items-center p-6 outline-none" onClick={onClose}>
           <Dialog.Title className="sr-only">{title}</Dialog.Title>
-          <img src={p.url} alt={title} className="max-h-[calc(100dvh-128px)] max-w-full rounded-lg" onClick={(e) => e.stopPropagation()} />
+          <img src={p.url} alt={title} className="max-h-[calc(100dvh-150px)] max-w-full rounded-lg" onClick={(e) => e.stopPropagation()} />
           <Dialog.Close aria-label="Kapat" className="absolute top-4 right-4 grid size-10 place-items-center rounded-full bg-ink/70 text-white ring-1 ring-white/25 hover:bg-ink">
             <X size={18} />
           </Dialog.Close>
-          <span className="tnum absolute bottom-6 left-1/2 -translate-x-1/2 text-[13px] text-white/85">
+          <span className="tnum absolute inset-x-4 bottom-5 text-center text-[13px] text-white/85" onClick={(e) => e.stopPropagation()}>
             {p.isPrimary ? 'Ana fotoğraf' : 'Tanıtım fotoğrafı'} · {index + 1} / {photos.length}
+            {p.attribution && (
+              <span className="mt-1 block text-[12px] text-white/70">
+                <Credit a={p.attribution} tone="dark" />
+              </span>
+            )}
           </span>
         </Dialog.Content>
       </Dialog.Portal>
@@ -206,16 +238,16 @@ export function VehicleGallery({ v, canManage }: { v: VehicleDetail; canManage: 
             type="button"
             onClick={() => setZoom(true)}
             aria-label="Fotoğrafı büyüt"
-            className="absolute right-3 bottom-3 grid size-9 place-items-center rounded-lg bg-surface/92 text-ink opacity-0 backdrop-blur-sm transition-opacity group-hover/stage:opacity-100 focus-visible:opacity-100"
+            className="absolute right-3 bottom-3 grid size-9 place-items-center rounded-lg bg-surface/92 text-ink opacity-0 backdrop-blur-sm transition-opacity group-hover/stage:opacity-100 focus-visible:opacity-100 pointer-coarse:opacity-100 max-sm:opacity-100"
           >
             <ArrowsOutSimple size={16} />
           </button>
           {photos.length > 1 && (
             <>
-              <button type="button" aria-label="Önceki fotoğraf" onClick={() => step(-1)} className="absolute top-1/2 left-3 grid size-9 -translate-y-1/2 place-items-center rounded-full bg-surface/92 text-ink opacity-0 transition-opacity group-hover/stage:opacity-100 focus-visible:opacity-100">
+              <button type="button" aria-label="Önceki fotoğraf" onClick={() => step(-1)} className="absolute top-1/2 left-3 grid size-9 -translate-y-1/2 place-items-center rounded-full bg-surface/92 text-ink opacity-0 transition-opacity group-hover/stage:opacity-100 focus-visible:opacity-100 pointer-coarse:opacity-100 max-sm:opacity-100">
                 <CaretLeft size={16} />
               </button>
-              <button type="button" aria-label="Sonraki fotoğraf" onClick={() => step(1)} className="absolute top-1/2 right-3 grid size-9 -translate-y-1/2 place-items-center rounded-full bg-surface/92 text-ink opacity-0 transition-opacity group-hover/stage:opacity-100 focus-visible:opacity-100">
+              <button type="button" aria-label="Sonraki fotoğraf" onClick={() => step(1)} className="absolute top-1/2 right-3 grid size-9 -translate-y-1/2 place-items-center rounded-full bg-surface/92 text-ink opacity-0 transition-opacity group-hover/stage:opacity-100 focus-visible:opacity-100 pointer-coarse:opacity-100 max-sm:opacity-100">
                 <CaretRight size={16} />
               </button>
             </>
@@ -305,6 +337,12 @@ export function VehicleGallery({ v, canManage }: { v: VehicleDetail; canManage: 
           </button>
         )}
       </div>
+
+      {current?.attribution && (
+        <p className="mt-1 text-[12px] text-ink-2">
+          <Credit a={current.attribution} />
+        </p>
+      )}
 
       {zoom && current && <Lightbox photos={photos} index={index} onIndex={(i) => setSelectedId(photos[i]!.id)} onClose={() => setZoom(false)} title={title} />}
       {manage && q.data && <ManageDialog v={v} list={q.data} uploader={uploader} onPick={() => input.current?.click()} onClose={() => setManage(false)} />}

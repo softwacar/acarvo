@@ -71,6 +71,12 @@ export async function registerSecurity(app: FastifyInstance, env: Env) {
     return reply.code(500).send({ error: { code: 'INTERNAL', message: 'Beklenmeyen bir hata oluştu.' } })
   })
 
+  // API answers carry company data: never keep them in browser or proxy caches (including errors).
+  app.addHook('onSend', async (req, reply, payload) => {
+    if (req.url.startsWith('/api/') && !reply.hasHeader('cache-control')) reply.header('cache-control', 'no-store')
+    return payload
+  })
+
   app.setNotFoundHandler((_req, reply) => {
     reply.code(404).send({ error: { code: 'NOT_FOUND', message: 'Kaynak bulunamadı.' } })
   })

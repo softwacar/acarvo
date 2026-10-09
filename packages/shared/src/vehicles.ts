@@ -229,6 +229,15 @@ export type VehicleTab = (typeof VEHICLE_TABS)[number]
 export const MAX_PROMO_PHOTOS = 6
 export const MAX_PHOTO_MB = 10
 
+export interface VehiclePhotoAttribution {
+  author: string
+  sourceUrl: string
+  license: string
+  licenseUrl: string
+  /** What was changed from the original, as the licence asks (e.g. resized, converted). */
+  changes: string
+}
+
 export interface VehiclePhoto {
   id: string
   position: number
@@ -238,6 +247,7 @@ export interface VehiclePhoto {
   sizeBytes: number
   createdAt: string
   uploadedByName: string | null
+  attribution: VehiclePhotoAttribution | null
   url: string
   thumbUrl: string
 }

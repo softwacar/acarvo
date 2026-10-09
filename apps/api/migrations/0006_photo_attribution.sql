@@ -1,0 +1,1 @@
+ALTER TABLE "vehicle_promo_photos" ADD COLUMN "attribution" jsonb;

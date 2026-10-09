@@ -307,6 +307,8 @@ export const vehiclePromoPhotos = pgTable(
     fileId: uuid('file_id').notNull(),
     position: integer('position').notNull(),
     isPrimary: boolean('is_primary').notNull().default(false),
+    /** Credit for third-party photos (e.g. CC BY-SA): author, source, licence and the changes made. Null for own photos. */
+    attribution: jsonb('attribution').$type<{ author: string; sourceUrl: string; license: string; licenseUrl: string; changes: string }>(),
     createdBy: uuid('created_by').references(() => users.id),
     createdAt: createdAt(),
   },

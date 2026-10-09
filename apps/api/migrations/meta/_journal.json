@@ -43,6 +43,13 @@
       "when": 1791580419335,
       "tag": "0005_promo_photos_rls",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1791581699005,
+      "tag": "0006_photo_attribution",
+      "breakpoints": true
     }
   ]
 }

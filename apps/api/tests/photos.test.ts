@@ -19,6 +19,7 @@ interface Photo {
   height: number
   url: string
   thumbUrl: string
+  attribution: Record<string, string> | null
 }
 
 /** A camera-like JPEG: orientation flag, owner name and a GPS position in EXIF. */
@@ -85,8 +86,10 @@ describe('upload', () => {
     const file = await adnan.get(photo.url)
     expect(file.statusCode).toBe(200)
     expect(file.headers['content-type']).toBe('image/webp')
-    expect(file.headers['cache-control']).toBe('private, no-cache')
+    expect(file.headers['cache-control']).toBe('private, no-store, max-age=0')
+    expect(file.headers.pragma).toBe('no-cache')
     expect(file.headers.vary).toContain('Cookie')
+    expect(file.headers.etag).toBeUndefined()
     const out = await sharp(file.rawPayload).metadata()
     expect(out.format).toBe('webp')
     expect(out.exif).toBeUndefined()
@@ -212,6 +215,7 @@ describe('isolation', () => {
     const file = await adnan.get(neretvaPhoto.url)
     expect(file.statusCode).toBe(404)
     expect(file.headers['content-type']).toContain('application/json')
+    expect(file.headers['cache-control']).toBe('no-store')
     expect((await adnan.get(neretvaPhoto.thumbUrl)).statusCode).toBe(404)
     expect((await adnan.upload(`/api/vehicles/${neretvaVehicle}/photos`, await cameraJpeg())).statusCode).toBe(404)
     expect((await adnan.put(`/api/vehicles/${neretvaVehicle}/photos/order`, { photoIds: [neretvaPhoto.id] })).statusCode).toBe(404)
@@ -221,12 +225,37 @@ describe('isolation', () => {
     expect((await lejla.get(neretvaPhoto.url)).statusCode).toBe(200)
   })
 
-  it('revalidation is re-authorised: a cached ETag gets 304 only with access, otherwise 404', async () => {
-    const first = await lejla.get(neretvaPhoto.url)
-    const etag = first.headers.etag as string
-    expect((await lejla.request('GET', neretvaPhoto.url, undefined, { 'if-none-match': etag })).statusCode).toBe(304)
-    expect((await adnan.request('GET', neretvaPhoto.url, undefined, { 'if-none-match': etag })).statusCode).toBe(404)
-    expect((await new Client(app).request('GET', neretvaPhoto.url, undefined, { 'if-none-match': etag })).statusCode).toBe(401)
+  it('never answers 304 and checks access on every request, whatever validators the browser sends', async () => {
+    const conditional = { 'if-none-match': '*', 'if-modified-since': new Date().toUTCString() }
+    const own = await lejla.request('GET', neretvaPhoto.url, undefined, conditional)
+    expect(own.statusCode).toBe(200)
+    expect(own.headers['cache-control']).toContain('no-store')
+    expect((await adnan.request('GET', neretvaPhoto.url, undefined, conditional)).statusCode).toBe(404)
+    expect((await new Client(app).request('GET', neretvaPhoto.url, undefined, conditional)).statusCode).toBe(401)
+  })
+
+  it('access ends with logout and with a company switch', async () => {
+    const c = new Client(app)
+    await c.login(EMAILS.adnan)
+    const own = await idOf(c, 'A12-K-345')
+    const photo = (await photosOf(c, own))[0]!
+    expect((await c.get(photo.url)).statusCode).toBe(200)
+    expect((await c.post('/api/auth/switch-company', { companyId: data.companies.neretva })).statusCode).toBe(200)
+    expect((await c.get(photo.url)).statusCode).toBe(404)
+    expect((await c.get(photo.thumbUrl)).statusCode).toBe(404)
+    expect((await c.post('/api/auth/switch-company', { companyId: data.companies.drina })).statusCode).toBe(200)
+    expect((await c.get(photo.url)).statusCode).toBe(200)
+    expect((await c.post('/api/auth/logout')).statusCode).toBe(204)
+    expect((await c.get(photo.url)).statusCode).toBe(401)
+  })
+
+  it('returns the attribution stored with a photo', async () => {
+    const own = await idOf(adnan, 'A12-K-345')
+    const photo = (await photosOf(adnan, own))[0]!
+    expect(photo.attribution).toBeNull()
+    const credit = { author: 'Mike-fiesta', sourceUrl: 'https://commons.wikimedia.org/wiki/File:X.jpg', license: 'CC BY-SA 4.0', licenseUrl: 'https://creativecommons.org/licenses/by-sa/4.0/', changes: 'boyutlandırıldı' }
+    await asOwner(data.companies.drina, `update vehicle_promo_photos set attribution = $1 where id = $2`, [JSON.stringify(credit), photo.id])
+    expect((await photosOf(adnan, own))[0]!.attribution).toEqual(credit)
   })
 
   it('a photo id of another company cannot be used through an own vehicle', async () => {

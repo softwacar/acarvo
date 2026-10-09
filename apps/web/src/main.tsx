@@ -25,6 +25,12 @@ const queryClient = new QueryClient({
 })
 const router = createAppRouter(queryClient)
 
+// A page restored from the back/forward cache still shows what was on screen before logout or
+// a company switch. Reload it so the session and every image are checked by the server again.
+window.addEventListener('pageshow', (e) => {
+  if (e.persisted) window.location.reload()
+})
+
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <QueryClientProvider client={queryClient}>
