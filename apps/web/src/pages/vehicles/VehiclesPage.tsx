@@ -104,11 +104,11 @@ function BranchCell({ v }: { v: VehicleListItem }) {
   const away = v.location && (v.location.type !== 'branch' || v.location.branchName !== v.homeBranch.name)
   return (
     <span className="block leading-tight">
-      <span className="flex items-center gap-2 text-ink-2">
+      <span className="flex items-center gap-2 text-ink">
         <span className="rounded-[4px] border border-line px-1 text-[11px] font-semibold tracking-[0.05em] text-ink">{v.homeBranch.code}</span>
         <span className="truncate">{v.homeBranch.name}</span>
       </span>
-      <span className="mt-0.5 block truncate text-[12px] text-ink-3">
+      <span className="mt-0.5 block truncate text-[13px] text-ink-2">
         {!v.location ? (
           'Konum kaydı yok'
         ) : away ? (
@@ -278,22 +278,22 @@ export function VehiclesPage() {
             )
           ) : (
             <div className="overflow-x-auto">
-              <table className={cn('w-full text-left transition-opacity', q.isPlaceholderData && 'opacity-60')}>
+              <table className={cn('w-full table-fixed text-left transition-opacity', q.isPlaceholderData && 'opacity-60')}>
                 <thead>
-                  <tr className="h-10 border-b border-line text-[12px] whitespace-nowrap text-ink-3">
-                    <SortHeader label="Plaka" sort="plate" search={search} className="w-[150px]" />
+                  <tr className="h-10 border-b border-line text-[12.5px] whitespace-nowrap text-ink-2">
+                    <SortHeader label="Plaka" sort="plate" search={search} className="w-[140px] sm:w-[148px]" />
                     <SortHeader label="Araç" sort="vehicle" search={search} />
-                    <SortHeader label="Sınıf" sort="class" search={search} className="hidden lg:table-cell" />
-                    <SortHeader label="Ana şube ve konum" sort="branch" search={search} className="hidden lg:table-cell" />
-                    <SortHeader label="Kilometre" sort="km" search={search} align="right" className="text-right" />
-                    <th scope="col" className="hidden px-3 font-medium xl:table-cell">
-                      Yakıt · Vites
+                    <SortHeader label="Sınıf" sort="class" search={search} className="hidden w-[92px] xl:table-cell" />
+                    <SortHeader label="Ana şube ve konum" sort="branch" search={search} className="hidden w-[236px] xl:table-cell" />
+                    <SortHeader label="Kilometre" sort="km" search={search} align="right" className="w-[108px] text-right" />
+                    <th scope="col" className="hidden w-[96px] px-3 font-medium xl:table-cell">
+                      Yakıt / vites
                     </th>
-                    <th scope="col" className="px-3 font-medium">
+                    <th scope="col" className="w-[116px] px-3 font-medium">
                       Durum
                     </th>
                     {canEdit && (
-                      <th scope="col" className="w-12 pr-4">
+                      <th scope="col" className="w-[64px] pr-4 xl:w-[108px]">
                         <span className="sr-only">İşlemler</span>
                       </th>
                     )}
@@ -303,60 +303,66 @@ export function VehiclesPage() {
                   {!data ? (
                     <SkeletonRows />
                   ) : (
-                    data.items.map((v) => (
-                      <tr
-                        key={v.id}
-                        onClick={canEdit ? () => goEdit(v.id) : undefined}
-                        className={cn('group h-[52px]', canEdit && 'cursor-pointer hover:bg-ground/60', v.status !== 'active' && 'bg-hold-soft/30')}
-                      >
-                        <td className="pr-3 pl-5">
-                          <Plate plate={v.plate} country={session.company?.country} />
-                        </td>
-                        <td className="max-w-0 min-w-[180px] px-3">
-                          <span className="block truncate font-medium text-ink">
-                            {v.make} {v.model}
-                            {v.modelYear && <span className="tnum font-normal text-ink-3"> · {v.modelYear}</span>}
-                          </span>
-                          <span className="block truncate text-[12.5px] text-ink-3">
-                            <span className="lg:hidden">
-                              {v.className} · {v.homeBranch.name}
-                              {(v.trim || v.vehicleCode) && ' · '}
-                            </span>
-                            {[v.trim, v.vehicleCode].filter(Boolean).join(' · ')}
-                          </span>
-                        </td>
-                        <td className="hidden px-3 whitespace-nowrap text-ink-2 lg:table-cell">{v.className}</td>
-                        <td className="hidden max-w-[220px] px-3 lg:table-cell">
-                          <BranchCell v={v} />
-                        </td>
-                        <td className="px-3 text-right whitespace-nowrap">
-                          {v.odometer ? (
-                            <span className="tnum text-ink">{formatKm(v.odometer.km)}</span>
-                          ) : (
-                            <span className="text-[12.5px] text-ink-3">Doğrulanmadı</span>
-                          )}
-                        </td>
-                        <td className="hidden px-3 whitespace-nowrap text-ink-2 xl:table-cell">
-                          {FUEL_LABELS[v.fuelType]} · {TRANSMISSION_LABELS[v.transmission]}
-                        </td>
-                        <td className="px-3 whitespace-nowrap">
-                          <StatusText status={v.status} />
-                        </td>
-                        {canEdit && (
-                          <td className="pr-4 text-right">
-                            <Link
-                              to="/araclar/$vehicleId/duzenle"
-                              params={{ vehicleId: v.id }}
-                              onClick={(e) => e.stopPropagation()}
-                              aria-label={`${v.plate} aracını düzenle`}
-                              className="inline-grid size-8 place-items-center rounded-lg text-ink-3 hover:bg-surface hover:text-ink hover:shadow-[0_0_0_1px_var(--ac-line)] focus-visible:opacity-100 lg:opacity-0 lg:group-hover:opacity-100"
-                            >
-                              <PencilSimple size={16} />
-                            </Link>
+                    data.items.map((v) => {
+                      const name = `${v.make} ${v.model}`
+                      return (
+                        <tr
+                          key={v.id}
+                          onClick={canEdit ? () => goEdit(v.id) : undefined}
+                          className={cn('group h-[56px]', canEdit && 'cursor-pointer hover:bg-blue-soft/35', v.status !== 'active' && 'bg-hold-soft/30')}
+                        >
+                          <td className="py-2 pr-3 pl-5">
+                            <Plate plate={v.plate} country={session.company?.country} className="flex w-fit" />
+                            {v.vehicleCode && <span className="tnum mt-0.5 block text-[12px] leading-4 text-ink-2">{v.vehicleCode}</span>}
                           </td>
-                        )}
-                      </tr>
-                    ))
+                          <td className="px-3 py-2">
+                            <span className="block truncate font-medium text-ink group-hover:text-blue-ink" title={[name, v.modelYear].filter(Boolean).join(' · ')}>
+                              {name}
+                              {v.modelYear && <span className="tnum font-normal text-ink-2"> · {v.modelYear}</span>}
+                            </span>
+                            <span className="mt-0.5 block truncate text-[13px] text-ink-2" title={[v.className, v.homeBranch.name, v.trim].filter(Boolean).join(' · ')}>
+                              <span className="xl:hidden">
+                                {v.className} · {v.homeBranch.code}
+                                {v.trim && ' · '}
+                              </span>
+                              {v.trim ?? <span className="hidden text-ink-3 xl:inline">Donanım girilmemiş</span>}
+                            </span>
+                          </td>
+                          <td className="hidden truncate px-3 text-ink xl:table-cell">{v.className}</td>
+                          <td className="hidden px-3 xl:table-cell">
+                            <BranchCell v={v} />
+                          </td>
+                          <td className="px-3 text-right whitespace-nowrap">
+                            {v.odometer ? (
+                              <span className="tnum text-ink">{formatKm(v.odometer.km)}</span>
+                            ) : (
+                              <span className="text-[13px] text-ink-2">Doğrulanmadı</span>
+                            )}
+                          </td>
+                          <td className="hidden px-3 leading-tight text-ink xl:table-cell">
+                            {FUEL_LABELS[v.fuelType]}
+                            <span className="mt-0.5 block text-[13px] text-ink-2">{TRANSMISSION_LABELS[v.transmission]}</span>
+                          </td>
+                          <td className="px-3 whitespace-nowrap">
+                            <StatusText status={v.status} />
+                          </td>
+                          {canEdit && (
+                            <td className="pr-4 text-right">
+                              <Link
+                                to="/araclar/$vehicleId/duzenle"
+                                params={{ vehicleId: v.id }}
+                                onClick={(e) => e.stopPropagation()}
+                                aria-label={`${v.plate} aracını düzenle`}
+                                className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-line bg-surface px-2 text-[13px] font-medium text-ink-2 transition-colors group-hover:border-blue/40 group-hover:text-blue-ink hover:bg-blue-soft xl:px-2.5"
+                              >
+                                <PencilSimple size={15} />
+                                <span className="hidden xl:inline">Düzenle</span>
+                              </Link>
+                            </td>
+                          )}
+                        </tr>
+                      )
+                    })
                   )}
                 </tbody>
               </table>

@@ -48,14 +48,15 @@ export function Field({
 }) {
   return (
     <div className={className}>
-      <label htmlFor={id} className="mb-1.5 flex items-baseline gap-1 font-medium">
+      <label htmlFor={id} className="mb-1.5 flex items-baseline gap-1 text-[13.5px] font-medium text-ink">
         {label}
-        {required ? (
-          <span className="text-alert" aria-hidden>
-            *
-          </span>
-        ) : (
-          <span className="text-[12px] font-normal text-ink-3">isteğe bağlı</span>
+        {required && (
+          <>
+            <span className="text-alert" aria-hidden>
+              *
+            </span>
+            <span className="sr-only">(zorunlu)</span>
+          </>
         )}
       </label>
       {children}
@@ -64,7 +65,7 @@ export function Field({
           {error}
         </p>
       ) : hint ? (
-        <p id={`${id}-hint`} className="mt-1.5 text-[13px] text-ink-3">
+        <p id={`${id}-hint`} className="mt-1.5 text-[12.5px] leading-snug text-ink-3">
           {hint}
         </p>
       ) : null}

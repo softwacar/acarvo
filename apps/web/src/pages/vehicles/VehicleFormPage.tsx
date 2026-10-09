@@ -108,19 +108,53 @@ function valuesFrom(v: VehicleDetail): FormValues {
   }
 }
 
-function Section({ title, description, children, aside }: { title: string; description?: ReactNode; children: ReactNode; aside?: ReactNode }) {
+/** Form sections, in page order. Used for the section navigation and its error counts. */
+const SECTIONS: { id: string; title: string; fields: (keyof FormValues)[] }[] = [
+  { id: 'kimlik', title: 'Araç kimliği', fields: ['plate', 'vehicleCode', 'make', 'model', 'trim', 'modelYear', 'classId', 'color', 'vin'] },
+  { id: 'teknik', title: 'Teknik özellikler', fields: ['fuelType', 'transmission', 'seats'] },
+  { id: 'kaynak', title: 'Kaynak ve şube', fields: ['homeBranchId', 'status'] },
+  { id: 'edinim', title: 'Filoya giriş', fields: ['acquisitionType', 'acquisitionDate', 'acquisitionSeller', 'acquisitionReference', 'acquisitionCost', 'acquisitionCurrency'] },
+  { id: 'kayitlar', title: 'Kilometre ve konum', fields: ['initialOdometerKm', 'initialLocationBranchId'] },
+  { id: 'notlar', title: 'Notlar', fields: ['notes'] },
+]
+
+function Section({ id, title, description, children }: { id: string; title: string; description?: ReactNode; children: ReactNode }) {
   return (
-    <section className="rounded-xl border border-line bg-surface">
-      <header className="flex items-start justify-between gap-4 border-b border-line px-5 py-3.5">
-        <div>
-          <h2 className="font-semibold">{title}</h2>
-          {description && <p className="mt-0.5 text-[13px] text-ink-3">{description}</p>}
-        </div>
-        {aside}
+    <section id={id} aria-labelledby={`${id}-title`} className="scroll-mt-[136px] rounded-xl border border-line bg-surface lg:scroll-mt-[88px]">
+      <header className="border-b border-line px-5 py-4">
+        <h2 id={`${id}-title`} className="text-[16px] font-semibold tracking-[-0.01em] text-ink">
+          {title}
+        </h2>
+        {description && <p className="mt-1 max-w-[620px] text-[13px] leading-snug text-ink-2">{description}</p>}
       </header>
-      <div className="grid gap-x-5 gap-y-4 p-5 sm:grid-cols-2">{children}</div>
+      <div className="grid gap-x-5 gap-y-5 p-5 sm:grid-cols-2">{children}</div>
     </section>
   )
+}
+
+/** Which section is in view, for the navigation highlight. */
+function useActiveSection() {
+  const [active, setActive] = useState(SECTIONS[0]!.id)
+  useEffect(() => {
+    const els = SECTIONS.map((s) => document.getElementById(s.id)).filter((e): e is HTMLElement => !!e)
+    const io = new IntersectionObserver(
+      (entries) => {
+        const visible = entries.filter((e) => e.isIntersecting).sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top)
+        if (visible[0]) setActive(visible[0].target.id)
+      },
+      { rootMargin: '-96px 0px -55% 0px' },
+    )
+    els.forEach((e) => io.observe(e))
+    return () => io.disconnect()
+  }, [])
+  return active
+}
+
+function goToSection(id: string) {
+  const el = document.getElementById(id)
+  if (!el) return
+  el.scrollIntoView({ behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'start' })
+  el.querySelector<HTMLElement>('input, select, textarea')?.focus({ preventScroll: true })
 }
 
 function ReadOnlyFact({ label, children }: { label: string; children: ReactNode }) {
@@ -230,6 +264,19 @@ function VehicleForm({ mode, vehicle, classes }: { mode: 'create' | 'edit'; vehi
   })
 
   const dirty = formState.isDirty && !saved
+  const sections = SECTIONS.map((sec) => (sec.id === 'kayitlar' && mode === 'create' ? { ...sec, title: 'Başlangıç kayıtları' } : sec))
+  const active = useActiveSection()
+  const changedCount = Object.keys(formState.dirtyFields).length
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
+        e.preventDefault()
+        void submit()
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  })
   const blocker = useBlocker({ shouldBlockFn: () => dirty && !save.isPending, enableBeforeUnload: () => dirty, withResolver: true })
 
   const submit = handleSubmit(
@@ -307,9 +354,36 @@ function VehicleForm({ mode, vehicle, classes }: { mode: 'create' | 'edit'; vehi
         </div>
       )}
 
-      <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_280px]">
+      <nav aria-label="Form bölümleri" className="sticky top-16 z-10 -mx-4 overflow-x-auto border-b border-line bg-ground/95 px-4 py-2 backdrop-blur-sm sm:-mx-6 sm:px-6 lg:hidden">
+        <ul className="flex gap-1.5 whitespace-nowrap">
+          {sections.map((sec) => {
+            const errorCount = sec.fields.filter((f) => errors[f]).length
+            return (
+              <li key={sec.id}>
+                <a
+                  href={`#${sec.id}`}
+                  onClick={(e) => {
+                    e.preventDefault()
+                    goToSection(sec.id)
+                  }}
+                  aria-current={active === sec.id ? 'location' : undefined}
+                  className={cn(
+                    'inline-flex h-8 items-center gap-1.5 rounded-md border px-2.5 text-[13px] font-medium',
+                    active === sec.id ? 'border-ink bg-surface text-ink' : 'border-line bg-surface text-ink-2',
+                  )}
+                >
+                  {sec.title}
+                  {errorCount > 0 && <WarningCircle size={14} weight="bold" className="text-alert" aria-label={`${errorCount} hata`} />}
+                </a>
+              </li>
+            )
+          })}
+        </ul>
+      </nav>
+
+      <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_264px]">
         <fieldset disabled={!!exited || save.isPending} className="min-w-0 space-y-5">
-          <Section title="Araç kimliği" description="Plaka ve araç kodu şirket içinde tekildir.">
+          <Section id="kimlik" title="Araç kimliği" description="Plaka ve araç kodu şirket içinde tekildir; aynı plaka ikinci kez kaydedilemez.">
             <Field id="plate" label="Plaka" required error={err('plate')} hint="Örnek: A12-K-345">
               <Input {...describe('plate', err('plate'), true)} autoComplete="off" className="uppercase" {...register('plate')} />
             </Field>
@@ -346,7 +420,7 @@ function VehicleForm({ mode, vehicle, classes }: { mode: 'create' | 'edit'; vehi
             </Field>
           </Section>
 
-          <Section title="Teknik özellikler">
+          <Section id="teknik" title="Teknik özellikler">
             <Field id="fuelType" label="Yakıt" required error={err('fuelType')}>
               <Select {...describe('fuelType', err('fuelType'))} {...register('fuelType')}>
                 <option value="">Seçin</option>
@@ -372,7 +446,7 @@ function VehicleForm({ mode, vehicle, classes }: { mode: 'create' | 'edit'; vehi
             </Field>
           </Section>
 
-          <Section title="Kaynak ve şube" description="Ana şube, aracın bağlı olduğu ve yetkilerin uygulandığı şubedir; fiziksel konumdan ayrıdır.">
+          <Section id="kaynak" title="Kaynak ve şube" description="Ana şube, aracın bağlı olduğu ve yetkilerin uygulandığı şubedir; fiziksel konumdan ayrıdır.">
             <div className="sm:col-span-2">
               <span className="mb-1.5 block font-medium">Kaynak</span>
               <div className="grid gap-2 sm:grid-cols-2">
@@ -414,7 +488,7 @@ function VehicleForm({ mode, vehicle, classes }: { mode: 'create' | 'edit'; vehi
             ) : null}
           </Section>
 
-          <Section title="Filoya giriş" description="Edinim bilgisi işletme geliri değildir; yalnız varsa doldurun.">
+          <Section id="edinim" title="Filoya giriş" description="Edinim bilgisi işletme geliri değildir; yalnız varsa doldurun.">
             <Field id="acquisitionType" label="Edinim türü" error={err('acquisitionType')}>
               <Select {...describe('acquisitionType', err('acquisitionType'))} {...register('acquisitionType')}>
                 <option value="">Belirtilmedi</option>
@@ -456,7 +530,7 @@ function VehicleForm({ mode, vehicle, classes }: { mode: 'create' | 'edit'; vehi
           </Section>
 
           {mode === 'create' ? (
-            <Section title="Başlangıç kayıtları" description="Bu değerler aracın kilometre ve konum geçmişindeki ilk kayıtlar olur; sonradan bu formdan değiştirilmez.">
+            <Section id="kayitlar" title="Başlangıç kayıtları" description="Bu değerler aracın kilometre ve konum geçmişindeki ilk kayıtlar olur; sonradan bu formdan değiştirilmez.">
               <Field id="initialOdometerKm" label="Başlangıç kilometresi" error={err('initialOdometerKm')} hint="Boş bırakılırsa kilometre “doğrulanmadı” görünür.">
                 <Input {...describe('initialOdometerKm', err('initialOdometerKm'), true)} inputMode="numeric" className="tnum" {...register('initialOdometerKm')} />
               </Field>
@@ -472,7 +546,7 @@ function VehicleForm({ mode, vehicle, classes }: { mode: 'create' | 'edit'; vehi
               </Field>
             </Section>
           ) : (
-            <Section title="Kilometre ve konum" description="Geçmiş kayıtlarından türetilir. Düzeltmeler, Araç 360° geçmiş ekranıyla gerekçeli kayıt olarak yapılacak.">
+            <Section id="kayitlar" title="Kilometre ve konum" description="Geçmiş kayıtlarından türetilir. Düzeltmeler, Araç 360° geçmiş ekranıyla gerekçeli kayıt olarak yapılacak.">
               <ReadOnlyFact label="Güncel kilometre">
                 {vehicle!.odometer ? (
                   <span>
@@ -498,45 +572,95 @@ function VehicleForm({ mode, vehicle, classes }: { mode: 'create' | 'edit'; vehi
             </Section>
           )}
 
-          <section className="rounded-xl border border-line bg-surface p-5">
-            <Field id="notes" label="Notlar" error={err('notes')}>
+          <Section id="notlar" title="Notlar" description="Ekipteki diğer kişilerin bilmesi gereken kalıcı bilgiler.">
+            <Field id="notes" label="Not" error={err('notes')} className="sm:col-span-2">
               <Textarea {...describe('notes', err('notes'))} rows={3} {...register('notes')} />
             </Field>
-          </section>
+          </Section>
         </fieldset>
 
-        <aside className="fixed inset-x-0 bottom-0 z-20 border-t border-line bg-surface/95 px-4 py-3 backdrop-blur-sm lg:sticky lg:top-[88px] lg:inset-x-auto lg:bottom-auto lg:rounded-xl lg:border lg:p-5 lg:backdrop-blur-none">
-          <div className="hidden lg:block">
-            <p className="text-[12px] font-medium text-ink-3">Özet</p>
-            <div className="mt-2.5 min-h-9">
+        <aside className="fixed inset-x-0 bottom-0 z-20 border-t border-line bg-surface/95 px-4 py-3 backdrop-blur-sm lg:sticky lg:top-[88px] lg:inset-x-auto lg:bottom-auto lg:max-h-[calc(100dvh-104px)] lg:overflow-y-auto lg:rounded-xl lg:border lg:p-0 lg:backdrop-blur-none">
+          <div className="hidden border-b border-line p-4 lg:block">
+            <div className="min-h-9">
               {plate?.trim() ? (
                 <Plate plate={plate.trim().toLocaleUpperCase('tr')} country={session.company?.country} size="md" />
               ) : (
                 <span className="text-ink-3">Plaka girilmedi</span>
               )}
             </div>
-            <p className="mt-2 truncate font-medium">{[make, model].filter(Boolean).join(' ') || '—'}</p>
-            <p className="mt-0.5 text-[13px] text-ink-3">Kendi filo{mode === 'edit' ? ` · sürüm ${version}` : ''}</p>
-            <hr className="my-4 border-line" />
+            <p className="mt-2 truncate font-medium">{[make, model].filter(Boolean).join(' ') || 'Marka ve model girilmedi'}</p>
+            <p className="mt-0.5 text-[13px] text-ink-2">
+              Kendi filo{mode === 'edit' ? ` · ${STATUS_LABELS[vehicle!.status]} · sürüm ${version}` : ''}
+            </p>
           </div>
-          <div className="flex gap-2 lg:flex-col">
-            <button
-              type="submit"
-              disabled={save.isPending || !!exited}
-              className="flex h-10 flex-1 items-center justify-center gap-2 rounded-lg bg-blue px-4 lg:flex-none font-medium text-white transition-colors hover:bg-blue-ink disabled:opacity-60"
-            >
-              {save.isPending && <SpinnerGap size={17} className="animate-spin" />}
-              {save.isPending ? 'Kaydediliyor' : mode === 'create' ? 'Aracı kaydet' : 'Değişiklikleri kaydet'}
-            </button>
-            <Link
-              to="/araclar"
-              search={listSearchToReturnTo()}
-              className="flex h-10 flex-1 items-center justify-center rounded-lg border border-line px-4 font-medium text-ink-2 hover:bg-ground hover:text-ink lg:flex-none"
-            >
-              Vazgeç
-            </Link>
+
+          <nav aria-label="Form bölümleri" className="hidden border-b border-line p-2 lg:block">
+            <ul>
+              {sections.map((sec, i) => {
+                const errorCount = sec.fields.filter((f) => errors[f]).length
+                const on = active === sec.id
+                return (
+                  <li key={sec.id}>
+                    <a
+                      href={`#${sec.id}`}
+                      onClick={(e) => {
+                        e.preventDefault()
+                        goToSection(sec.id)
+                      }}
+                      aria-current={on ? 'location' : undefined}
+                      className={cn(
+                        'flex h-9 items-center gap-2.5 rounded-md px-2.5 text-[13.5px] transition-colors',
+                        on ? 'bg-ground font-medium text-ink' : 'text-ink-2 hover:bg-ground/70 hover:text-ink',
+                      )}
+                    >
+                      <span className={cn('tnum grid size-5 shrink-0 place-items-center rounded text-[11px] font-semibold', on ? 'bg-ink text-white' : 'bg-line-soft text-ink-2')}>
+                        {i + 1}
+                      </span>
+                      <span className="flex-1 truncate">{sec.title}</span>
+                      {errorCount > 0 && (
+                        <span className="inline-flex items-center gap-1 text-[12px] font-medium text-alert" aria-label={`${errorCount} hata`}>
+                          <WarningCircle size={14} weight="bold" />
+                          {errorCount}
+                        </span>
+                      )}
+                    </a>
+                  </li>
+                )
+              })}
+            </ul>
+          </nav>
+
+          <div className="lg:p-4">
+            <p className="mb-2 hidden text-[12.5px] lg:block" aria-live="polite">
+              {exited ? (
+                <span className="text-ink-2">Bu araç düzenlenemez.</span>
+              ) : changedCount > 0 ? (
+                <span className="font-medium text-hold">{changedCount} alanda kaydedilmemiş değişiklik</span>
+              ) : (
+                <span className="text-ink-3">{mode === 'create' ? 'Yıldızlı (*) alanlar zorunludur.' : 'Değişiklik yok.'}</span>
+              )}
+            </p>
+            <div className="flex gap-2 lg:flex-col">
+              <button
+                type="submit"
+                disabled={save.isPending || !!exited}
+                className="flex h-10 flex-1 items-center justify-center gap-2 rounded-lg bg-blue px-4 font-medium text-white transition-colors hover:bg-blue-ink disabled:opacity-60 lg:flex-none"
+              >
+                {save.isPending && <SpinnerGap size={17} className="animate-spin" />}
+                {save.isPending ? 'Kaydediliyor' : mode === 'create' ? 'Aracı kaydet' : 'Değişiklikleri kaydet'}
+              </button>
+              <Link
+                to="/araclar"
+                search={listSearchToReturnTo()}
+                className="flex h-10 flex-1 items-center justify-center rounded-lg border border-line px-4 font-medium text-ink-2 hover:bg-ground hover:text-ink lg:flex-none"
+              >
+                Vazgeç
+              </Link>
+            </div>
+            <p className="mt-2.5 hidden text-center text-[12px] text-ink-3 lg:block">
+              Kısayol: <kbd className="rounded border border-line bg-ground px-1 font-sans">Ctrl</kbd> + <kbd className="rounded border border-line bg-ground px-1 font-sans">S</kbd>
+            </p>
           </div>
-          {mode === 'edit' && formState.isDirty && <p className="mt-2 hidden text-[12.5px] text-ink-3 lg:block">Kaydedilmemiş değişiklikler var.</p>}
         </aside>
       </div>
 
