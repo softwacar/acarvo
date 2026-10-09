@@ -11,10 +11,10 @@
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
 $envFile = Join-Path $root '.env'
-$pgBin = 'C:\Program Files\PostgreSQL\17\bin'
+$pgBin = 'C:\Program Files\PostgreSQL\18\bin'
 $psql = Join-Path $pgBin 'psql.exe'
 
-if (-not (Test-Path $psql)) { throw "psql bulunamadı: $psql. PostgreSQL 17 kurulu mu?" }
+if (-not (Test-Path $psql)) { throw "psql bulunamadı: $psql. PostgreSQL 18 kurulu mu?" }
 if (Test-Path $envFile) {
   $answer = Read-Host '.env zaten var. Veritabanı rolleri ve parolaları yeniden oluşturulsun mu? (evet/hayir)'
   if ($answer -ne 'evet') { Write-Host 'İptal edildi.'; exit 0 }

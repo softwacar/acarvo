@@ -10,11 +10,16 @@ import { createDatabase } from '../src/db/client'
 import * as schema from '../src/db/schema'
 import { loadEnv } from '../src/env'
 import { ARGON2_OPTIONS } from '../src/modules/auth/password'
+import { assertConnectedToTestDatabase, assertSeparateDatabases } from './db-guard'
 
 const base = loadEnv()
 if (!base.TEST_DATABASE_URL || !base.TEST_DATABASE_OWNER_URL) {
   throw new Error('TEST_DATABASE_URL / TEST_DATABASE_OWNER_URL missing. Run scripts/setup-db.ps1.')
 }
+// Stop at import time if the test connections point to the application database.
+assertSeparateDatabases(base.TEST_DATABASE_URL, base.DATABASE_URL, 'TEST_DATABASE_URL')
+assertSeparateDatabases(base.TEST_DATABASE_OWNER_URL, base.DATABASE_OWNER_URL, 'TEST_DATABASE_OWNER_URL')
+
 export const env = { ...base, NODE_ENV: 'test' as const, DATABASE_URL: base.TEST_DATABASE_URL, DATABASE_OWNER_URL: base.TEST_DATABASE_OWNER_URL }
 
 /** Random per run; never stored anywhere. */
@@ -26,9 +31,25 @@ const ownerDb = drizzle(ownerPool, { schema })
 /** Raw connection as the restricted runtime role, for database-level checks. */
 export const appPool = new pg.Pool({ connectionString: env.DATABASE_URL, max: 2 })
 
+const currentDatabase = (pool: pg.Pool) => async () => (await pool.query<{ name: string }>('select current_database() as name')).rows[0]!.name
+let verified: Promise<void> | undefined
+
+/**
+ * Confirms on the live connections that they are in acarvo_test. Every helper that
+ * reads or writes data awaits this first; a failure is remembered and stops all later calls.
+ */
+export function ensureTestDatabase() {
+  verified ??= assertConnectedToTestDatabase([
+    { label: 'owner', currentDatabase: currentDatabase(ownerPool) },
+    { label: 'application', currentDatabase: currentDatabase(appPool) },
+  ])
+  return verified
+}
+
 export type DevData = Awaited<ReturnType<typeof loadDevData>>
 
 export async function resetDatabase(): Promise<DevData> {
+  await ensureTestDatabase()
   passwordHash ??= await hash(PASSWORD, ARGON2_OPTIONS)
   await ownerDb.execute(
     sql`truncate audit_log, membership_branches, membership_roles, memberships, roles, branches, sessions, users, companies restart identity cascade`,
@@ -38,6 +59,7 @@ export async function resetDatabase(): Promise<DevData> {
 
 /** Runs SQL as the owner inside a company context (RLS is forced for the owner too). */
 export async function asOwner(companyId: string | null, text: string, values: unknown[] = []) {
+  await ensureTestDatabase()
   const c = await ownerPool.connect()
   try {
     await c.query('begin')
@@ -55,6 +77,7 @@ export async function asOwner(companyId: string | null, text: string, values: un
 
 /** Runs `fn` as acarvo_app with the given company context, always rolled back. */
 export async function asApp<T>(companyId: string | null, fn: (c: pg.PoolClient) => Promise<T>): Promise<T> {
+  await ensureTestDatabase()
   const c = await appPool.connect()
   try {
     await c.query('begin')
@@ -67,6 +90,8 @@ export async function asApp<T>(companyId: string | null, fn: (c: pg.PoolClient) 
 }
 
 export async function makeApp() {
+  // The app connects with env.DATABASE_URL, the same connection string as appPool.
+  await ensureTestDatabase()
   const database = createDatabase(env.DATABASE_URL)
   const app = await buildApp({ env, database, logger: false })
   app.addHook('onClose', () => database.close())

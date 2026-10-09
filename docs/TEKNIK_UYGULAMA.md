@@ -27,7 +27,7 @@ Görsel referans: `C:\Users\soena\Desktop\acarvo-arac360\` (Araç 360° V5). Ön
 | Sunucu verisi | TanStack Query | Önbellek, yükleniyor/hata durumları |
 | Formlar | react-hook-form + zod | Doğrulama şemaları backend ile ortak |
 | Backend | Fastify 5, TypeScript | Hafif, olgun, resmi güvenlik eklentileri var |
-| Veritabanı | PostgreSQL 17 | RLS ile veritabanı düzeyinde şirket izolasyonu |
+| Veritabanı | PostgreSQL 18 | RLS ile veritabanı düzeyinde şirket izolasyonu |
 | ORM / migration | Drizzle ORM, drizzle-kit | Tip güvenli, SQL'e yakın; migration'lar okunabilir SQL; RLS politikaları migration içinde |
 | Doğrulama | zod (`packages/shared`) | Tek şema: API girişi, form, TypeScript tipi |
 | Parola özeti | `@node-rs/argon2` (Argon2id) | OWASP önerisi, olgun native kütüphane |
