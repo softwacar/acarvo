@@ -417,6 +417,7 @@ Aşama sonunda mevcut 183 API ve 38 tarayıcı testinin tamamı ve yeni testler 
 | 10 | Aşamalar | M1–M6 güncellendi; her aşamada gerçek arka uç, ön yüz, PostgreSQL güvenliği ve testler; yedeksiz migration yok | §12, §15 |
 
 **İleride sorulacaklar (M1'i engellemez):**
+- **M2 öncesi — ikamet durumunun referans ülkesi:** Yerli/Yabancı (ikamet) sınıflandırması vatandaşlık değil, ikamettir (spec §9.2 "residency"). Spec hangi ülkeye göre değerlendirildiğini tanımlamıyor. Seçenekler: şirket ülkesi, kiralamanın yapıldığı şubenin ülkesi veya başka bir kural. Karar verilene kadar yeni bir iş kuralı oluşturulmadı; ekranlar yalnız "Yerli (ikamet)" / "Yabancı (ikamet)" etiketlerini kullanır. Aynı kararla, yerel oturma izniyle yaşayan yabancı uyruklu kişiler için hangi belge setinin geçerli olacağı da belirlenmeli.
 - **M2 başında:** şifreleme anahtarlarının sizin tarafınızdan oluşturulup `.env`'e eklenmesi (§9.4) ve anahtarların ayrı yedeğinin nerede tutulacağı.
 - **M5 başında:** `pg_trgm` eklentisinin kurulması.
 - **M6 öncesi:** aydınlatma metni, hukuki dayanaklar ve saklama süreleri için hangi ülke(ler) adına hukuk danışmanlığı alınacağı. Bu belirlenmeden dosya veya işlem geçmişi temizliği planlanmaz.

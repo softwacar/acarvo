@@ -400,7 +400,7 @@ Plan ve kararlar: `docs/MUSTERILER_KURUMSAL_HESAPLAR_PLANI.md` (§14 kararlar, �
   - ad veya soyaddan en az biri (tek isimli kişiler);
   - telefon veya e-postadan en az biri;
   - telefon E.164 biçiminde, e-posta küçük harfle;
-  - Yerli/Yabancı açık seçim, hiçbir alandan tahmin edilmez;
+  - Yerli/Yabancı açık seçim, hiçbir alandan tahmin edilmez. Bu bir ikamet sınıflandırmasıdır, vatandaşlık değildir; ekranlarda "İkamet durumu: Yerli (ikamet) / Yabancı (ikamet)" olarak, uyruktan ayrı gösterilir. Referans ülke spec'te tanımlı değildir ve M2 öncesi karardır (plan §14);
   - arşiv nedeni sabit listeden.
 - **Telefon normalizasyonu** (`packages/shared/src/customers.ts`):
   - `+` veya `00` ile yazılan numara uluslararası kabul edilir;

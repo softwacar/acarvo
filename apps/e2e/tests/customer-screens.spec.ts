@@ -70,7 +70,7 @@ test('list at 1280 with a long branch name (display-only change in the browser)'
 
 test('customer 360 history, pending tab and archived state', async ({ page }) => {
   await page.goto('/musteriler')
-  await page.getByLabel('Durum').selectOption('archived')
+  await page.getByLabel('Durum', { exact: true }).selectOption('archived')
   await page.getByRole('link', { name: 'Haris Arhivić' }).click()
   await expect(page.getByText('Arşivdeki kayıt düzenlenemez')).toBeVisible()
   await settle(page)

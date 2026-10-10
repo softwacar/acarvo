@@ -142,7 +142,7 @@ export const customerFieldsSchema = z.object({
   givenName: optText(80),
   familyName: optText(80),
   // Required (checked in withRules, so that a missing name, contact and residency are reported together).
-  residency: z.preprocess(blank, z.enum(CUSTOMER_RESIDENCIES, { error: 'Yerli veya yabancı müşteri seçin' }).optional()),
+  residency: z.preprocess(blank, z.enum(CUSTOMER_RESIDENCIES, { error: 'İkamet durumunu seçin: Yerli veya Yabancı (ikamet)' }).optional()),
   nationality: country('Listeden bir ülke seçin'),
   dateOfBirth: z.preprocess(
     blank,
@@ -173,7 +173,7 @@ const withRules = <T extends z.ZodType<RequiredParts>>(schema: T) =>
   schema.superRefine((c, ctx) => {
     if (!c.givenName && !c.familyName) ctx.addIssue({ code: 'custom', path: ['givenName'], message: 'Ad veya soyaddan en az birini girin' })
     if (!c.phone && !c.email) ctx.addIssue({ code: 'custom', path: ['phone'], message: 'Telefon veya e-postadan en az birini girin' })
-    if (!c.residency) ctx.addIssue({ code: 'custom', path: ['residency'], message: 'Yerli veya yabancı müşteri seçin' })
+    if (!c.residency) ctx.addIssue({ code: 'custom', path: ['residency'], message: 'İkamet durumunu seçin: Yerli veya Yabancı (ikamet)' })
   })
 
 export const customerInputSchema = withRules(customerFieldsSchema)

@@ -41,7 +41,6 @@ import {
   initials,
   languageName,
   RESIDENCY_LABELS,
-  RESIDENCY_LONG,
 } from '@/lib/customer-labels'
 import { cn } from '@/lib/utils'
 import { formatDate, formatDateTime } from '@/lib/vehicle-labels'
@@ -295,8 +294,7 @@ function Header({ c, canManage, onEdit, onArchive, onRestore, restoring }: { c: 
           </div>
           <h1 className={cn('mt-1.5 text-[26px] leading-tight font-semibold tracking-[-0.025em] break-words sm:text-[30px]', archived && 'text-ink-2')}>{c.displayName}</h1>
           <p className="mt-1 text-ink-2">
-            {RESIDENCY_LONG[c.residency]}
-            {nationality && ` · ${nationality} uyruklu`}
+            İkamet durumu: {RESIDENCY_LABELS[c.residency]} · Uyruk: {nationality ?? 'girilmemiş'}
             {c.createdBranch && ` · ${c.createdBranch.name} şubesinde açıldı`}
           </p>
         </div>
@@ -410,7 +408,7 @@ function Overview({ c, canManage, onEdit, onTab }: { c: CustomerDetail; canManag
             rows={[
               ['Ad', c.givenName],
               ['Soyad', c.familyName],
-              ['Müşteri türü', RESIDENCY_LABELS[c.residency]],
+              ['İkamet durumu', RESIDENCY_LABELS[c.residency]],
               ['Uyruk', countryName(c.nationality)],
               ['Doğum tarihi', c.dateOfBirth && <span className="tnum">{formatDate(c.dateOfBirth)}</span>],
               ['Müşteri no', <span className="tnum">{c.customerNo}</span>],

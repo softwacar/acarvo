@@ -1,7 +1,10 @@
 import { COUNTRY_CODES, type ContactPreference, type CustomerArchiveReason, type CustomerLanguage, type CustomerResidency, type DuplicateReason } from '@acarvo/shared'
 
-export const RESIDENCY_LABELS: Record<CustomerResidency, string> = { local: 'Yerli', foreign: 'Yabancı' }
-export const RESIDENCY_LONG: Record<CustomerResidency, string> = { local: 'Yerli müşteri', foreign: 'Yabancı müşteri' }
+/**
+ * Residency classification (spec §9.2 "residency"), not citizenship. The spec does not name the country it is judged
+ * against, so the labels say only "(ikamet)"; the reference country is an open decision before M2.
+ */
+export const RESIDENCY_LABELS: Record<CustomerResidency, string> = { local: 'Yerli (ikamet)', foreign: 'Yabancı (ikamet)' }
 
 export const CONTACT_PREFERENCE_LABELS: Record<ContactPreference, string> = {
   phone: 'Telefonla arama',
@@ -30,7 +33,7 @@ export const CUSTOMER_FIELD_LABELS: Record<string, string> = {
   familyName: 'Soyad',
   phone: 'Telefon',
   email: 'E-posta',
-  residency: 'Yerli / yabancı',
+  residency: 'İkamet durumu',
   nationality: 'Uyruk',
   dateOfBirth: 'Doğum tarihi',
   addressLine1: 'Adres',

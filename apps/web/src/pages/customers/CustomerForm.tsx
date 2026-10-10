@@ -370,9 +370,9 @@ function CustomerForm({
               <Input {...describe('familyName', err('familyName'))} autoComplete="off" {...register('familyName')} />
             </Field>
           </div>
-          <fieldset aria-describedby={err('residency') ? 'residency-error' : 'residency-hint'}>
+          <fieldset aria-describedby={err('residency') ? 'residency-error residency-hint' : 'residency-hint'}>
             <legend className="mb-1.5 flex items-baseline gap-1 text-[13.5px] font-medium text-ink">
-              Müşteri türü
+              İkamet durumu
               <span className="text-alert" aria-hidden>
                 *
               </span>
@@ -381,8 +381,8 @@ function CustomerForm({
             <div className="grid grid-cols-2 gap-2">
               {(
                 [
-                  ['local', 'Yerli', 'Bu ülkede yaşayan'],
-                  ['foreign', 'Yabancı', 'Yurt dışından gelen'],
+                  ['local', 'Yerli (ikamet)', 'Yerel ikamet eden müşteri'],
+                  ['foreign', 'Yabancı (ikamet)', 'Yurt dışında ikamet eden müşteri'],
                 ] as const
               ).map(([value, label, sub]) => (
                 <label
@@ -400,15 +400,15 @@ function CustomerForm({
                 </label>
               ))}
             </div>
-            {err('residency') ? (
+            {err('residency') && (
               <p id="residency-error" className="mt-1.5 text-[13px] text-alert">
                 {err('residency')}
               </p>
-            ) : (
-              <p id="residency-hint" className="mt-1.5 text-[12.5px] leading-snug text-ink-3">
-                İstenecek belgeleri belirler. Uyruktan, addan veya telefon kodundan tahmin edilmez; siz seçersiniz.
-              </p>
             )}
+            {/* The meaning stays visible next to an error: this is residence, not citizenship. */}
+            <p id="residency-hint" className="mt-1.5 text-[12.5px] leading-snug text-ink-3">
+              Vatandaşlık değil, ikamet sınıflandırmasıdır ve istenecek belgeleri belirler. Uyruktan, addan veya telefon kodundan tahmin edilmez; siz seçersiniz.
+            </p>
           </fieldset>
           <div className="grid gap-4 sm:grid-cols-2">
             <CountrySelect id="nationality" label="Uyruk" name="nationality" register={register} error={err('nationality')} companyCountry={companyCountry} />

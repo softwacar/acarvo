@@ -103,8 +103,8 @@ function CustomerRow({ c, onOpen }: { c: CustomerListItem; onOpen: () => void })
         </span>
       </td>
       <td className="py-2 pr-4 pl-3 leading-tight sm:px-3">
-        <span className="block text-ink">{RESIDENCY_LABELS[c.residency]}</span>
-        <span className="mt-0.5 block truncate text-[13px] text-ink-2">{countryName(c.nationality) ?? 'Uyruk girilmemiş'}</span>
+        <span className="block whitespace-nowrap text-ink">{RESIDENCY_LABELS[c.residency]}</span>
+        <span className="mt-0.5 block truncate text-[13px] text-ink-2">{c.nationality ? `Uyruk: ${countryName(c.nationality)}` : 'Uyruk girilmemiş'}</span>
       </td>
       <td className="hidden px-3 xl:table-cell">
         {c.createdBranch ? (
@@ -201,10 +201,10 @@ export function CustomersPage() {
                 className="h-9 w-full rounded-lg border border-line bg-surface pr-3 pl-9 text-[13.5px] outline-none placeholder:text-ink-3 hover:border-ink-3/50 focus:border-blue focus:ring-3 focus:ring-blue/15"
               />
             </div>
-            <FilterSelect label="Yerli veya yabancı" value={search.residency} onChange={(residency) => set({ residency: residency as CustomerListSearch['residency'] })}>
-              <option value="">Yerli ve yabancı</option>
-              <option value="local">Yerli</option>
-              <option value="foreign">Yabancı</option>
+            <FilterSelect label="İkamet durumu" value={search.residency} onChange={(residency) => set({ residency: residency as CustomerListSearch['residency'] })}>
+              <option value="">İkamet: tümü</option>
+              <option value="local">{RESIDENCY_LABELS.local}</option>
+              <option value="foreign">{RESIDENCY_LABELS.foreign}</option>
             </FilterSelect>
             {session.branches.length > 1 && (
               <FilterSelect label="Kayıt şubesi" value={search.branchId} onChange={(branchId) => set({ branchId })}>
@@ -273,13 +273,13 @@ export function CustomersPage() {
               <table className={cn('w-full table-fixed sm:min-w-[560px] text-left transition-opacity', list.isPlaceholderData && 'opacity-60')}>
                 <thead>
                   <tr className="h-10 border-b border-line text-[12.5px] whitespace-nowrap text-ink-2">
-                    <SortHeader label="No" sort="customerNo" search={search} className="hidden w-[108px] sm:table-cell" />
+                    <SortHeader label="No" sort="customerNo" search={search} className="hidden w-[100px] sm:table-cell" />
                     <SortHeader label="Müşteri" sort="name" search={search} className="pl-4 sm:pl-3" />
                     <th scope="col" className="hidden w-[19%] px-3 font-medium lg:table-cell">
                       İletişim
                     </th>
-                    <th scope="col" className="w-[124px] pr-4 pl-3 font-medium sm:px-3">
-                      Yerli / yabancı
+                    <th scope="col" className="w-[132px] pr-4 pl-3 font-medium sm:w-[148px] sm:px-3">
+                      İkamet durumu
                     </th>
                     <th scope="col" className="hidden w-[200px] px-3 font-medium xl:table-cell">
                       Kayıt şubesi

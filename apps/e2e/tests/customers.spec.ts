@@ -32,7 +32,9 @@ test.describe('as the owner', () => {
     await form.getByRole('button', { name: 'Müşteriyi kaydet' }).click()
     await expect(form.getByText('Ad veya soyaddan en az birini girin')).toBeVisible()
     await expect(form.getByText('Telefon veya e-postadan en az birini girin')).toBeVisible()
-    await expect(form.getByText('Yerli veya yabancı müşteri seçin')).toBeVisible()
+    await expect(form.getByText('İkamet durumunu seçin: Yerli veya Yabancı (ikamet)')).toBeVisible()
+    // Residency is a residence classification, explained as such, and never preselected or derived.
+    await expect(form.getByText('Vatandaşlık değil, ikamet sınıflandırmasıdır', { exact: false })).toBeVisible()
 
     await form.locator('#givenName').fill('Elma')
     await form.locator('#familyName').fill('Akış Testi')
@@ -48,7 +50,7 @@ test.describe('as the owner', () => {
 
     await expect(page.getByRole('heading', { name: 'Elma Akış Testi' })).toBeVisible()
     await expect(page.getByText(/^M-0000\d\d$/).first()).toBeVisible()
-    await expect(page.getByText('Yabancı müşteri · Hırvatistan uyruklu · Mostar şubesinde açıldı')).toBeVisible()
+    await expect(page.getByText('İkamet durumu: Yabancı (ikamet) · Uyruk: Hırvatistan · Mostar şubesinde açıldı')).toBeVisible()
     await expect(page.getByRole('link', { name: '+387 61 444 321' })).toHaveAttribute('href', 'tel:+38761444321')
     await expect(page.getByRole('link', { name: 'elma.akis@example.test' })).toBeVisible()
     await page.getByRole('tab', { name: 'Kayıt geçmişi' }).click()
@@ -64,6 +66,8 @@ test.describe('as the owner', () => {
     await form.locator('#email').fill('tekisimli@example.test')
     await form.getByRole('button', { name: 'Müşteriyi kaydet' }).click()
     await expect(page.getByRole('heading', { name: 'Tekisimli', exact: true })).toBeVisible()
+    // Residency and nationality are separate facts; an empty nationality is not filled in from residency.
+    await expect(page.getByText('İkamet durumu: Yerli (ikamet) · Uyruk: girilmemiş')).toBeVisible()
   })
 
   test('the same phone shows the existing customer and the reason; saving needs an explicit decision', async ({ page }) => {
@@ -113,7 +117,7 @@ test.describe('as the owner', () => {
     await expect(page.getByRole('link', { name: 'Lena Beispiel' })).toBeVisible()
     await expect(page.getByText('1 müşteri').first()).toBeVisible()
     expect(page.url()).not.toMatch(/062|primjer|M-000003/i)
-    await page.getByLabel('Yerli veya yabancı').selectOption('foreign')
+    await page.getByLabel('İkamet durumu').selectOption('foreign')
     await expect(page).toHaveURL(/residency=foreign/)
     await box.fill('')
     await expect(page.getByRole('link', { name: 'John Sample' })).toBeVisible()
@@ -186,7 +190,7 @@ test.describe('as the owner', () => {
     await page.goto('/musteriler')
     await page.getByRole('searchbox', { name: 'Müşterilerde ara' }).fill('Demović')
     await expect(page.getByText('Aramaya uyan müşteri yok')).toBeVisible()
-    await page.getByLabel('Durum').selectOption('archived')
+    await page.getByLabel('Durum', { exact: true }).selectOption('archived')
     await page.getByRole('link', { name: 'Amra Demović' }).click()
     await page.getByRole('button', { name: 'Arşivden çıkar' }).first().click()
     await expect(page.getByText('Etkin müşteri')).toBeVisible()
