@@ -80,7 +80,10 @@ export function formatPhone(e164: string): string {
     .sort((a, b) => b.length - a.length)[0]
   if (!cc) return e164
   const rest = d.slice(cc.length)
-  const groups = rest.length <= 6 ? [rest] : [rest.slice(0, 2), ...(rest.slice(2).match(/.{1,3}/g) ?? [])]
+  // Groups of three from the end; a lone leading digit joins the next group ("7700 000 106", "61 000 101").
+  const groups: string[] = []
+  for (let end = rest.length; end > 0; end -= 3) groups.unshift(rest.slice(Math.max(0, end - 3), end))
+  if (groups.length > 1 && groups[0]!.length === 1) groups.splice(0, 2, groups[0]! + groups[1]!)
   return `+${cc} ${groups.join(' ')}`
 }
 

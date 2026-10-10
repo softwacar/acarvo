@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, Outlet, useNavigate, useRouterState } from '@tanstack/react-router'
 import { DropdownMenu } from 'radix-ui'
 import { useEffect, useState } from 'react'
-import { authApi, vehiclesApi } from '@/lib/api'
+import { authApi, customersApi, vehiclesApi } from '@/lib/api'
 import { cn, initials } from '@/lib/utils'
 import { findNavItem, NAV } from '@/nav'
 import { can, sessionQuery, useSession } from '@/session'
@@ -203,6 +203,13 @@ function TopBar({ onMenu }: { onMenu: () => void }) {
     enabled: !!vehicleMatch,
     retry: false,
   })
+  const customerMatch = pathname.match(/^\/musteriler\/([0-9a-f-]{36})$/i)
+  const customer = useQuery({
+    queryKey: ['customer', session.company?.id, customerMatch?.[1]],
+    queryFn: () => customersApi.get(customerMatch![1]!),
+    enabled: !!customerMatch,
+    retry: false,
+  })
   const item = current === 'profil' ? { group: 'Hesap', label: 'Profil ve oturum' } : findNavItem(current)
   const branchLabel = session.allBranches ? 'Tüm şubeler' : session.branches.length === 1 ? session.branches[0]!.name : `${session.branches.length} şube`
 
@@ -212,9 +219,17 @@ function TopBar({ onMenu }: { onMenu: () => void }) {
         <List size={20} />
       </button>
       <nav aria-label="Konum" className="flex min-w-0 items-center gap-2 text-ink-3">
-        {item && !vehicleMatch && <span className="hidden sm:inline">{item.group}</span>}
-        {item && !vehicleMatch && <span className="hidden text-line sm:inline">/</span>}
-        {vehicleMatch ? (
+        {item && !vehicleMatch && !customerMatch && <span className="hidden sm:inline">{item.group}</span>}
+        {item && !vehicleMatch && !customerMatch && <span className="hidden text-line sm:inline">/</span>}
+        {customerMatch ? (
+          <>
+            <Link to="/musteriler" className="hidden hover:text-ink sm:inline">
+              Müşteriler
+            </Link>
+            <span className="hidden text-line sm:inline">/</span>
+            <span className="tnum truncate font-medium text-ink">{customer.data?.customerNo ?? 'Müşteri'}</span>
+          </>
+        ) : vehicleMatch ? (
           <>
             <Link to="/araclar" className="hidden hover:text-ink sm:inline">
               Araçlar

@@ -1,4 +1,4 @@
-import { VEHICLE_TABS, type VehicleTab } from '@acarvo/shared'
+import { CUSTOMER_TABS, type CustomerTab, VEHICLE_TABS, type VehicleTab } from '@acarvo/shared'
 import type { QueryClient } from '@tanstack/react-query'
 import { createRootRouteWithContext, createRoute, createRouter, lazyRouteComponent, Outlet, redirect, useParams } from '@tanstack/react-router'
 import { AppLayout } from './components/AppLayout'
@@ -11,6 +11,7 @@ import { NotFoundPage } from './pages/NotFoundPage'
 import { ProfilePage } from './pages/ProfilePage'
 import { VehiclesPage } from './pages/vehicles/VehiclesPage'
 import { validateVehicleSearch } from './pages/vehicles/search'
+import { validateCustomerSearch } from './pages/customers/search'
 import { sessionQuery } from './session'
 
 const rootRoute = createRootRouteWithContext<{ queryClient: QueryClient }>()({
@@ -68,6 +69,19 @@ const vehicleEditRoute = createRoute({
   validateSearch: (s: Record<string, unknown>): { geri?: 'arac' } => (s.geri === 'arac' ? { geri: 'arac' } : {}),
   component: lazyRouteComponent(() => import('./pages/vehicles/VehicleFormPage'), 'EditVehiclePage'),
 })
+const customersRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/musteriler',
+  validateSearch: validateCustomerSearch,
+  component: lazyRouteComponent(() => import('./pages/customers/CustomersPage'), 'CustomersPage'),
+})
+const customer360Route = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/musteriler/$customerId',
+  validateSearch: (s: Record<string, unknown>): { sekme?: CustomerTab } =>
+    (CUSTOMER_TABS as readonly string[]).includes(s.sekme as string) && s.sekme !== 'genel' ? { sekme: s.sekme as CustomerTab } : {},
+  component: lazyRouteComponent(() => import('./pages/customers/Customer360Page'), 'Customer360Page'),
+})
 const profileRoute = createRoute({ getParentRoute: () => appRoute, path: '/profil', component: ProfilePage })
 const moduleRoute = createRoute({
   getParentRoute: () => appRoute,
@@ -78,7 +92,7 @@ const moduleRoute = createRoute({
   },
 })
 
-const routeTree = rootRoute.addChildren([loginRoute, appRoute.addChildren([indexRoute, branchesRoute, vehiclesRoute, vehicleNewRoute, vehicle360Route, vehicleEditRoute, profileRoute, moduleRoute])])
+const routeTree = rootRoute.addChildren([loginRoute, appRoute.addChildren([indexRoute, branchesRoute, vehiclesRoute, vehicleNewRoute, vehicle360Route, vehicleEditRoute, customersRoute, customer360Route, profileRoute, moduleRoute])])
 
 export function createAppRouter(queryClient: QueryClient) {
   return createRouter({ routeTree, context: { queryClient }, defaultPreload: 'intent', scrollRestoration: true })

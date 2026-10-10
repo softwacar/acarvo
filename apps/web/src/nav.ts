@@ -80,7 +80,7 @@ export const NAV: NavGroup[] = [
   {
     label: 'Müşteri & Ticari',
     items: [
-      { slug: 'musteriler', label: 'Müşteriler', icon: Users },
+      { slug: 'musteriler', label: 'Müşteriler', icon: Users, permission: 'customers.read', built: true },
       { slug: 'kurumsal-hesaplar', label: 'Kurumsal Hesaplar', icon: Buildings },
       { slug: 'talep-merkezi', label: 'Talep Merkezi', icon: Tray },
       { slug: 'partnerler', label: 'Partnerler', icon: Handshake },
@@ -144,6 +144,8 @@ export const PERMISSION_LABELS: Record<Permission, string> = {
   'vehicles.odometer.record': 'Kilometre okuması girme',
   'vehicles.location.record': 'Araç konumunu güncelleme',
   'vehicles.history.correct': 'Kilometre ve konum kayıtlarını düzeltme',
+  'customers.read': 'Müşterileri görüntüleme',
+  'customers.manage': 'Müşteri ekleme, düzenleme ve arşivleme',
   'branches.read': 'Şubeleri görüntüleme',
   'users.read': 'Kullanıcıları görüntüleme',
   'roles.read': 'Rolleri görüntüleme',

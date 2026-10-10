@@ -1,4 +1,4 @@
-import type { ApiError, HistoryWriteResult, SessionInfo, VehicleActivityItem, VehicleDocumentDetail, VehicleDocumentsResponse, VehiclePhoto, VehiclePhotoList, VehicleClassSummary, VehicleDetail, VehicleHistory, VehicleListResponse } from '@acarvo/shared'
+import type { ApiError, CustomerActivityItem, CustomerDetail, CustomerDuplicateResponse, CustomerListResponse, HistoryWriteResult, SessionInfo, VehicleActivityItem, VehicleDocumentDetail, VehicleDocumentsResponse, VehiclePhoto, VehiclePhotoList, VehicleClassSummary, VehicleDetail, VehicleHistory, VehicleListResponse } from '@acarvo/shared'
 
 export class ApiRequestError extends Error {
   constructor(
@@ -168,4 +168,19 @@ export const documentsApi = {
     api<VehicleDocumentDetail>(`/vehicles/${vehicleId}/documents/${docId}/void`, { method: 'POST', body: { version, reason } }),
   upload: (vehicleId: string, docId: string, file: File, onProgress?: (f: number) => void) =>
     uploadFile<VehicleDocumentDetail>(`/vehicles/${vehicleId}/documents/${docId}/files`, file, onProgress),
+}
+
+/**
+ * Customers (M1). The list is read with POST so that names, phone numbers and e-mail addresses
+ * never appear in a URL, the browser history or server logs.
+ */
+export const customersApi = {
+  search: (body: Record<string, unknown>) => api<CustomerListResponse>('/customers/search', { method: 'POST', body }),
+  get: (id: string) => api<CustomerDetail>(`/customers/${id}`),
+  history: (id: string) => api<{ items: CustomerActivityItem[] }>(`/customers/${id}/history`),
+  create: (body: unknown) => api<CustomerDetail>('/customers', { method: 'POST', body }),
+  update: (id: string, body: unknown) => api<CustomerDetail>(`/customers/${id}`, { method: 'PUT', body }),
+  archive: (id: string, version: number, reason: string) => api<CustomerDetail>(`/customers/${id}/archive`, { method: 'POST', body: { version, reason } }),
+  restore: (id: string, version: number) => api<CustomerDetail>(`/customers/${id}/restore`, { method: 'POST', body: { version } }),
+  duplicates: (body: Record<string, unknown>) => api<CustomerDuplicateResponse>('/customers/duplicate-check', { method: 'POST', body }),
 }
