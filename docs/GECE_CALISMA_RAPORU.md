@@ -12,8 +12,8 @@ _Sprint ilerledikçe güncellenir._
 | 1 Tarih ve saat altyapısı | Tamamlandı | `08b19d0` |
 | 2 Güvenlik ve yetki denetimi | Tamamlandı | `da529b4` |
 | 3 Tarayıcı testleri | Tamamlandı | `eeebc0c` |
-| 4 Kullanılabilirlik ve erişilebilirlik | Sürüyor | |
-| 5 Araç modülünde küçük eksikler | Bekliyor | |
+| 4 Kullanılabilirlik ve erişilebilirlik | Tamamlandı | `652146a` |
+| 5 Araç modülünde küçük eksikler | Sürüyor | |
 | 6 Performans | Bekliyor | |
 | 7 Kod kalitesi ve dağıtım güvenliği | Bekliyor | |
 | 8 Gelecek modüllerin planı | Bekliyor | |
@@ -68,6 +68,22 @@ Testlerin yakaladığı ve düzeltilen hatalar:
 2. **Telefonda araç listesinde "Araç" sütunu sıfır genişliğe iniyordu**; başlıklar üst üste biniyor, araca götüren bağlantı görünmüyordu (araç yalnız satıra dokunarak açılabiliyordu, klavye/ekran okuyucuyla açılamıyordu). Tablo artık dar ekranda kendi kartı içinde yana kayıyor.
 3. **Sayfa yana taşıyordu**: tablodaki ekran okuyucu metni konumlanmamış olduğu için sayfayı genişletiyordu. Düzeltildi.
 4. **Fotoğraf yükleme hataları ekran okuyucuya hemen bildirilmiyordu**; hata satırları artık `role="alert"`.
+
+## Aşama 4 — Kullanılabilirlik ve erişilebilirlik (`652146a`)
+
+Yöntem: önce ölçüm. Tarayıcı testlerine eklenen `a11y.spec.ts` ana ekranları (giriş, araç listesi, araç formu, 360° genel/belgeler/geçmiş, belge ve km panelleri) **axe ile WCAG 2.1 A/AA** denetiminden geçiriyor; ciddi/kritik bulgu testi düşürüyor. Ayrıca 1440, 1024, 768 ve 390 px'te liste, form ve 360° sekmelerinde yatay taşma, yan panelde odak tuzağı ve Escape ile kapanma test ediliyor. V5 tasarımı değiştirilmedi.
+
+Bulunan ve düzeltilen sorunlar:
+1. **Yan paneller kapanınca odak kayboluyordu** (klavye/ekran okuyucu kullanıcısı sayfanın başına düşüyordu). Artık odak paneli açan düğmeye dönüyor: km/konum/belge panelleri, belge detayı, fotoğraf büyütme ve fotoğraf yönetimi.
+2. **Kaydedilmemiş bilgi uyarısız kayboluyordu**: km, konum, düzeltme ve belge panellerinde bir şey yazılmışken Escape/dışarı tıklama/Kapat paneli hemen kapatıyordu. Artık panelin üstünde "Girdiğiniz bilgiler kaydedilmedi. Kapatılsın mı?" sorusu çıkıyor (Devam et / Kaydetmeden kapat). Boş panel eskisi gibi hemen kapanıyor.
+3. **API hatasında yanıltıcı ekran**: geçmiş yüklenemezse sekme "Kilometre kaydı yok · doğrulanmadı" diyordu, Genel bakış'taki "Son kayıtlar" sonsuza dek yükleniyor görünüyordu. Artık hata ve "Tekrar dene" gösteriliyor.
+4. (Aşama 3'te) telefon listesi, sayfa taşması, yükleme hatalarının duyurulması.
+
+Notlar: axe, ilk denemede birkaç "renk kontrastı" bulgusu verdi; inceleyince bunların sekme içeriğinin giriş animasyonu sürerken ölçülmesinden kaynaklandığı görüldü (animasyon bitince ihlal yok). Denetim artık animasyonların bitmesini bekliyor. Son durumda ana ekranlarda **hiç axe ihlali yok**.
+
+Belge modülündeki yan panel kopyası kaldırılıp ortak `Sheet` bileşenine bağlandı (davranış aynı; odak ve kaydedilmemiş değişiklik desteği eklendi).
+
+Testler: tarayıcı **33/33** (bir çalıştırmada web test sunucusu bir an bağlantıyı reddetti — `ERR_CONNECTION_REFUSED`; yeniden çalıştırmada temiz geçti, uygulama hatası değil), API **156/156**, tip kontrolü ve derleme hatasız.
 
 ## Onay bekleyen kararlar
 
