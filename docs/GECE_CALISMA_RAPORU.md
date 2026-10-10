@@ -15,8 +15,8 @@ _Sprint ilerledikçe güncellenir._
 | 4 Kullanılabilirlik ve erişilebilirlik | Tamamlandı | `652146a` |
 | 5 Araç modülünde küçük eksikler | Tamamlandı | `ba9675e` |
 | 6 Performans | Tamamlandı | `325b1e0` |
-| 7 Kod kalitesi ve dağıtım güvenliği | Sürüyor | |
-| 8 Gelecek modüllerin planı | Bekliyor | |
+| 7 Kod kalitesi ve dağıtım güvenliği | Tamamlandı | `d9d5b4c` |
+| 8 Gelecek modüllerin planı | Sürüyor | |
 
 ## Aşama 0 — Güvenli çalışma ortamı
 
@@ -121,6 +121,21 @@ Bulunan ve düzeltilen darboğazlar:
 3. **Ön yüz tek parça yükleniyordu** (992 kB / sıkıştırılmış 286 kB). Araç 360° (sıkıştırılmış 37 kB) ve araç formu (10 kB) artık açıldıklarında yükleniyor; ilk yükleme ~247 kB. En büyük bağımlılıklar React DOM, zod ve ikon kütüphanesi; daha fazla küçültme yeniden yapılandırma gerektirir, gerek görmedim.
 
 İncelenen ve sorun bulunmayanlar: liste sayfalaması ve filtreleri sunucuda; N+1 sorgu yok (belge özetleri ve geçmiş tek sorguda); km/konum geçmişi indeksli ve görünümde 500 kayıtla sınırlı (kurallar pencereye bağlı değil, Aşama 2); 360° sayfasında aynı belge verisi tek istekle paylaşılıyor.
+
+## Aşama 7 — Kod kalitesi ve dağıtım güvenliği (`d9d5b4c`)
+
+1. **Güvenli migration aracı** `scripts/safe-migrate.mjs`: bekleyen migration'ları listeler → doğrulanmış yedek alır (doğrulanmazsa durur) → her tablonun satır sayısını şirket bazında kaydeder → migration'ı uygular → hiçbir tabloda satır azalmadığını, tüm migration'ların uygulandığını ve RLS'in zayıflamadığını doğrular; sorun olursa yedek klasörünü ve geri yükleme adımlarını yazıp durur.
+   - `--test` ile `acarvo_test` üzerinde **baştan sona prova edildi** (0011 test veritabanında geri alınıp araçla yeniden uygulandı: yedek doğrulandı, migration uygulandı, doğrulama geçti).
+   - `--dry-run` ana veritabanında yalnız okuma yaptı: `acarvo` 11 migration'da, bekleyen tek migration `0011_audit_entity_index`. **Ana veritabanına uygulanmadı.**
+   - Test provasında yedeğe gerçek depolama klasörü kopyalanmıyor (`BACKUP_SKIP_STORAGE`); prova yedekleri sonradan silindi.
+2. **Üretim ayarı uyarıları:** sunucu üretimde açılırken tehlikeli varsayılanları uyarı olarak yazar (`STORAGE_DIR` yok, `WEB_ORIGIN` localhost/https değil, `TRUST_PROXY` yok, zararlı dosya tarayıcısı yok). Davranış değişmez, yalnız görünür olur.
+3. **Tekrarlanan kod:** PostgreSQL zaman damgası çözümleme mantığı üç dosyada kopyaydı; tek yere (`lib/timestamps.ts`) alındı ve `+05:30` gibi yarım saatlik farkları da kapsayan testi yazıldı. Belge modülündeki yan panel kopyası (Aşama 4) ve belge başlık metinleri (Aşama 5) ortaklaştırıldı.
+4. **Kullanılmayan kod taraması:** API derleyiciyle `noUnusedLocals/noUnusedParameters` ile tarandı; kullanılmayan kod yok. Web zaten bu kurallarla derleniyor.
+5. Belge: `docs/TEKNIK_UYGULAMA.md` §12 (güvenli dağıtım sırası ve üretim ayarları), §9.2 (testler).
+
+Bilinçli olarak yapılmayanlar: `Vehicle360Page.tsx` (~950 satır) ve `VehicleDocuments.tsx` (~900 satır) büyük ama bölümleri net; gece bunları bölmek onaylı tasarımı riske atmadan fayda sağlamazdı. Sonraki modülde ortak sekme bileşenleri çıkarılırken bölünmesini öneririm.
+
+Testler: API **165/165**, tarayıcı **34/34**; tip kontrolü ve derleme hatasız.
 
 ## Onay bekleyen kararlar
 
