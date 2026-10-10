@@ -218,6 +218,19 @@ test.describe('as the owner', () => {
     await page.getByRole('tab', { name: 'Kayıt geçmişi' }).click()
     await expect(page.getByText('Kişisel bilgilerin eski ve yeni değerleri geçmişe kopyalanmaz')).toBeVisible()
   })
+
+  test('a record created outside the screens says the user is unknown instead of inventing one', async ({ page }) => {
+    // The synthetic test customers are loaded by the guarded test seed, not by a user.
+    await openCustomer(page, 'Marie Exemple')
+    const facts = page.getByRole('region').or(page.locator('section')).filter({ hasText: 'Kayıt bilgisi' }).last()
+    await expect(facts.getByText('Kullanıcı bilgisi yok')).toHaveCount(2)
+    await expect(facts.getByText('uygulama ekranları dışında oluşturulmuş veya değiştirilmiş')).toBeVisible()
+    // A customer created through the form names its creator and shows no such note.
+    await openCustomer(page, 'Elma Akış Testi')
+    const own = page.locator('section').filter({ hasText: 'Kayıt bilgisi' }).last()
+    await expect(own.getByText('Adnan Kovač')).toHaveCount(2)
+    await expect(own.getByText('uygulama ekranları dışında')).toHaveCount(0)
+  })
 })
 
 test.describe('access', () => {
@@ -245,6 +258,27 @@ test.describe('access', () => {
     await page.goto('/musteriler')
     await expect(page.getByRole('link', { name: 'Dino Neretvić' })).toBeVisible()
     await expect(page.getByRole('link', { name: 'Ajla Testović' })).toHaveCount(0)
+    await ctx.close()
+  })
+
+  test('a long branch name is shown in full (wrapped), not cut off', async ({ browser }) => {
+    const ctx = await browser.newContext({ storageState: authFile('adnan'), viewport: { width: 1280, height: 900 }, locale: 'tr-TR' })
+    const page = await ctx.newPage()
+    const long = 'Sarajevo Međunarodni Aerodrom Dolasci Terminal B'
+    // Display-only check: the list answer is altered in the browser; no record is changed.
+    await page.route('**/api/customers/search', async (route) => {
+      const res = await route.fetch()
+      const body = await res.json()
+      body.items[0].createdBranch.name = long
+      await route.fulfill({ response: res, json: body })
+    })
+    await page.goto('/musteriler')
+    const cell = page.locator('tbody tr').first().getByText(long)
+    await expect(cell).toBeVisible()
+    await expect(page.locator('tbody tr').first().locator('[title]', { hasText: long })).toHaveAttribute('title', long)
+    const clipped = await cell.evaluate((el) => el.scrollWidth > el.clientWidth + 1 || el.scrollHeight > el.clientHeight + 1)
+    expect(clipped, 'branch name is not cut off').toBe(false)
+    await expectNoHorizontalOverflow(page)
     await ctx.close()
   })
 

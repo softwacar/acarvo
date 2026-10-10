@@ -54,6 +54,20 @@ for (const [width, height] of [
   })
 }
 
+test('list at 1280 with a long branch name (display-only change in the browser)', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 })
+  await page.route('**/api/customers/search', async (route) => {
+    const res = await route.fetch()
+    const body = await res.json()
+    body.items[0].createdBranch.name = 'Sarajevo Međunarodni Aerodrom Dolasci Terminal B'
+    await route.fulfill({ response: res, json: body })
+  })
+  await page.goto('/musteriler')
+  await expect(page.getByRole('link', { name: 'Ajla Testović' })).toBeVisible()
+  await settle(page)
+  await page.screenshot({ path: out('10-liste-uzun-sube-adi-1280') })
+})
+
 test('customer 360 history, pending tab and archived state', async ({ page }) => {
   await page.goto('/musteriler')
   await page.getByLabel('Durum').selectOption('archived')

@@ -78,7 +78,7 @@ function CustomerRow({ c, onOpen }: { c: CustomerListItem; onOpen: () => void })
   return (
     <tr onClick={onOpen} className={cn('group h-[56px] cursor-pointer hover:bg-blue-soft/35', archived && 'text-ink-2')}>
       <td className="hidden py-2 pr-3 pl-5 sm:table-cell">
-        <span className="tnum text-[13px] font-medium text-ink-2">{c.customerNo}</span>
+        <span className="tnum text-[13px] font-medium whitespace-nowrap text-ink-2">{c.customerNo}</span>
       </td>
       <td className="py-2 pr-3 pl-4 sm:px-3">
         <Link
@@ -108,9 +108,10 @@ function CustomerRow({ c, onOpen }: { c: CustomerListItem; onOpen: () => void })
       </td>
       <td className="hidden px-3 xl:table-cell">
         {c.createdBranch ? (
-          <span className="flex items-center gap-2 text-ink">
-            <span className="rounded-[4px] border border-line px-1 text-[11px] font-semibold tracking-[0.05em]">{c.createdBranch.code}</span>
-            <span className="truncate">{c.createdBranch.name}</span>
+          <span className="flex items-center gap-2 text-ink" title={c.createdBranch.name}>
+            <span className="shrink-0 rounded-[4px] border border-line px-1 text-[11px] font-semibold tracking-[0.05em]">{c.createdBranch.code}</span>
+            {/* Long names wrap inside the row instead of being cut off. */}
+            <span className="min-w-0 leading-tight break-words">{c.createdBranch.name}</span>
           </span>
         ) : (
           <span className="text-[13px] text-ink-3">Belirtilmemiş</span>
@@ -272,19 +273,19 @@ export function CustomersPage() {
               <table className={cn('w-full table-fixed sm:min-w-[560px] text-left transition-opacity', list.isPlaceholderData && 'opacity-60')}>
                 <thead>
                   <tr className="h-10 border-b border-line text-[12.5px] whitespace-nowrap text-ink-2">
-                    <SortHeader label="No" sort="customerNo" search={search} className="hidden w-[100px] sm:table-cell" />
+                    <SortHeader label="No" sort="customerNo" search={search} className="hidden w-[108px] sm:table-cell" />
                     <SortHeader label="Müşteri" sort="name" search={search} className="pl-4 sm:pl-3" />
-                    <th scope="col" className="hidden w-[25%] px-3 font-medium lg:table-cell">
+                    <th scope="col" className="hidden w-[19%] px-3 font-medium lg:table-cell">
                       İletişim
                     </th>
-                    <th scope="col" className="w-[124px] pr-4 pl-3 font-medium sm:w-[140px] sm:px-3">
+                    <th scope="col" className="w-[124px] pr-4 pl-3 font-medium sm:px-3">
                       Yerli / yabancı
                     </th>
-                    <th scope="col" className="hidden w-[180px] px-3 font-medium xl:table-cell">
+                    <th scope="col" className="hidden w-[200px] px-3 font-medium xl:table-cell">
                       Kayıt şubesi
                     </th>
-                    <SortHeader label="Kayıt" sort="created" search={search} className="hidden w-[100px] md:table-cell" />
-                    <th scope="col" className="hidden w-[96px] pr-5 pl-3 font-medium sm:table-cell">
+                    <SortHeader label="Kayıt" sort="created" search={search} className="hidden w-[96px] md:table-cell" />
+                    <th scope="col" className="hidden w-[88px] pr-5 pl-3 font-medium sm:table-cell">
                       Durum
                     </th>
                   </tr>

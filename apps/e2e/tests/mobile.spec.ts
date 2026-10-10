@@ -90,3 +90,23 @@ test('phone: customer list, file, tabs and form fit the screen', async ({ page }
   await expect(form.getByRole('button', { name: 'Değişiklikleri kaydet' })).toBeInViewport()
   await expectNoHorizontalOverflow(page)
 })
+
+test('phone: the fixed save bar of the customer panel never covers the last fields', async ({ page }) => {
+  await page.goto('/musteriler')
+  await page.getByRole('link', { name: 'Ajla Testović' }).click()
+  await page.getByRole('button', { name: 'Düzenle' }).first().click()
+  const form = page.getByRole('dialog', { name: 'Müşteriyi düzenle' })
+  const save = form.getByRole('button', { name: 'Değişiklikleri kaydet' })
+  // Scroll the panel body to its end, then compare the last field and closing note with the save bar.
+  await form.locator('#operationalNote').scrollIntoViewIfNeeded()
+  await form.locator('#customer-form').evaluate((el) => el.parentElement!.scrollTo({ top: el.parentElement!.scrollHeight }))
+  const bar = (await save.locator('..').boundingBox())!
+  for (const last of [form.locator('#operationalNote'), form.getByText('Kimlik, pasaport ve ehliyet numaraları bu formda istenmez', { exact: false })]) {
+    const box = (await last.boundingBox())!
+    expect(box.y + box.height, 'last fields stay above the save bar').toBeLessThanOrEqual(bar.y + 1)
+    await expect(last).toBeInViewport()
+  }
+  await form.locator('#operationalNote').fill('Teslimde önceden aranmak istiyor')
+  await expect(form.locator('#operationalNote')).toBeInViewport()
+  await expect(save).toBeInViewport()
+})

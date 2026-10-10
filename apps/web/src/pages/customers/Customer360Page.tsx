@@ -334,7 +334,7 @@ function Header({ c, canManage, onEdit, onArchive, onRestore, restoring }: { c: 
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-line-soft bg-ground/60 px-5 py-3 text-[13px] text-ink-2 sm:px-6">
           <Archive size={16} className="shrink-0 text-ink-3" />
           <span>
-            {c.archivedAt ? formatDate(c.archivedAt) : ''} tarihinde {c.archivedByName ?? 'bir kullanıcı'} tarafından arşivlendi · Neden:{' '}
+            {c.archivedAt ? formatDate(c.archivedAt) : ''} tarihinde {c.archivedByName ? `${c.archivedByName} tarafından arşivlendi` : 'arşivlendi (arşivleyen kullanıcı bilgisi yok)'} · Neden:{' '}
             <span className="font-medium text-ink">{c.archivedReason ? ARCHIVE_REASON_LABELS[c.archivedReason] : '—'}</span>
           </span>
           <span className="basis-full text-[12.5px] sm:basis-auto">Arşivdeki kayıt düzenlenemez; kayıt ve geçmişi silinmez.</span>
@@ -444,13 +444,20 @@ function Overview({ c, canManage, onEdit, onTab }: { c: CustomerDetail; canManag
             columns={1}
             rows={[
               ['Kayıt şubesi', c.createdBranch?.name ?? null],
-              ['Oluşturan', c.createdByName ?? <span className="font-normal text-ink-3">Kayıtlı değil</span>],
+              ['Oluşturan', c.createdByName ?? <span className="font-normal text-ink-3">Kullanıcı bilgisi yok</span>],
               ['Oluşturulma', <span className="tnum">{formatDateTime(c.createdAt)}</span>],
               ['Son değişiklik', <span className="tnum">{formatDateTime(c.updatedAt)}</span>],
-              ['Değiştiren', c.updatedByName ?? <span className="font-normal text-ink-3">Kayıtlı değil</span>],
+              ['Değiştiren', c.updatedByName ?? <span className="font-normal text-ink-3">Kullanıcı bilgisi yok</span>],
               ['Sürüm', <span className="tnum">{c.version}</span>],
             ]}
           />
+          {/* Every record saved through the app stores its user; an empty value means the record came from outside the screens. */}
+          {(!c.createdByName || !c.updatedByName) && (
+            <p className="mt-3 flex items-start gap-1.5 text-[12.5px] text-ink-2">
+              <Info size={14} className="mt-[3px] shrink-0 text-ink-3" />
+              Bu kayıt uygulama ekranları dışında oluşturulmuş veya değiştirilmiş (ör. veri yüklemesi); işlemi yapan kullanıcı bilinmiyor.
+            </p>
+          )}
         </Panel>
       </div>
     </div>
