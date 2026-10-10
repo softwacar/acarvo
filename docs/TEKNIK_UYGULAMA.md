@@ -381,6 +381,24 @@ Kurallar:
 - Güncellemelerde `version` gönderilir; uyuşmazsa 409 ve güncel kayıt döner.
 - Her değişiklik `audit_log`'a yazılır.
 
+### 9.1 Zaman, tarih ve saat dilimleri
+
+ACARVO uluslararası kullanılır; bilgisayarın saat dilimi hiçbir zaman saklanan veya gösterilen değeri değiştirmez. İki tür zaman vardır ve birbirine çevrilmez:
+
+| Tür | Örnek | Veritabanı | API | Giriş ve gösterim |
+|---|---|---|---|---|
+| **An (instant)** | km okuması, konum kaydı, işlem geçmişi, oturum | `timestamptz` (UTC) | ISO 8601 UTC (`2026-10-08T12:30:00.000Z`) | Şirketin saat diliminde duvar saati (`companies.timezone`) |
+| **Takvim tarihi** | belge geçerlilik günleri, edinim tarihi | `date` | `YYYY-MM-DD` | Olduğu gibi `GG.AA.YYYY`; hiçbir saat dilimi çevrimi yapılmaz |
+
+- Ortak yardımcılar `packages/shared/src/time.ts`: `wallTimeToUtc` (şirket saatinde girilen değeri UTC ana çevirir), `utcToWallTime`, `timeZoneOffsetMs`, `isDateOnly`, `formatDateOnly`. Yalnız `Date.UTC` ve açık saat dilimli `Intl` kullanır; yerel saat API'si kullanmaz.
+- Web: `formatDate`/`formatDateTime` anları oturumdaki şirket saat diliminde, takvim tarihlerini çevirmeden gösterir. Km/konum formlarındaki tarih-saat alanı şirket saatiyle doldurulur ve okunur; bilgisayarın saat dilimi farklıysa alanın altında belirtilir.
+- **Yaz/kış saati:** ileri geçişte yaşanmayan saat (ör. 29.03.2026 02:30) geçişin hemen sonrasına alınır ve formda belirtilir; geri geçişte iki kez yaşanan saat (25.10.2026 02:30) ilk geçişi (yaz saati) olarak kaydedilir ve belirtilir.
+- **Belgelerde "bugün"** sunucuda şirket saat dilimine göre hesaplanır (`todayIn`); gün farkları takvim günü olarak sayılır, yaz/kış geçişinden etkilenmez.
+- **48 saat kuralı** gerçek geçen süreyle (iki UTC an arasındaki fark) ölçülür; saat dilimi veya yaz/kış geçişi sonucu değiştirmez.
+- Sunucu iletilerindeki tarih-saat de şirket saat diliminde ve web ile aynı biçimdedir (`GG.AA.YYYY SS:dd`).
+- Testler (`apps/api/tests/time.test.ts`) senaryoları bilgisayar saat dilimi Berlin, İstanbul, New York, Tokyo, UTC ve Honolulu iken çalıştırır.
+- Açık karar: şubelerin de kendi `timezone` alanı var; şu an tüm giriş/gösterim şirket saat dilimini kullanır (bkz. gece raporu, bekleyen kararlar).
+
 ## 10. Git ve gizli bilgiler
 
 - `.gitignore`: `.env*` (`.env.example` hariç), `node_modules`, `dist`, `storage/`, `*.log`, test çıktıları, Playwright raporları, `.playwright-mcp/`, yerel veritabanı dökümleri (`*.dump`, `*.sql.gz`, `pgdata/`), editör geçici dosyaları.

@@ -54,3 +54,4 @@ export interface ApiError {
 export * from './vehicles'
 export * from './documents'
 export * from './history'
+export * from './time'

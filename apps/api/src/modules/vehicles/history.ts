@@ -67,7 +67,9 @@ async function visibleVehicle(tx: Tx, access: CompanyAccess, vehicleId: string):
 const lockHistory = (tx: Tx, vehicleId: string) => tx.execute(sql`select lock_vehicle_history(${vehicleId}::uuid)`)
 
 const kmText = (n: number) => `${new Intl.NumberFormat('tr-TR').format(n)} km`
-const timeText = (at: string, timeZone: string) => new Intl.DateTimeFormat('tr-TR', { timeZone, dateStyle: 'short', timeStyle: 'short' }).format(new Date(at))
+/** Same format as the web app (DD.MM.YYYY HH:mm), in the company's time zone. */
+const timeText = (at: string, timeZone: string) =>
+  new Intl.DateTimeFormat('tr-TR', { timeZone, day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }).format(new Date(at))
 
 // ---------------------------------------------------------------------------
 // Reading the history

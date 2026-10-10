@@ -1,6 +1,7 @@
 import type { Permission, SessionInfo } from '@acarvo/shared'
 import { queryOptions, useQuery } from '@tanstack/react-query'
 import { authApi } from './lib/api'
+import { setDisplayTimeZone } from './lib/vehicle-labels'
 
 export const sessionQuery = queryOptions({
   queryKey: ['session'],
@@ -12,6 +13,7 @@ export const sessionQuery = queryOptions({
 export function useSession(): SessionInfo {
   const { data } = useQuery(sessionQuery)
   if (!data) throw new Error('useSession outside an authenticated route')
+  setDisplayTimeZone(data.company?.timezone)
   return data
 }
 

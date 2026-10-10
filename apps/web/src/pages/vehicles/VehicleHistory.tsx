@@ -12,6 +12,8 @@ import {
   largeJump,
   odometerNeighbours,
   odometerOrderProblem,
+  utcToWallTime,
+  wallTimeToUtc,
 } from '@acarvo/shared'
 import { ArrowRight, Buildings, DotsThree, Gauge, Info, LockSimple, MapPin, Plus, SpinnerGap, Warning, WarningCircle, Wrench } from '@phosphor-icons/react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
@@ -22,18 +24,31 @@ import { Sheet } from '@/components/Sheet'
 import { toast } from '@/components/Toaster'
 import { ApiRequestError, historyApi } from '@/lib/api'
 import { cn } from '@/lib/utils'
-import { formatDateTime, formatKm, LOCATION_LABELS } from '@/lib/vehicle-labels'
+import { formatDateTime, formatKm, getDisplayTimeZone, LOCATION_LABELS } from '@/lib/vehicle-labels'
 import { can, useSession } from '@/session'
 
 // Araç 360° → Konum ve geçmiş: odometer and physical location records (spec §13.3 tab 8, §59CY, §59CG; docs §8.5).
 
 const nf = new Intl.NumberFormat('tr-TR')
-const pad = (n: number) => String(n).padStart(2, '0')
-/** datetime-local value in the browser's time zone. */
-const toLocalInput = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
-const fromLocalInput = (v: string) => {
-  const d = new Date(v)
-  return Number.isNaN(d.getTime()) ? null : d.toISOString()
+/** datetime-local values are wall-clock times in the company's time zone, not the computer's (docs §9.1). */
+const nowInput = () => utcToWallTime(Date.now(), getDisplayTimeZone())
+const fromInput = (v: string) => wallTimeToUtc(v, getDisplayTimeZone())
+
+/** Which clock the field uses, the computer's zone when it differs, and what happens around daylight saving changes. */
+function TimeZoneHint({ value, base }: { value: string; base: string }) {
+  const zone = getDisplayTimeZone()
+  const own = Intl.DateTimeFormat().resolvedOptions().timeZone
+  const r = fromInput(value)
+  return (
+    <>
+      {base} Saat, şirket saatiyle ({zone}) girilir.
+      {own !== zone && <> Bilgisayarınızın saat dilimi farklı ({own}).</>}
+      {r?.note === 'gap' && (
+        <span className="mt-1 block font-medium text-hold">Bu saat yaz saatine geçişte yaşanmaz; {formatDateTime(r.iso)} olarak kaydedilir.</span>
+      )}
+      {r?.note === 'ambiguous' && <span className="mt-1 block font-medium text-hold">Bu saat kış saatine geçişte iki kez yaşanır; ilki (yaz saati) kullanılır.</span>}
+    </>
+  )
 }
 const newRequestId = () => crypto.randomUUID()
 
@@ -385,7 +400,7 @@ function OdometerForm({ v, history, onClose }: { v: VehicleDetail; history: Vehi
   const apply = useApplyResult(v.id)
   const requestId = useRef(newRequestId())
   const [km, setKm] = useState('')
-  const [at, setAt] = useState(() => toLocalInput(new Date()))
+  const [at, setAt] = useState(nowInput)
   const [note, setNote] = useState('')
   const [jumpReason, setJumpReason] = useState('')
   const [errors, setErrors] = useState<Record<string, string>>({})
@@ -393,7 +408,7 @@ function OdometerForm({ v, history, onClose }: { v: VehicleDetail; history: Vehi
   const onError = useErrorHandler(v.id, setErrors, setMessage)
 
   const kmNum = /^\d+$/.test(km.replace(/\D/g, '')) && km.trim() !== '' ? Number(km.replace(/\D/g, '')) : null
-  const atIso = fromLocalInput(at)
+  const atIso = fromInput(at)?.iso ?? null
   const n = atIso ? odometerNeighbours(history.odometer, atIso) : { previous: null, next: null }
   const problem = kmNum != null ? odometerOrderProblem(kmNum, n) : null
   const jump = kmNum != null && atIso && !problem ? largeJump(n.previous, kmNum, atIso) : null
@@ -455,8 +470,8 @@ function OdometerForm({ v, history, onClose }: { v: VehicleDetail; history: Vehi
               : `Bu değer daha sonraki ${formatDateTime(n.next!.occurredAt)} tarihli ${formatKm(n.next!.km)} okumasından yüksek.`}
           </Banner>
         )}
-        <Field id="occurredAt" label="Okuma zamanı" required error={errors.occurredAt} hint="Göstergenin okunduğu an. Gelecek bir zaman girilemez.">
-          <Input {...describe('occurredAt', errors.occurredAt, true)} type="datetime-local" value={at} max={toLocalInput(new Date())} onChange={(e) => setAt(e.target.value)} />
+        <Field id="occurredAt" label="Okuma zamanı" required error={errors.occurredAt} hint={<TimeZoneHint value={at} base="Göstergenin okunduğu an; gelecek bir zaman girilemez." />}>
+          <Input {...describe('occurredAt', errors.occurredAt, true)} type="datetime-local" value={at} max={nowInput()} onChange={(e) => setAt(e.target.value)} />
         </Field>
         {backdated && <Banner tone="info">Bu okuma geçmişe eklenecek. Daha yeni bir okuma olduğu için güncel kilometre değişmeyecek.</Banner>}
         {jump && (
@@ -538,12 +553,12 @@ function LocationForm({ v, history, onClose }: { v: VehicleDetail; history: Vehi
   const [type, setType] = useState<ManualLocationType>('branch')
   const [branchId, setBranchId] = useState('')
   const [description, setDescription] = useState('')
-  const [at, setAt] = useState(() => toLocalInput(new Date()))
+  const [at, setAt] = useState(nowInput)
   const [reason, setReason] = useState('')
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [message, setMessage] = useState<string | null>(null)
   const onError = useErrorHandler(v.id, setErrors, setMessage)
-  const atIso = fromLocalInput(at)
+  const atIso = fromInput(at)?.iso ?? null
   const current = currentOf(history.locations)
   const backdated = !!(atIso && current && atIso < current.occurredAt)
 
@@ -591,8 +606,8 @@ function LocationForm({ v, history, onClose }: { v: VehicleDetail; history: Vehi
           </span>
         </div>
         <LocationFields type={type} setType={setType} branchId={branchId} setBranchId={setBranchId} description={description} setDescription={setDescription} errors={errors} />
-        <Field id="occurredAt" label="Ne zamandan beri" required error={errors.occurredAt}>
-          <Input {...describe('occurredAt', errors.occurredAt)} type="datetime-local" value={at} max={toLocalInput(new Date())} onChange={(e) => setAt(e.target.value)} />
+        <Field id="occurredAt" label="Ne zamandan beri" required error={errors.occurredAt} hint={<TimeZoneHint value={at} base="Gelecek bir zaman girilemez." />}>
+          <Input {...describe('occurredAt', errors.occurredAt, true)} type="datetime-local" value={at} max={nowInput()} onChange={(e) => setAt(e.target.value)} />
         </Field>
         {backdated && <Banner tone="info">Bu kayıt geçmişe eklenecek. Daha yeni bir konum kaydı olduğu için güncel konum değişmeyecek.</Banner>}
         <Field id="reason" label="Değişiklik nedeni" required error={errors.reason}>
