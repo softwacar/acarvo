@@ -1,6 +1,6 @@
 # ACARVO — Müşteriler, Kurumsal Hesaplar, Sürücüler ve Müşteri 360° — Uygulama planı
 
-Durum: **genel yaklaşım onaylandı (10.10.2026); kararlar işlendi (§14); M1 kapsamı onay bekliyor (§15).** Kod yazılmadı.
+Durum: **genel yaklaşım onaylandı (10.10.2026); kararlar işlendi (§14); M1 uygulandı (10.10.2026, `musteriler-m1` dalı, inceleme bekliyor). M2–M6 başlamadı.** Uygulama ayrıntıları: `docs/TEKNIK_UYGULAMA.md` §8.6.
 
 Kaynaklar:
 - Spec (`ACARVO_GLOBAL_WEB_UI_V1_SPEC.md`):
@@ -423,6 +423,12 @@ Aşama sonunda mevcut 183 API ve 38 tarayıcı testinin tamamı ve yeni testler 
 - **Rol ayarı:** Operasyon'un belge görüntüsünü açması teslim masasında gerekli görülürse, bu hazır role değil şirket sahibinin vereceği özel bir role eklenmesi önerilir.
 
 ## 15. M1 — Kişi kaydının temeli: kapsam
+
+> **Uygulamada plandan iki bilinçli sapma (daha sıkı):**
+> 1. Liste ve arama `GET /api/customers?q=` yerine `POST /api/customers/search` ile yapılır. Arama metni hiçbir adreste, tarayıcı geçmişinde veya günlükte yer almaz.
+> 2. İşlem geçmişi ad, telefon ve e-posta için eski ve yeni değeri değil, yalnız değişen alanın adını tutar ("gereksiz kişisel veri kopyalama" kuralı). Değer yalnız kişisel olmayan alanlarda yazılır: Yerli/Yabancı, dil, iletişim tercihi.
+>
+> Arşivleme nedeni serbest metin değil, sabit bir listedir.
 
 M1 belge numarası içermez; bu yüzden şifreleme anahtarı gerektirmez.
 

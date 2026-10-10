@@ -381,6 +381,64 @@ Kurallar:
 
 İlk sürüm: manuel km okuması, gerekçeli düzeltme ve düzeltme zinciri, büyük artış onayı, manuel konum güncelleme ve düzeltme, eşzamanlılık ve geçmiş tarih kuralları, 360 Konum ve geçmiş sekmesi, yetkiler ve rol yükseltme, testler. Sonra: gösterge değişimi (ayrı plan), kiralama teslim/iade, rezervasyon projeksiyonu, bakım, transfer, tedarikçi olayları, km eşiklerinin Ayarlar'a taşınması, Araçlar listesinde konum/km filtresi, GPS (V1 dışı).
 
+### 8.6 Müşteriler — M1 (ayrı modül; uygulandı 10.10.2026)
+
+Plan ve kararlar: `docs/MUSTERILER_KURUMSAL_HESAPLAR_PLANI.md` (§14 kararlar, §15 M1 kapsamı). Bu bölüm uygulanan teknik ayrıntıları tutar.
+
+- **Tablolar** (migration `0012_customers`, `0013_customers_rls`; yalnız ekleme):
+  - `customers`: kişi kaydı, tek şirkete ait. Kimlik, pasaport ve ehliyet numarası yoktur (M2, şifreli, ayrı tablo).
+  - `company_sequences`: şirket başına sayaç (`customer`, ileride `corporate_account`).
+- **Şirket izolasyonu:**
+  - iki tabloda zorunlu RLS ve 4 politika;
+  - `created_branch_id` ve `merged_into_id` bileşik `(company_id, id)` anahtarla bağlanır;
+  - şirketler arası ortak kişi, havuz veya eşleştirme yoktur;
+  - başka şirketin kaydı API'de 404 döner.
+- **Değiştirilemez sütunlar (tetikleyici):** `company_id`, `customer_no`, oluşturma zamanı/kişisi ve kayıt şubesi. Sayaç yalnız ileri gider.
+- **Çalışma rolü:** `acarvo_app` iki tabloda SELECT/INSERT/UPDATE; **DELETE ve TRUNCATE yok**. Müşteri arşivlenir, silinmez.
+- **Numara:** `M-000123`, şirket içinde benzersiz, şube öneki yok. Üretim tek bir `insert … on conflict do update … returning` ile sayaç satırını kilitler; eşzamanlı kayıtlar farklı ve ardışık numara alır (20 paralel kayıt testi). Numara yeniden kullanılmaz.
+- **Kontroller:**
+  - ad veya soyaddan en az biri (tek isimli kişiler);
+  - telefon veya e-postadan en az biri;
+  - telefon E.164 biçiminde, e-posta küçük harfle;
+  - Yerli/Yabancı açık seçim, hiçbir alandan tahmin edilmez;
+  - arşiv nedeni sabit listeden.
+- **Telefon normalizasyonu** (`packages/shared/src/customers.ts`):
+  - `+` veya `00` ile yazılan numara uluslararası kabul edilir;
+  - başında `0` olan ya da ülke kodsuz numaraya şirket ülkesinin kodu eklenir ve bu formda gösterilir;
+  - başka hiçbir tahmin yapılmaz; numara çözülemezse alan hatası verilir.
+- **Şube erişimi:** şirketin `customers.read` yetkili tüm kullanıcıları tüm şubelerin müşterilerini bulur. Kayıt şubesi bilgi amaçlıdır. Tek şubeli kullanıcının açtığı kayıt o şubeye yazılır; yetkisi olmayan şube seçilemez.
+- **Yetkiler:**
+  - `customers.read`: liste, 360° ve kayıt geçmişi;
+  - `customers.manage`: ekleme, düzenleme, arşivleme, geri alma ve mükerrer önerisi;
+  - hazır rollere `ROLE_PRESET_HISTORY` v3 üzerinden eklenir; değiştirilmiş hazır roller ve özel roller değişmez.
+- **Kişisel veri:**
+  - **Liste ve arama `POST /api/customers/search` gövdesiyle yapılır.** Planda GET + sorgu dizesi öngörülmüştü; daha sıkı olan bu yol seçildi. Ad, telefon ve e-posta hiçbir adreste, tarayıcı geçmişinde veya erişim günlüğünde yer almaz. Web'de arama metni adres satırına yazılmaz; yalnız açık sekmenin belleğinde tutulur. Filtre, sıralama ve sayfa adreste kalır.
+  - **Mükerrer önerisi `POST /api/customers/duplicate-check`.**
+    - Yalnız aynı şirket içinde arar.
+    - Aynı telefon veya e-posta güçlü öneridir; aynı ad ve doğum tarihi olası öneridir; ad tek başına hiçbir zaman öneri üretmez.
+    - Yanıt maskelidir (`+387 61 ••• •01`, `aj••••@example.test`).
+    - Kullanıcı başına dakikada 60 istekle sınırlıdır.
+    - Güçlü öneri varken kayıt, kullanıcı "farklı kişi" diye onaylamadan yapılmaz (`409 POSSIBLE_DUPLICATE`). Onay, işlem geçmişine eşleşen müşteri numaralarıyla yazılır. Otomatik birleştirme yoktur.
+  - **İşlem geçmişi** (`customer.create/update/archive/restore`):
+    - kişisel değerler kopyalanmaz, yalnız hangi alanın değiştiği tutulur;
+    - eski ve yeni değer yalnız kişisel olmayan alanlarda yazılır: Yerli/Yabancı, hizmet dili, iletişim tercihi;
+    - arşiv nedeni sabit listeden geldiği için serbest metin içermez.
+  - **Günlükler** (`src/lib/log-safety.ts`):
+    - istek satırı sorgu dizesi olmadan yazılır; gövde hiç yazılmaz;
+    - hata kaydında başarısız sorgunun metni ve parametreleri, PostgreSQL `detail` alanı ve hata iletisi satırları atılır; yalnız tür, kod, kısıt ve yığın satırları kalır;
+    - bu, otomatik testle doğrulanır.
+  - **Doğrulama hataları** alan adı ve kural döner; girilen değeri yansıtmaz.
+- **Sürüm çakışması:** araçlarla aynı. Satır kilitlenir; eski sürümle kayıt `409 VERSION_CONFLICT` ve güncel kayıt döner. Formda değişen alanlar listelenir; kullanıcı güncel bilgileri yükler ya da kendi değişikliklerini bilerek kaydeder. Arşivdeki kayıt düzenlenemez (`409 CUSTOMER_ARCHIVED`).
+- **Sentetik veri:** `seed/test-customers.ts` yalnız `acarvo_test`'e yükler; başka veritabanında hiçbir şey eklemeden durur.
+  - Adlar uydurmadır; e-postalar `example.test`; telefonlar `000` bloğundadır.
+  - Ana veritabanına örnek müşteri eklenmez; ana veritabanında liste boş başlar.
+- **Web:**
+  - `/musteriler`: liste (yoğun tablo; 390 px'te numara ve telefon ad altında, yana kaydırma yok);
+  - `/musteriler/:id`: Müşteri 360°, yani müşteri dosyası. Kimlik başlığı, iletişim şeridi ve "Müşteri dosyası" durumu var. Sekmeler adreste (`?sekme=`). Genel ve Kayıt geçmişi gerçek veriyle çalışır; Belgeler, Rezervasyonlar, Kiralamalar, Cari, Görevler dürüst "henüz bağlı değil" panelidir;
+  - Ekleme ve düzenleme ortak yan panelde açılır. Kaydedilmemiş değişiklik sorusu ve canlı mükerrer önerisi vardır.
+  - Arşivleme gerekçe seçilen bir diyalogla yapılır.
+- **Testler:** API `tests/customers.test.ts` (32); tarayıcı `customers.spec.ts` (13), `a11y` ve `mobile` eklemeleri; ekran görüntüleri isteğe bağlı `customer-screens.spec.ts` (`SCREENSHOTS=1`).
+
 ## 9. API kuralları
 
 - REST, JSON; tüm uçlar `/api` altında. Liste uçları sunucu tarafında arama, filtre, sıralama ve sayfalama yapar.
@@ -417,7 +475,7 @@ ACARVO uluslararası kullanılır; bilgisayarın saat dilimi hiçbir zaman sakla
   - Her çalıştırmada `acarvo_test` aynı korumalı sıfırlamayla yeniden kurulur ve test kullanıcılarına **o çalıştırmaya özel rastgele bir parola** verilir; kişisel parola veya açık tarayıcı oturumu kullanılmaz. Tarayıcı Playwright'ın kendi Chromium'udur, her test temiz bir profil kullanır.
   - Giriş hız sınırı nedeniyle her test kullanıcısı bir kez giriş yapar (`auth.setup.ts`), oturum `apps/e2e/.auth/` altında saklanır (Git dışı).
   - API testleri ve tarayıcı testleri aynı test veritabanını sıfırladığı için **aynı anda çalıştırılmaz**.
-  - Kapsam: giriş/çıkış, şirket değiştirme, liste arama/filtre, araç ekleme/düzenleme ve sürüm çakışması, 360° sekmeleri, fotoğraf yükleme/ana fotoğraf/sıralama/kaldırma, belge ekleme/görüntüleme/indirme/yenileme, km girişi ve düzeltme, konum, saat dilimi (tarayıcı İstanbul saatinde), şube sınırlı kullanıcı, telefon (390 px). Rapor: `apps/e2e/playwright-report/` (Git dışı).
+  - Kapsam: giriş/çıkış, şirket değiştirme, liste arama/filtre, araç ekleme/düzenleme ve sürüm çakışması, 360° sekmeleri, fotoğraf yükleme/ana fotoğraf/sıralama/kaldırma, belge ekleme/görüntüleme/indirme/yenileme, km girişi ve düzeltme, konum, saat dilimi (tarayıcı İstanbul saatinde), şube sınırlı kullanıcı, telefon (390 px); müşteri ekleme, mükerrer önerisi, arama, düzenleme ve sürüm çakışması, arşivleme, Müşteri 360°, şirketler arası erişim. Rapor: `apps/e2e/playwright-report/` (Git dışı).
 
 ## 10. Git ve gizli bilgiler
 

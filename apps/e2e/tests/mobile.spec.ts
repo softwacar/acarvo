@@ -64,3 +64,29 @@ test('phone: an image document is previewed, opened and downloaded; the preview 
   expect(actions.filter((a) => a === 'vehicle.document.view_request')).toHaveLength(1)
   expect(actions.filter((a) => a === 'vehicle.document.download_request')).toHaveLength(1)
 })
+
+test('phone: customer list, file, tabs and form fit the screen', async ({ page }) => {
+  await page.goto('/musteriler')
+  await expect(page.getByRole('link', { name: 'Ajla Testović' })).toBeVisible()
+  // Number and phone sit under the name; nothing scrolls sideways.
+  await expect(page.locator('tbody tr').first()).toContainText('M-0000')
+  await expectNoHorizontalOverflow(page)
+  await page.getByRole('link', { name: 'Ajla Testović' }).click()
+  await expect(page.getByRole('heading', { name: 'Ajla Testović' })).toBeVisible()
+  await expectNoHorizontalOverflow(page)
+  const call = page.getByRole('link', { name: '+387 61 000 101' })
+  expect((await call.boundingBox())!.height).toBeGreaterThanOrEqual(36)
+  await page.getByRole('tab', { name: 'Kayıt geçmişi' }).click()
+  const visible = await page.evaluate(() => {
+    const el = document.querySelector('[role=tab][aria-selected=true]')!
+    const bar = el.parentElement!.getBoundingClientRect()
+    const r = el.getBoundingClientRect()
+    return r.left >= bar.left - 1 && r.right <= bar.right + 1
+  })
+  expect(visible).toBe(true)
+  await page.getByRole('button', { name: 'Düzenle' }).first().click()
+  const form = page.getByRole('dialog', { name: 'Müşteriyi düzenle' })
+  expect(Math.round((await form.boundingBox())!.width)).toBe(390)
+  await expect(form.getByRole('button', { name: 'Değişiklikleri kaydet' })).toBeInViewport()
+  await expectNoHorizontalOverflow(page)
+})

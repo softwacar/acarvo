@@ -51,6 +51,28 @@ test.describe('signed in', () => {
     await audit(page, 'km formu')
   })
 
+  test('customer list, file, form and archive dialog', async ({ page }) => {
+    await page.goto('/musteriler')
+    await expect(page.getByRole('link', { name: 'Ajla Testović' })).toBeVisible()
+    await audit(page, 'musteriler')
+    await page.getByRole('link', { name: 'Ajla Testović' }).click()
+    await expect(page.getByRole('heading', { name: 'Ajla Testović' })).toBeVisible()
+    await audit(page, 'musteri 360')
+    await page.getByRole('tab', { name: 'Kayıt geçmişi' }).click()
+    await audit(page, 'musteri gecmis')
+    await page.getByRole('button', { name: 'Düzenle' }).first().click()
+    await expect(page.getByRole('dialog', { name: 'Müşteriyi düzenle' })).toBeVisible()
+    await audit(page, 'musteri duzenle')
+    await page.keyboard.press('Escape')
+    await page.goto('/musteriler')
+    await page.getByRole('button', { name: 'Yeni müşteri' }).click()
+    const form = page.getByRole('dialog', { name: 'Yeni müşteri' })
+    await form.getByRole('button', { name: 'Müşteriyi kaydet' }).click()
+    await form.locator('#phone').fill('+387 61 000 104')
+    await expect(form.getByRole('region', { name: 'Benzer müşteri kayıtları' })).toBeVisible()
+    await audit(page, 'yeni musteri hatalar ve benzer kayit')
+  })
+
   test('side panels trap focus, close with Escape and give focus back', async ({ page }) => {
     await openVehicle(page, 'A12-K-345', 'Konum ve geçmiş')
     const opener = page.getByRole('button', { name: 'Konumu güncelle' })
