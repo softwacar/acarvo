@@ -576,7 +576,21 @@ function recentItems(history: VehicleHistory | undefined): TimelineItem[] {
   ].sort((a, b) => b.at.localeCompare(a.at))
 }
 
-function Overview({ v, history, onTab, canEdit }: { v: VehicleDetail; history?: VehicleHistory; onTab: (t: VehicleTab) => void; canEdit: boolean }) {
+function Overview({
+  v,
+  history,
+  historyError,
+  onRetry,
+  onTab,
+  canEdit,
+}: {
+  v: VehicleDetail
+  history?: VehicleHistory
+  historyError: boolean
+  onRetry: () => void
+  onTab: (t: VehicleTab) => void
+  canEdit: boolean
+}) {
   const navigate = useNavigate()
   const items = recentItems(history).slice(0, 5)
   const docs = useDocumentsHeadline(v.id)
@@ -613,7 +627,14 @@ function Overview({ v, history, onTab, canEdit }: { v: VehicleDetail; history?: 
         </Panel>
 
         <Panel title="Son kayıtlar" action={<TextLink onClick={() => onTab('gecmis')}>Tüm geçmiş</TextLink>}>
-          {!history ? (
+          {!history && historyError ? (
+            <p className="text-ink-2">
+              Son kayıtlar yüklenemedi.{' '}
+              <button type="button" onClick={onRetry} className="font-medium text-blue hover:underline">
+                Tekrar dene
+              </button>
+            </p>
+          ) : !history ? (
             <div className="h-24 animate-pulse rounded-lg bg-line-soft/60" aria-busy="true" />
           ) : items.length === 0 ? (
             <p className="text-ink-2">Bu araç için kilometre veya konum kaydı yok.</p>
@@ -731,13 +752,13 @@ function Pending({ tab }: { tab: VehicleTab }) {
   )
 }
 
-function HistoryTab({ v, history, isLoading }: { v: VehicleDetail; history?: VehicleHistory; isLoading: boolean }) {
+function HistoryTab({ v, history, isLoading, error, onRetry }: { v: VehicleDetail; history?: VehicleHistory; isLoading: boolean; error: Error | null; onRetry: () => void }) {
   const session = useSession()
   const canAudit = can(session, 'audit.read')
   const activity = useQuery({ queryKey: ['vehicle-activity', session.company?.id, v.id], queryFn: () => vehicle360Api.activity(v.id), enabled: canAudit })
   return (
     <div className="space-y-5">
-      <OdometerLocationSection v={v} history={history} isLoading={isLoading} />
+      {error && !history ? <ErrorState message={`Kilometre ve konum geçmişi yüklenemedi. ${error.message}`} onRetry={onRetry} /> : <OdometerLocationSection v={v} history={history} isLoading={isLoading} />}
 
       <Panel title="Kayıt geçmişi" action={<span className="text-[12.5px] text-ink-2">Kim, ne zaman, neyi değiştirdi</span>}>
         {!canAudit ? (
@@ -861,9 +882,9 @@ export function Vehicle360Page() {
       <Hero v={v} canEdit={canEdit} onTab={onTab} />
       <Tabs tab={tab} onTab={onTab} counts={counts} />
       <div key={tab} id="vehicle-tabpanel" role="tabpanel" aria-labelledby={`tab-${tab}`} className="mx-auto max-w-[1400px] animate-fade px-4 py-6 lg:px-8">
-        {tab === 'genel' && <Overview v={v} history={history.data} onTab={onTab} canEdit={canEdit} />}
+        {tab === 'genel' && <Overview v={v} history={history.data} historyError={history.isError} onRetry={() => history.refetch()} onTab={onTab} canEdit={canEdit} />}
         {tab === 'belgeler' && <VehicleDocuments vehicleId={v.id} plate={v.plate} />}
-        {tab === 'gecmis' && <HistoryTab v={v} history={history.data} isLoading={history.isPending} />}
+        {tab === 'gecmis' && <HistoryTab v={v} history={history.data} isLoading={history.isPending} error={history.error} onRetry={() => history.refetch()} />}
         {PENDING[tab] && <Pending tab={tab} />}
       </div>
     </>

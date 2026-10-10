@@ -447,7 +447,7 @@ function OdometerForm({ v, history, onClose }: { v: VehicleDetail; history: Vehi
   })
 
   return (
-    <Sheet title="Kilometre gir" subtitle={`${v.plate} · yeni okuma ayrı kayıt olur; eski okumalar değişmez.`} onClose={onClose} footer={<FormFooter pending={save.isPending} onClose={onClose} />}>
+    <Sheet title="Kilometre gir" subtitle={`${v.plate} · yeni okuma ayrı kayıt olur; eski okumalar değişmez.`} dirty={!!(km.trim() || note.trim() || jumpReason.trim())} onClose={onClose} footer={<FormFooter pending={save.isPending} onClose={onClose} />}>
       <form id="history-form" className="space-y-4" noValidate onSubmit={(e) => (e.preventDefault(), save.mutate())}>
         {message && <Banner tone="alert">{message}</Banner>}
         <div className="grid grid-cols-2 gap-3 rounded-lg border border-line bg-ground/50 px-3.5 py-3 text-[13px]">
@@ -592,7 +592,7 @@ function LocationForm({ v, history, onClose }: { v: VehicleDetail; history: Vehi
   })
 
   return (
-    <Sheet title="Konumu güncelle" subtitle={`${v.plate} · aracın şu an fiziksel olarak bulunduğu yer.`} onClose={onClose} footer={<FormFooter pending={save.isPending} onClose={onClose} />}>
+    <Sheet title="Konumu güncelle" subtitle={`${v.plate} · aracın şu an fiziksel olarak bulunduğu yer.`} dirty={!!(branchId || description.trim() || reason.trim())} onClose={onClose} footer={<FormFooter pending={save.isPending} onClose={onClose} />}>
       <form id="history-form" className="space-y-4" noValidate onSubmit={(e) => (e.preventDefault(), save.mutate())}>
         {message && <Banner tone="alert">{message}</Banner>}
         <div className="grid grid-cols-2 gap-3 rounded-lg border border-line bg-ground/50 px-3.5 py-3 text-[13px]">
@@ -667,7 +667,7 @@ function OdometerCorrectForm({ v, history, entry, onClose }: { v: VehicleDetail;
   })
 
   return (
-    <Sheet title="Kilometre kaydını düzelt" subtitle="Hatalı kayıt silinmez; geçmişte üstü çizili ve gerekçesiyle görünür." onClose={onClose} footer={<FormFooter pending={save.isPending} onClose={onClose} label="Düzeltmeyi kaydet" />}>
+    <Sheet title="Kilometre kaydını düzelt" subtitle="Hatalı kayıt silinmez; geçmişte üstü çizili ve gerekçesiyle görünür." dirty={!!(km.trim() || reason.trim() || jumpReason.trim())} onClose={onClose} footer={<FormFooter pending={save.isPending} onClose={onClose} label="Düzeltmeyi kaydet" />}>
       <form id="history-form" className="space-y-4" noValidate onSubmit={(e) => (e.preventDefault(), save.mutate())}>
         {message && <Banner tone="alert">{message}</Banner>}
         <div className="rounded-lg border border-line bg-ground/50 px-3.5 py-3 text-[13px]">
@@ -756,7 +756,7 @@ function LocationCorrectForm({ v, history, entry, onClose }: { v: VehicleDetail;
   })
 
   return (
-    <Sheet title="Konum kaydını düzelt" subtitle="Hatalı kayıt silinmez; geçmişte üstü çizili ve gerekçesiyle görünür." onClose={onClose} footer={<FormFooter pending={save.isPending} onClose={onClose} label="Düzeltmeyi kaydet" />}>
+    <Sheet title="Konum kaydını düzelt" subtitle="Hatalı kayıt silinmez; geçmişte üstü çizili ve gerekçesiyle görünür." dirty={!!(branchId || description.trim() || reason.trim())} onClose={onClose} footer={<FormFooter pending={save.isPending} onClose={onClose} label="Düzeltmeyi kaydet" />}>
       <form id="history-form" className="space-y-4" noValidate onSubmit={(e) => (e.preventDefault(), save.mutate())}>
         {message && <Banner tone="alert">{message}</Banner>}
         <div className="rounded-lg border border-line bg-ground/50 px-3.5 py-3 text-[13px]">

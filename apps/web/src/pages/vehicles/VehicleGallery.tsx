@@ -21,6 +21,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Dialog } from 'radix-ui'
 import { type DragEvent, useEffect, useRef, useState } from 'react'
 import { toast } from '@/components/Toaster'
+import { useReturnFocus } from '@/components/useReturnFocus'
 import { ApiRequestError, photosApi } from '@/lib/api'
 import { cn } from '@/lib/utils'
 import { useSession } from '@/session'
@@ -134,6 +135,7 @@ function UploadStatus({ items, onClear }: { items: UploadItem[]; onClear: () => 
 
 function Lightbox({ photos, index, onIndex, onClose, title }: { photos: VehiclePhoto[]; index: number; onIndex: (i: number) => void; onClose: () => void; title: string }) {
   const p = photos[index]!
+  const returnFocus = useReturnFocus()
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'ArrowRight') onIndex((index + 1) % photos.length)
@@ -146,7 +148,7 @@ function Lightbox({ photos, index, onIndex, onClose, title }: { photos: VehicleP
     <Dialog.Root open onOpenChange={(o) => !o && onClose()}>
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 z-[60] bg-ink/92" />
-        <Dialog.Content className="fixed inset-0 z-[61] grid place-items-center p-6 outline-none" onClick={onClose}>
+        <Dialog.Content onCloseAutoFocus={returnFocus} className="fixed inset-0 z-[61] grid place-items-center p-6 outline-none" onClick={onClose}>
           <Dialog.Title className="sr-only">{title}</Dialog.Title>
           <img src={p.url} alt={title} className="max-h-[calc(100dvh-150px)] max-w-full rounded-lg" onClick={(e) => e.stopPropagation()} />
           <Dialog.Close aria-label="Kapat" className="absolute top-4 right-4 grid size-10 place-items-center rounded-full bg-ink/70 text-white ring-1 ring-white/25 hover:bg-ink">
@@ -363,6 +365,7 @@ function ManageDialog({
   onPick: () => void
   onClose: () => void
 }) {
+  const returnFocus = useReturnFocus()
   const session = useSession()
   const qc = useQueryClient()
   const key = ['vehicle-photos', session.company?.id, v.id]
@@ -422,7 +425,7 @@ function ManageDialog({
     <Dialog.Root open onOpenChange={(o) => !o && onClose()}>
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 z-50 bg-ink/30" />
-        <Dialog.Content className="fixed top-1/2 left-1/2 z-50 flex max-h-[calc(100dvh-32px)] w-[860px] max-w-[calc(100vw-32px)] -translate-x-1/2 -translate-y-1/2 flex-col rounded-xl border border-line bg-surface shadow-xl outline-none">
+        <Dialog.Content onCloseAutoFocus={returnFocus} className="fixed top-1/2 left-1/2 z-50 flex max-h-[calc(100dvh-32px)] w-[860px] max-w-[calc(100vw-32px)] -translate-x-1/2 -translate-y-1/2 flex-col rounded-xl border border-line bg-surface shadow-xl outline-none">
           <div className="flex items-start justify-between gap-4 border-b border-line px-6 py-4">
             <div>
               <Dialog.Title className="text-[17px] font-semibold">Tanıtım fotoğrafları</Dialog.Title>
