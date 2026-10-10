@@ -392,7 +392,10 @@ ACARVO uluslararası kullanılır; bilgisayarın saat dilimi hiçbir zaman sakla
 
 - Ortak yardımcılar `packages/shared/src/time.ts`: `wallTimeToUtc` (şirket saatinde girilen değeri UTC ana çevirir), `utcToWallTime`, `timeZoneOffsetMs`, `isDateOnly`, `formatDateOnly`. Yalnız `Date.UTC` ve açık saat dilimli `Intl` kullanır; yerel saat API'si kullanmaz.
 - Web: `formatDate`/`formatDateTime` anları oturumdaki şirket saat diliminde, takvim tarihlerini çevirmeden gösterir. Km/konum formlarındaki tarih-saat alanı şirket saatiyle doldurulur ve okunur; bilgisayarın saat dilimi farklıysa alanın altında belirtilir.
-- **Yaz/kış saati:** ileri geçişte yaşanmayan saat (ör. 29.03.2026 02:30) geçişin hemen sonrasına alınır ve formda belirtilir; geri geçişte iki kez yaşanan saat (25.10.2026 02:30) ilk geçişi (yaz saati) olarak kaydedilir ve belirtilir.
+- **Yaz/kış saati (kullanıcı kararı, 11.10.2026): hiçbir saat kendiliğinden kaydırılmaz veya seçilmez.**
+  - Yaşanmayan saat (ör. Europe/Sarajevo 29.03.2026 02:30): kayıt reddedilir; formda alan hatası anında görünür, API `422 NONEXISTENT_TIME` döner.
+  - İki kez yaşanan saat (ör. 25.10.2026 02:30): kullanıcı açıkça seçer — "İlk 02:30 — yaz saati (UTC+2)" veya "İkinci 02:30 — kış saati (UTC+1)"; seçim yoksa form kaydetmez, API `422 AMBIGUOUS_TIME` döner (seçenekler ve UTC anları ayrıntıda).
+  - Web, km/konum kayıtlarında duvar saatini (`occurredAtLocal`) ve gerekirse seçimi (`ambiguousTime: earlier|later`) gönderir; çözümü **sunucu** şirket saat dilimiyle yapar (`resolveWallTime`), doğru UTC anını kaydeder ve yazılan saati/seçimi işlem geçmişine ekler. Açık bir an gönderen istemciler (`occurredAt`, Z veya saat farkı içeren ISO) eskisi gibi çalışır; bu değer zaten belirsiz değildir. İkisi birden gönderilemez.
 - **Belgelerde "bugün"** sunucuda şirket saat dilimine göre hesaplanır (`todayIn`); gün farkları takvim günü olarak sayılır, yaz/kış geçişinden etkilenmez.
 - **48 saat kuralı** gerçek geçen süreyle (iki UTC an arasındaki fark) ölçülür; saat dilimi veya yaz/kış geçişi sonucu değiştirmez.
 - Sunucu iletilerindeki tarih-saat de şirket saat diliminde ve web ile aynı biçimdedir (`GG.AA.YYYY SS:dd`).

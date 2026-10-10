@@ -1,9 +1,11 @@
 // Resets acarvo_test for the browser tests (apps/e2e): same guarded reset as the API tests, with the
 // run password from E2E_PASSWORD. Refuses to run against any database other than acarvo_test.
-import { appPool, ownerPool, resetDatabase } from './helpers'
+import { appPool, asOwner, ownerPool, resetDatabase } from './helpers'
 
 if (!process.env.E2E_PASSWORD) throw new Error('E2E_PASSWORD missing')
-await resetDatabase()
+const data = await resetDatabase()
+// Browser DST test: one vehicle registered early enough for the 2025 clock changes to be valid back-dated entries.
+await asOwner(data.companies.drina, `update vehicles set created_at = '2025-01-01T00:00:00Z' where plate = 'A05-J-418'`)
 await ownerPool.end()
 await appPool.end()
 console.log('e2e: acarvo_test reset and seeded')

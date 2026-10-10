@@ -59,3 +59,16 @@ test('history load error and location form on a phone', async ({ page }) => {
   await settle(page)
   await page.screenshot({ path: out('07-konum-formu-telefon-390') })
 })
+
+test('daylight saving: never-happened time and doubled-time choice', async ({ page }) => {
+  await openVehicle(page, 'A05-J-418', 'Konum ve geçmiş')
+  await page.getByRole('button', { name: 'Kilometre gir' }).click()
+  const form = page.getByRole('dialog', { name: 'Kilometre gir' })
+  await form.locator('#km').fill('20000')
+  await form.locator('#occurredAt').fill('2025-03-30T02:30')
+  await settle(page)
+  await page.screenshot({ path: out('08-yasanmayan-saat-1440') })
+  await form.locator('#occurredAt').fill('2025-10-26T02:30')
+  await settle(page)
+  await page.screenshot({ path: out('09-iki-kez-yasanan-saat-secimi-1440') })
+})

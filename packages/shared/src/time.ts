@@ -35,21 +35,34 @@ export function utcToWallTime(instant: string | number | Date, timeZone: string)
   return `${p.y}-${pad(p.m)}-${pad(p.d)}T${pad(p.h)}:${pad(p.mi)}`
 }
 
-export interface WallTimeResult {
+/** Which of the two occurrences of a doubled wall time (clocks going back) is meant. */
+export const AMBIGUOUS_TIME_CHOICES = ['earlier', 'later'] as const
+export type AmbiguousTimeChoice = (typeof AMBIGUOUS_TIME_CHOICES)[number]
+
+export interface WallTimeOption {
   /** ISO 8601 UTC instant. */
   iso: string
-  /**
-   * 'gap': the wall time does not exist (clocks jumped forward); the instant just after the jump is used.
-   * 'ambiguous': the wall time occurs twice (clocks went back); the first occurrence is used.
-   */
-  note: 'gap' | 'ambiguous' | null
+  /** Offset from UTC at that instant, in minutes (e.g. 120 for UTC+2). */
+  offsetMinutes: number
 }
 
 /**
- * Instant of a wall-clock time in a time zone, independent of the computer's own time zone.
- * Daylight saving changes are handled explicitly (see WallTimeResult.note). Null for malformed input.
+ * What a wall-clock time means in a time zone:
+ *  - 'valid': exactly one instant;
+ *  - 'nonexistent': the time never happened (clocks jumped forward, e.g. 29.03.2026 02:30 in Sarajevo);
+ *  - 'ambiguous': it happened twice (clocks went back, e.g. 25.10.2026 02:30); `earlier` is the first occurrence
+ *    (summer time), `later` the second (winter time). The caller must ask which one; nothing is chosen silently.
  */
-export function wallTimeToUtc(local: string, timeZone: string): WallTimeResult | null {
+export type WallTimeResolution =
+  | ({ kind: 'valid' } & WallTimeOption)
+  | { kind: 'nonexistent' }
+  | { kind: 'ambiguous'; earlier: WallTimeOption; later: WallTimeOption }
+
+/**
+ * Resolves a wall-clock time (YYYY-MM-DDTHH:mm, the value of an <input type="datetime-local">) in a time zone,
+ * independent of the computer's own zone. Null for malformed input. Never shifts or picks a time on its own.
+ */
+export function resolveWallTime(local: string, timeZone: string): WallTimeResolution | null {
   const m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/.exec(local)
   if (!m) return null
   const [y, mo, d, h, mi] = m.slice(1).map(Number) as [number, number, number, number, number]
@@ -61,10 +74,37 @@ export function wallTimeToUtc(local: string, timeZone: string): WallTimeResult |
     .map((o) => guess - o)
     .filter((t) => utcToWallTime(t, timeZone) === local)
     .sort((a, b) => a - b)
-  if (matches.length) return { iso: new Date(matches[0]!).toISOString(), note: matches.length > 1 ? 'ambiguous' : null }
-  // Spring-forward gap: read the time with the offset that applied before the jump, landing just after it.
-  return { iso: new Date(guess - timeZoneOffsetMs(guess - 86_400_000, timeZone)).toISOString(), note: 'gap' }
+  const option = (t: number): WallTimeOption => ({ iso: new Date(t).toISOString(), offsetMinutes: timeZoneOffsetMs(t, timeZone) / 60_000 })
+  if (matches.length === 0) return { kind: 'nonexistent' }
+  if (matches.length === 1) return { kind: 'valid', ...option(matches[0]!) }
+  return { kind: 'ambiguous', earlier: option(matches[0]!), later: option(matches[matches.length - 1]!) }
+}
+
+/** The instant for a wall time and (when doubled) an explicit choice; null when nonexistent, malformed or not chosen. */
+export function wallTimeInstant(local: string, timeZone: string, choice?: AmbiguousTimeChoice): string | null {
+  const r = resolveWallTime(local, timeZone)
+  if (!r || r.kind === 'nonexistent') return null
+  if (r.kind === 'valid') return r.iso
+  return choice ? r[choice].iso : null
+}
+
+/** "UTC+2", "UTC+5:30", "UTC−3". */
+export function formatUtcOffset(minutes: number) {
+  const sign = minutes < 0 ? '−' : '+'
+  const abs = Math.abs(minutes)
+  const h = Math.floor(abs / 60)
+  const mm = abs % 60
+  return `UTC${sign}${h}${mm ? `:${String(mm).padStart(2, '0')}` : ''}`
 }
 
 /** Formats a calendar date (YYYY-MM-DD) as DD.MM.YYYY without any time zone conversion. */
 export const formatDateOnly = (value: string) => `${value.slice(8, 10)}.${value.slice(5, 7)}.${value.slice(0, 4)}`
+
+/** DD.MM.YYYY HH:mm of a wall-time input value, for messages. */
+const shownWallTime = (local: string) => `${local.slice(8, 10)}.${local.slice(5, 7)}.${local.slice(0, 4)} ${local.slice(11)}`
+
+/** Same wording in the form (immediately) and from the API (as the final check). */
+export const nonexistentTimeMessage = (local: string, timeZone: string) =>
+  `${shownWallTime(local)} şirket saatinde (${timeZone}) yaşanmadı: yaz saatine geçişte saatler ileri alındı. Gerçek saati girin.`
+export const ambiguousTimeMessage = (local: string, timeZone: string) =>
+  `${shownWallTime(local)} şirket saatinde (${timeZone}) iki kez yaşandı: kış saatine geçişte saatler geri alındı. Hangisi olduğunu seçin.`

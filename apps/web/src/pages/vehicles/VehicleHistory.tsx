@@ -12,8 +12,12 @@ import {
   largeJump,
   odometerNeighbours,
   odometerOrderProblem,
+  type AmbiguousTimeChoice,
+  ambiguousTimeMessage,
+  formatUtcOffset,
+  nonexistentTimeMessage,
+  resolveWallTime,
   utcToWallTime,
-  wallTimeToUtc,
 } from '@acarvo/shared'
 import { ArrowRight, Buildings, DotsThree, Gauge, Info, LockSimple, MapPin, Plus, SpinnerGap, Warning, WarningCircle, Wrench } from '@phosphor-icons/react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
@@ -32,21 +36,94 @@ import { can, useSession } from '@/session'
 const nf = new Intl.NumberFormat('tr-TR')
 /** datetime-local values are wall-clock times in the company's time zone, not the computer's (docs §9.1). */
 const nowInput = () => utcToWallTime(Date.now(), getDisplayTimeZone())
-const fromInput = (v: string) => wallTimeToUtc(v, getDisplayTimeZone())
 
-/** Which clock the field uses, the computer's zone when it differs, and what happens around daylight saving changes. */
-function TimeZoneHint({ value, base }: { value: string; base: string }) {
+/** Which clock the field uses, and the computer's zone when it differs. */
+function TimeZoneHint({ base }: { base: string }) {
   const zone = getDisplayTimeZone()
   const own = Intl.DateTimeFormat().resolvedOptions().timeZone
-  const r = fromInput(value)
   return (
     <>
       {base} Saat, şirket saatiyle ({zone}) girilir.
       {own !== zone && <> Bilgisayarınızın saat dilimi farklı ({own}).</>}
-      {r?.note === 'gap' && (
-        <span className="mt-1 block font-medium text-hold">Bu saat yaz saatine geçişte yaşanmaz; {formatDateTime(r.iso)} olarak kaydedilir.</span>
+    </>
+  )
+}
+
+/**
+ * Event time typed as company wall time. Around daylight saving changes nothing is guessed: a time that never happened
+ * is an error, a time that happened twice needs an explicit choice. The API applies the same rules (docs §9.1).
+ */
+function useEventTime() {
+  const zone = getDisplayTimeZone()
+  const [at, setAtValue] = useState(nowInput)
+  const [choice, setChoice] = useState<AmbiguousTimeChoice | ''>('')
+  const resolution = resolveWallTime(at, zone)
+  const setAt = (value: string) => {
+    setAtValue(value)
+    setChoice('')
+  }
+  /** Instant for the form's own checks; for a doubled time without a choice, the first one (saving is blocked anyway). */
+  const iso = !resolution || resolution.kind === 'nonexistent' ? null : resolution.kind === 'valid' ? resolution.iso : resolution[choice || 'earlier'].iso
+  const fieldError = resolution?.kind === 'nonexistent' ? nonexistentTimeMessage(at, zone) : undefined
+  /** Errors to block saving with, keyed like the API's fields. */
+  const validate = (): Record<string, string> => {
+    if (!resolution) return { occurredAt: 'Tarih ve saat girin' }
+    if (resolution.kind === 'nonexistent') return { occurredAt: nonexistentTimeMessage(at, zone) }
+    if (resolution.kind === 'ambiguous' && !choice) return { ambiguousTime: ambiguousTimeMessage(at, zone) }
+    if (isInFuture(iso!)) return { occurredAt: 'Gelecekteki bir zaman girilemez' }
+    return {}
+  }
+  /** Sent to the API: the wall time and, when doubled, the choice; the server resolves it in the company zone. */
+  const body = { occurredAtLocal: at, ambiguousTime: choice || undefined }
+  return { at, setAt, choice, setChoice, resolution, iso, fieldError, validate, body }
+}
+
+const withoutTimeErrors = ({ occurredAt: _a, ambiguousTime: _b, ...rest }: Record<string, string>) => rest
+
+function EventTimeField({
+  t,
+  label,
+  base,
+  errors,
+  onEdit,
+}: {
+  t: ReturnType<typeof useEventTime>
+  label: string
+  base: string
+  errors: Record<string, string>
+  /** Clears earlier time errors once the time is changed. */
+  onEdit: () => void
+}) {
+  const r = t.resolution
+  const hhmm = t.at.slice(11)
+  return (
+    <>
+      <Field id="occurredAt" label={label} required error={errors.occurredAt ?? t.fieldError} hint={<TimeZoneHint base={base} />}>
+        <Input {...describe('occurredAt', errors.occurredAt ?? t.fieldError, true)} type="datetime-local" value={t.at} max={nowInput()} onChange={(e) => (t.setAt(e.target.value), onEdit())} />
+      </Field>
+      {r?.kind === 'ambiguous' && (
+        <div className="space-y-2 rounded-lg border border-hold/30 bg-hold-soft px-3.5 py-3">
+          <p className="flex items-start gap-2 text-[13px]">
+            <Warning size={16} weight="fill" className="mt-px shrink-0 text-hold" />
+            <span>{ambiguousTimeMessage(t.at, getDisplayTimeZone())}</span>
+          </p>
+          <Choice
+            name="ambiguousTime"
+            label="Hangi saat?"
+            value={t.choice as AmbiguousTimeChoice}
+            onChange={t.setChoice}
+            options={[
+              ['earlier', `İlk ${hhmm} — yaz saati (${formatUtcOffset(r.earlier.offsetMinutes)})`],
+              ['later', `İkinci ${hhmm} — kış saati (${formatUtcOffset(r.later.offsetMinutes)})`],
+            ]}
+          />
+          {errors.ambiguousTime && !t.choice && (
+            <p id="ambiguousTime-error" role="alert" className="text-[13px] text-alert">
+              İlk mi, ikinci mi olduğunu seçin.
+            </p>
+          )}
+        </div>
       )}
-      {r?.note === 'ambiguous' && <span className="mt-1 block font-medium text-hold">Bu saat kış saatine geçişte iki kez yaşanır; ilki (yaz saati) kullanılır.</span>}
     </>
   )
 }
@@ -400,7 +477,7 @@ function OdometerForm({ v, history, onClose }: { v: VehicleDetail; history: Vehi
   const apply = useApplyResult(v.id)
   const requestId = useRef(newRequestId())
   const [km, setKm] = useState('')
-  const [at, setAt] = useState(nowInput)
+  const t = useEventTime()
   const [note, setNote] = useState('')
   const [jumpReason, setJumpReason] = useState('')
   const [errors, setErrors] = useState<Record<string, string>>({})
@@ -408,7 +485,7 @@ function OdometerForm({ v, history, onClose }: { v: VehicleDetail; history: Vehi
   const onError = useErrorHandler(v.id, setErrors, setMessage)
 
   const kmNum = /^\d+$/.test(km.replace(/\D/g, '')) && km.trim() !== '' ? Number(km.replace(/\D/g, '')) : null
-  const atIso = fromInput(at)?.iso ?? null
+  const atIso = t.iso
   const n = atIso ? odometerNeighbours(history.odometer, atIso) : { previous: null, next: null }
   const problem = kmNum != null ? odometerOrderProblem(kmNum, n) : null
   const jump = kmNum != null && atIso && !problem ? largeJump(n.previous, kmNum, atIso) : null
@@ -422,8 +499,7 @@ function OdometerForm({ v, history, onClose }: { v: VehicleDetail; history: Vehi
       if (kmNum == null) e.km = 'Kilometre girin'
       else if (problem === 'below_previous') e.km = `Önceki okumadan (${formatKm(n.previous!.km)}) düşük olamaz`
       else if (problem === 'above_next') e.km = `Sonraki okumadan (${formatKm(n.next!.km)}) yüksek olamaz`
-      if (!atIso) e.occurredAt = 'Tarih ve saat girin'
-      else if (isInFuture(atIso)) e.occurredAt = 'Gelecekteki bir zaman girilemez'
+      Object.assign(e, t.validate())
       if (late && !note.trim()) e.note = '48 saatten eski kayıtlarda açıklama girin'
       if (jump && jumpReason.trim().length < 5) e.largeJumpReason = 'Gerekçe en az 5 karakter olmalı'
       setErrors(e)
@@ -431,7 +507,7 @@ function OdometerForm({ v, history, onClose }: { v: VehicleDetail; history: Vehi
       setMessage(null)
       return historyApi.recordOdometer(v.id, {
         km: kmNum,
-        occurredAt: atIso,
+        ...t.body,
         note: note.trim() || undefined,
         largeJumpReason: jump ? jumpReason.trim() : undefined,
         expectedVersion: history.odometerVersion,
@@ -470,9 +546,7 @@ function OdometerForm({ v, history, onClose }: { v: VehicleDetail; history: Vehi
               : `Bu değer daha sonraki ${formatDateTime(n.next!.occurredAt)} tarihli ${formatKm(n.next!.km)} okumasından yüksek.`}
           </Banner>
         )}
-        <Field id="occurredAt" label="Okuma zamanı" required error={errors.occurredAt} hint={<TimeZoneHint value={at} base="Göstergenin okunduğu an; gelecek bir zaman girilemez." />}>
-          <Input {...describe('occurredAt', errors.occurredAt, true)} type="datetime-local" value={at} max={nowInput()} onChange={(e) => setAt(e.target.value)} />
-        </Field>
+        <EventTimeField t={t} label="Okuma zamanı" base="Göstergenin okunduğu an; gelecek bir zaman girilemez." errors={errors} onEdit={() => setErrors(withoutTimeErrors)} />
         {backdated && <Banner tone="info">Bu okuma geçmişe eklenecek. Daha yeni bir okuma olduğu için güncel kilometre değişmeyecek.</Banner>}
         {jump && (
           <div className="space-y-3 rounded-lg border border-hold/30 bg-hold-soft px-3.5 py-3">
@@ -553,12 +627,12 @@ function LocationForm({ v, history, onClose }: { v: VehicleDetail; history: Vehi
   const [type, setType] = useState<ManualLocationType>('branch')
   const [branchId, setBranchId] = useState('')
   const [description, setDescription] = useState('')
-  const [at, setAt] = useState(nowInput)
+  const t = useEventTime()
   const [reason, setReason] = useState('')
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [message, setMessage] = useState<string | null>(null)
   const onError = useErrorHandler(v.id, setErrors, setMessage)
-  const atIso = fromInput(at)?.iso ?? null
+  const atIso = t.iso
   const current = currentOf(history.locations)
   const backdated = !!(atIso && current && atIso < current.occurredAt)
 
@@ -567,8 +641,7 @@ function LocationForm({ v, history, onClose }: { v: VehicleDetail; history: Vehi
       const e: Record<string, string> = {}
       if (type === 'branch' && !branchId) e.branchId = 'Şube seçin'
       if (type === 'service_provider' && !description.trim()) e.description = 'Servisin veya yerin adını girin'
-      if (!atIso) e.occurredAt = 'Tarih ve saat girin'
-      else if (isInFuture(atIso)) e.occurredAt = 'Gelecekteki bir zaman girilemez'
+      Object.assign(e, t.validate())
       if (reason.trim().length < 3) e.reason = 'Değişiklik nedenini yazın'
       setErrors(e)
       if (Object.keys(e).length) return Promise.reject(new Error('validation'))
@@ -578,7 +651,7 @@ function LocationForm({ v, history, onClose }: { v: VehicleDetail; history: Vehi
         branchId: type === 'branch' ? branchId : undefined,
         description: type === 'service_provider' ? description.trim() : undefined,
         reason: reason.trim(),
-        occurredAt: atIso,
+        ...t.body,
         expectedVersion: history.locationVersion,
         clientRequestId: requestId.current,
       })
@@ -606,9 +679,7 @@ function LocationForm({ v, history, onClose }: { v: VehicleDetail; history: Vehi
           </span>
         </div>
         <LocationFields type={type} setType={setType} branchId={branchId} setBranchId={setBranchId} description={description} setDescription={setDescription} errors={errors} />
-        <Field id="occurredAt" label="Ne zamandan beri" required error={errors.occurredAt} hint={<TimeZoneHint value={at} base="Gelecek bir zaman girilemez." />}>
-          <Input {...describe('occurredAt', errors.occurredAt, true)} type="datetime-local" value={at} max={nowInput()} onChange={(e) => setAt(e.target.value)} />
-        </Field>
+        <EventTimeField t={t} label="Ne zamandan beri" base="Gelecek bir zaman girilemez." errors={errors} onEdit={() => setErrors(withoutTimeErrors)} />
         {backdated && <Banner tone="info">Bu kayıt geçmişe eklenecek. Daha yeni bir konum kaydı olduğu için güncel konum değişmeyecek.</Banner>}
         <Field id="reason" label="Değişiklik nedeni" required error={errors.reason}>
           <Input {...describe('reason', errors.reason)} value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Örn. servise bırakıldı, sayımda bu şubede bulundu" maxLength={300} />

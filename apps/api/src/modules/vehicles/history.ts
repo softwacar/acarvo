@@ -14,6 +14,11 @@ import {
   odometerCorrectSchema,
   odometerOrderProblem,
   odometerRecordSchema,
+  resolveWallTime,
+  formatUtcOffset,
+  nonexistentTimeMessage,
+  ambiguousTimeMessage,
+  type AmbiguousTimeChoice,
 } from '@acarvo/shared'
 import { sql } from 'drizzle-orm'
 import type { FastifyInstance } from 'fastify'
@@ -224,6 +229,29 @@ function assertVersion(expected: string, actual: string, history: VehicleHistory
   }
 }
 
+/**
+ * The event instant. An explicit instant is used as sent. A wall time is resolved in the company's zone: a time that
+ * never happened is refused, a time that happened twice needs an explicit choice. Nothing is shifted or picked silently.
+ */
+function resolveEventTime(input: { occurredAt?: string; occurredAtLocal?: string; ambiguousTime?: AmbiguousTimeChoice }, vehicle: VisibleVehicle): string {
+  if (input.occurredAt) return input.occurredAt
+  const local = input.occurredAtLocal!
+  const r = resolveWallTime(local, vehicle.timezone)
+  if (!r) throw new AppError(400, 'VALIDATION', 'Bazı alanlar geçersiz.', { occurredAt: 'Geçerli bir tarih ve saat girin' })
+  if (r.kind === 'nonexistent') {
+    const msg = nonexistentTimeMessage(local, vehicle.timezone)
+    throw new AppError(422, 'NONEXISTENT_TIME', msg, { occurredAt: msg })
+  }
+  if (r.kind === 'ambiguous') {
+    if (input.ambiguousTime) return r[input.ambiguousTime].iso
+    const msg = ambiguousTimeMessage(local, vehicle.timezone)
+    throw new AppError(422, 'AMBIGUOUS_TIME', msg, { ambiguousTime: 'İlk mi, ikinci mi? Seçin' }, {
+      options: (['earlier', 'later'] as const).map((choice) => ({ choice, iso: r[choice].iso, offset: formatUtcOffset(r[choice].offsetMinutes) })),
+    })
+  }
+  return r.iso
+}
+
 function assertTime(occurredAt: string, vehicle: VisibleVehicle) {
   if (isInFuture(occurredAt)) {
     throw new AppError(422, 'INVALID_TIME', 'Gelecekteki bir zaman için kayıt girilemez.', { occurredAt: 'Gelecekteki bir zaman girilemez' })
@@ -359,22 +387,23 @@ export async function vehicleHistoryRoutes(app: FastifyInstance) {
     const result = await withCompany(req, 'vehicles.odometer.record', async (tx, access): Promise<HistoryWriteResult> => {
       const input = odometerRecordSchema.parse(req.body)
       const vehicle = await visibleVehicle(tx, access, id)
+      const at = resolveEventTime(input, vehicle)
       await lockHistory(tx, id)
       const repeated = await findRequest(tx, 'odometer_readings', input.clientRequestId, id)
       let history = await loadHistory(tx, vehicle)
       if (repeated) return { id: repeated, becameCurrent: history.currentOdometerId === repeated, duplicate: true, history }
       assertVersion(input.expectedVersion, history.odometerVersion, history)
-      assertTime(input.occurredAt, vehicle)
-      if (isLateEntry(input.occurredAt) && !input.note) {
+      assertTime(at, vehicle)
+      if (isLateEntry(at) && !input.note) {
         throw new AppError(422, 'NOTE_REQUIRED', '48 saatten eski kilometre kayıtlarında açıklama zorunludur.', { note: '48 saatten eski kayıtlarda açıklama girin' })
       }
-      const n = await odometerProblem(tx, input.km, input.occurredAt, vehicle)
-      const jump = assertJumpReason(n, input.km, input.occurredAt, input.largeJumpReason)
+      const n = await odometerProblem(tx, input.km, at, vehicle)
+      const jump = assertJumpReason(n, input.km, at, input.largeJumpReason)
       const userId = req.auth!.user.id
       const row = await insertOrMap(async () =>
         (
           await tx.execute(sql`insert into odometer_readings (company_id, vehicle_id, km, event_type, source_type, occurred_at, note, jump_reason, client_request_id, recorded_by)
-            values (${access.companyId}, ${id}, ${input.km}, 'manual', 'manual', ${input.occurredAt}, ${input.note ?? null}, ${jump ? input.largeJumpReason! : null}, ${input.clientRequestId}, ${userId})
+            values (${access.companyId}, ${id}, ${input.km}, 'manual', 'manual', ${at}, ${input.note ?? null}, ${jump ? input.largeJumpReason! : null}, ${input.clientRequestId}, ${userId})
             returning id`)
         ).rows[0] as { id: string },
       )
@@ -389,9 +418,10 @@ export async function vehicleHistoryRoutes(app: FastifyInstance) {
         summary: {
           readingId: row.id,
           km: input.km,
-          occurredAt: input.occurredAt,
+          occurredAt: at,
+          ...(input.occurredAtLocal ? { occurredAtLocal: input.occurredAtLocal, ambiguousTime: input.ambiguousTime ?? null } : {}),
           previousKm: n.previous?.km ?? null,
-          late: isLateEntry(input.occurredAt),
+          late: isLateEntry(at),
           jumpReason: jump ? input.largeJumpReason : null,
           becameCurrent,
         },
@@ -461,16 +491,17 @@ export async function vehicleHistoryRoutes(app: FastifyInstance) {
     const result = await withCompany(req, 'vehicles.location.record', async (tx, access): Promise<HistoryWriteResult> => {
       const input = locationRecordSchema.parse(req.body)
       const vehicle = await visibleVehicle(tx, access, id)
+      const at = resolveEventTime(input, vehicle)
       const branch = input.locationType === 'branch' ? await assertTargetBranch(tx, access, input.branchId!) : null
       await lockHistory(tx, id)
       const repeated = await findRequest(tx, 'vehicle_location_events', input.clientRequestId, id)
       let history = await loadHistory(tx, vehicle)
       if (repeated) return { id: repeated, becameCurrent: history.currentLocationId === repeated, duplicate: true, history }
       assertVersion(input.expectedVersion, history.locationVersion, history)
-      assertTime(input.occurredAt, vehicle)
+      assertTime(at, vehicle)
       const current = history.locations.find((l) => l.id === history.currentLocationId) ?? null
       const target = { type: input.locationType, branchId: branch?.id ?? null, description: input.locationType === 'service_provider' ? input.description! : null }
-      const willBeCurrent = !current || Date.parse(input.occurredAt) >= Date.parse(current.occurredAt)
+      const willBeCurrent = !current || Date.parse(at) >= Date.parse(current.occurredAt)
       if (willBeCurrent && current && samePlace(current, target)) {
         throw new AppError(422, 'SAME_LOCATION', 'Araç zaten bu konumda kayıtlı.', { locationType: 'Araç zaten bu konumda' })
       }
@@ -478,7 +509,7 @@ export async function vehicleHistoryRoutes(app: FastifyInstance) {
       const row = await insertOrMap(async () =>
         (
           await tx.execute(sql`insert into vehicle_location_events (company_id, vehicle_id, location_type, branch_id, description, reason, event_type, source_type, occurred_at, client_request_id, recorded_by)
-            values (${access.companyId}, ${id}, ${target.type}, ${target.branchId}, ${target.description}, ${input.reason}, 'manual', 'manual', ${input.occurredAt}, ${input.clientRequestId}, ${userId})
+            values (${access.companyId}, ${id}, ${target.type}, ${target.branchId}, ${target.description}, ${input.reason}, 'manual', 'manual', ${at}, ${input.clientRequestId}, ${userId})
             returning id`)
         ).rows[0] as { id: string },
       )
@@ -494,7 +525,8 @@ export async function vehicleHistoryRoutes(app: FastifyInstance) {
           eventId: row.id,
           from: current ? placeSummary(current) : null,
           to: placeSummary({ ...target, branchName: branch?.name }),
-          occurredAt: input.occurredAt,
+          occurredAt: at,
+          ...(input.occurredAtLocal ? { occurredAtLocal: input.occurredAtLocal, ambiguousTime: input.ambiguousTime ?? null } : {}),
           reason: input.reason,
           becameCurrent,
         },

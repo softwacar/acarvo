@@ -8,8 +8,10 @@ import {
   isLateEntry,
   timeZoneOffsetMs,
   todayIn,
+  formatUtcOffset,
+  resolveWallTime,
   utcToWallTime,
-  wallTimeToUtc,
+  wallTimeInstant,
 } from '@acarvo/shared'
 import type { FastifyInstance } from 'fastify'
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest'
@@ -37,8 +39,8 @@ describe('wall-clock time in the company zone', () => {
   it('Sarajevo wall time maps to the same instant whatever the computer zone', () => {
     for (const zone of COMPUTER_ZONES) {
       underZone(zone, () => {
-        expect(wallTimeToUtc('2026-10-08T14:30', 'Europe/Sarajevo')).toEqual({ iso: '2026-10-08T12:30:00.000Z', note: null })
-        expect(wallTimeToUtc('2026-12-08T14:30', 'Europe/Sarajevo')).toEqual({ iso: '2026-12-08T13:30:00.000Z', note: null })
+        expect(resolveWallTime('2026-10-08T14:30', 'Europe/Sarajevo')).toEqual({ kind: 'valid', iso: '2026-10-08T12:30:00.000Z', offsetMinutes: 120 })
+        expect(resolveWallTime('2026-12-08T14:30', 'Europe/Sarajevo')).toEqual({ kind: 'valid', iso: '2026-12-08T13:30:00.000Z', offsetMinutes: 60 })
         expect(utcToWallTime('2026-10-08T12:30:00.000Z', 'Europe/Sarajevo')).toBe('2026-10-08T14:30')
       })
     }
@@ -47,23 +49,51 @@ describe('wall-clock time in the company zone', () => {
   it('a user in Germany or Turkey entering a Bosnian branch time gets the Bosnian instant', () => {
     // Berlin happens to share Sarajevo's offset; Istanbul is one hour ahead in winter and summer alike.
     underZone('Europe/Istanbul', () => {
-      const entered = wallTimeToUtc('2026-10-08T09:00', 'Europe/Sarajevo')!
-      expect(entered.iso).toBe('2026-10-08T07:00:00.000Z')
-      expect(utcToWallTime(entered.iso, 'Europe/Istanbul')).toBe('2026-10-08T10:00')
+      const entered = wallTimeInstant('2026-10-08T09:00', 'Europe/Sarajevo')!
+      expect(entered).toBe('2026-10-08T07:00:00.000Z')
+      expect(utcToWallTime(entered, 'Europe/Istanbul')).toBe('2026-10-08T10:00')
     })
   })
 
-  it('spring forward: a missing time is moved past the jump and flagged', () => {
-    const r = wallTimeToUtc('2026-03-29T02:30', 'Europe/Sarajevo')!
-    expect(r.note).toBe('gap')
-    expect(utcToWallTime(r.iso, 'Europe/Sarajevo')).toBe('2026-03-29T03:30')
-    expect(wallTimeToUtc('2026-03-29T03:30', 'Europe/Sarajevo')).toEqual({ iso: '2026-03-29T01:30:00.000Z', note: null })
+  it('spring forward: a time that never happened is reported as such, never shifted', () => {
+    for (const zone of COMPUTER_ZONES) {
+      underZone(zone, () => {
+        expect(resolveWallTime('2026-03-29T02:30', 'Europe/Sarajevo')).toEqual({ kind: 'nonexistent' })
+        expect(resolveWallTime('2026-03-29T02:00', 'Europe/Sarajevo')).toEqual({ kind: 'nonexistent' })
+        expect(wallTimeInstant('2026-03-29T02:30', 'Europe/Sarajevo', 'earlier')).toBeNull()
+        // Either side of the jump is fine.
+        expect(resolveWallTime('2026-03-29T01:59', 'Europe/Sarajevo')).toMatchObject({ kind: 'valid', iso: '2026-03-29T00:59:00.000Z' })
+        expect(resolveWallTime('2026-03-29T03:00', 'Europe/Sarajevo')).toMatchObject({ kind: 'valid', iso: '2026-03-29T01:00:00.000Z' })
+      })
+    }
   })
 
-  it('fall back: a doubled time takes its first occurrence and is flagged', () => {
-    const r = wallTimeToUtc('2026-10-25T02:30', 'Europe/Sarajevo')!
-    expect(r).toEqual({ iso: '2026-10-25T00:30:00.000Z', note: 'ambiguous' })
-    expect(wallTimeToUtc('2026-10-25T03:30', 'Europe/Sarajevo')).toEqual({ iso: '2026-10-25T02:30:00.000Z', note: null })
+  it('fall back: a doubled time offers two different instants and needs a choice', () => {
+    for (const zone of COMPUTER_ZONES) {
+      underZone(zone, () => {
+        const r = resolveWallTime('2026-10-25T02:30', 'Europe/Sarajevo')
+        expect(r).toEqual({
+          kind: 'ambiguous',
+          earlier: { iso: '2026-10-25T00:30:00.000Z', offsetMinutes: 120 },
+          later: { iso: '2026-10-25T01:30:00.000Z', offsetMinutes: 60 },
+        })
+        expect(wallTimeInstant('2026-10-25T02:30', 'Europe/Sarajevo')).toBeNull()
+        expect(wallTimeInstant('2026-10-25T02:30', 'Europe/Sarajevo', 'earlier')).toBe('2026-10-25T00:30:00.000Z')
+        expect(wallTimeInstant('2026-10-25T02:30', 'Europe/Sarajevo', 'later')).toBe('2026-10-25T01:30:00.000Z')
+        expect(resolveWallTime('2026-10-25T03:30', 'Europe/Sarajevo')).toMatchObject({ kind: 'valid', iso: '2026-10-25T02:30:00.000Z' })
+        expect(resolveWallTime('2026-10-25T01:59', 'Europe/Sarajevo')).toMatchObject({ kind: 'valid', iso: '2026-10-24T23:59:00.000Z' })
+      })
+    }
+    expect(formatUtcOffset(120)).toBe('UTC+2')
+    expect(formatUtcOffset(330)).toBe('UTC+5:30')
+    expect(formatUtcOffset(-180)).toBe('UTC−3')
+  })
+
+  it('other zones: New York has its own changes; zones without daylight saving never ask', () => {
+    expect(resolveWallTime('2026-03-08T02:30', 'America/New_York')).toEqual({ kind: 'nonexistent' })
+    expect(resolveWallTime('2026-11-01T01:30', 'America/New_York')).toMatchObject({ kind: 'ambiguous', earlier: { offsetMinutes: -240 }, later: { offsetMinutes: -300 } })
+    expect(resolveWallTime('2026-10-25T02:30', 'Asia/Tokyo')).toMatchObject({ kind: 'valid' })
+    expect(resolveWallTime('2026-03-29T02:30', 'Europe/Istanbul')).toMatchObject({ kind: 'valid' })
   })
 
   it('offsets follow daylight saving; zones without it stay constant', () => {
@@ -74,9 +104,9 @@ describe('wall-clock time in the company zone', () => {
   })
 
   it('rejects malformed wall times', () => {
-    expect(wallTimeToUtc('2026-02-30T10:00', 'Europe/Sarajevo')).toBeNull()
-    expect(wallTimeToUtc('2026-10-08 10:00', 'Europe/Sarajevo')).toBeNull()
-    expect(wallTimeToUtc('2026-10-08T24:00', 'Europe/Sarajevo')).toBeNull()
+    expect(resolveWallTime('2026-02-30T10:00', 'Europe/Sarajevo')).toBeNull()
+    expect(resolveWallTime('2026-10-08 10:00', 'Europe/Sarajevo')).toBeNull()
+    expect(resolveWallTime('2026-10-08T24:00', 'Europe/Sarajevo')).toBeNull()
   })
 })
 
@@ -149,7 +179,7 @@ describe('API with a different server/computer zone', () => {
     expect(low.json().error.message).toContain('01.07.2026 10:00')
     // A Sarajevo wall time entered from an Istanbul computer, 47 hours ago: not late, no note needed.
     const wall = utcToWallTime(Date.now() - 47 * 3_600_000, 'Europe/Sarajevo')
-    const at = wallTimeToUtc(wall, 'Europe/Sarajevo')!.iso
+    const at = wallTimeInstant(wall, 'Europe/Sarajevo')!
     const ok = await adnan.post(`/api/vehicles/${id}/odometer`, { km: 48_300, occurredAt: at, expectedVersion: h.odometerVersion, clientRequestId: randomUUID() })
     expect(ok.statusCode).toBe(201)
     const entry = ok.json().history.odometer.find((o: { id: string }) => o.id === ok.json().id)
@@ -157,7 +187,7 @@ describe('API with a different server/computer zone', () => {
     expect(entry.late).toBe(false)
     // 49 hours ago: late, so a note is required.
     const h2 = ok.json().history
-    const lateAt = wallTimeToUtc(utcToWallTime(Date.now() - 49 * 3_600_000, 'Europe/Sarajevo'), 'Europe/Sarajevo')!.iso
+    const lateAt = wallTimeInstant(utcToWallTime(Date.now() - 49 * 3_600_000, 'Europe/Sarajevo'), 'Europe/Sarajevo')!
     const noNote = await adnan.post(`/api/vehicles/${id}/odometer`, { km: 48_250, occurredAt: lateAt, expectedVersion: h2.odometerVersion, clientRequestId: randomUUID() })
     expect(noNote.statusCode).toBe(422)
     expect(noNote.json().error.code).toBe('NOTE_REQUIRED')

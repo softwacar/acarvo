@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { AMBIGUOUS_TIME_CHOICES } from './time'
 import type { LocationSummary } from './vehicles'
 
 // ---------------------------------------------------------------------------
@@ -27,16 +28,31 @@ const reason = (min: number, label = 'Gerekçe') =>
 const optReason = z.preprocess(blank, reason(5).optional())
 const km = z.coerce.number({ error: 'Kilometre girin' }).int('Tam sayı girin').min(0, 'Kilometre negatif olamaz').max(MAX_ODOMETER_KM, '3.000.000 km üstü girilemez')
 const occurredAt = z.iso.datetime({ offset: true, error: 'Geçerli bir tarih ve saat girin' })
+/**
+ * When the event happened: either an explicit instant (`occurredAt`, ISO 8601 with Z or an offset), or the wall-clock
+ * time in the company's zone (`occurredAtLocal`, YYYY-MM-DDTHH:mm) that the server resolves. A wall time that never
+ * happened is refused; one that happened twice needs `ambiguousTime` (docs §9.1).
+ */
+const eventTime = {
+  occurredAt: occurredAt.optional(),
+  occurredAtLocal: z.string().regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/, 'Geçerli bir tarih ve saat girin').optional(),
+  ambiguousTime: z.preprocess(blank, z.enum(AMBIGUOUS_TIME_CHOICES).optional()),
+}
+const eventTimeRefine = (v: { occurredAt?: string; occurredAtLocal?: string }, ctx: z.RefinementCtx) => {
+  if (!v.occurredAt === !v.occurredAtLocal) ctx.addIssue({ code: 'custom', path: ['occurredAt'], message: 'Tarih ve saat girin' })
+}
 /** Guards against stale screens and repeated submits (docs §8.5.4). */
 const concurrency = { expectedVersion: z.string().max(40), clientRequestId: z.uuid() }
 
-export const odometerRecordSchema = z.object({
-  km,
-  occurredAt,
-  note: optText(300),
-  largeJumpReason: optReason,
-  ...concurrency,
-})
+export const odometerRecordSchema = z
+  .object({
+    km,
+    ...eventTime,
+    note: optText(300),
+    largeJumpReason: optReason,
+    ...concurrency,
+  })
+  .superRefine(eventTimeRefine)
 export type OdometerRecordInput = z.output<typeof odometerRecordSchema>
 
 export const odometerCorrectSchema = z
@@ -63,8 +79,11 @@ const locationRefine = (v: { locationType?: ManualLocationType; branchId?: strin
 }
 
 export const locationRecordSchema = z
-  .object({ ...locationFields, reason: reason(3, 'Değişiklik nedeni'), occurredAt, ...concurrency })
-  .superRefine(locationRefine)
+  .object({ ...locationFields, reason: reason(3, 'Değişiklik nedeni'), ...eventTime, ...concurrency })
+  .superRefine((v, ctx) => {
+    locationRefine(v, ctx)
+    eventTimeRefine(v, ctx)
+  })
 export type LocationRecordInput = z.output<typeof locationRecordSchema>
 
 export const locationCorrectSchema = z
