@@ -14,8 +14,8 @@ _Sprint ilerledikçe güncellenir._
 | 3 Tarayıcı testleri | Tamamlandı | `eeebc0c` |
 | 4 Kullanılabilirlik ve erişilebilirlik | Tamamlandı | `652146a` |
 | 5 Araç modülünde küçük eksikler | Tamamlandı | `ba9675e` |
-| 6 Performans | Sürüyor | |
-| 7 Kod kalitesi ve dağıtım güvenliği | Bekliyor | |
+| 6 Performans | Tamamlandı | `325b1e0` |
+| 7 Kod kalitesi ve dağıtım güvenliği | Sürüyor | |
 | 8 Gelecek modüllerin planı | Bekliyor | |
 
 ## Aşama 0 — Güvenli çalışma ortamı
@@ -99,6 +99,29 @@ Testler: API 7 yeni (toplam **163/163**), tarayıcı 1 yeni (toplam **34/34**). 
 
 Spec'e göre araç modülünde kalan ama **başka modül gerektiren** eksikler (bilinçli olarak yapılmadı): müsaitlik/hazırlık/aktif kiralama sütunları ve as-of görünümü (Rezervasyon/Kiralama), bakım ve hasar blocker sayıları (Bakım, Hasar), transfer geçmişi (Transfer), tedarikçi dönemleri ve dış araçlar (Tedarik), filodan çıkış/satış akışı (ayrı gerekçeli işlem), A4 araç durum raporu çıktısı.
 
+## Aşama 6 — Performans ve ölçeklenebilirlik (`325b1e0`)
+
+Yöntem: önce ölçüm. `apps/api/tests/perf-measure.ts` test veritabanına büyük bir filo yükler (3.000 / 10.000 araç, araç başına 10 km okuması, belgeler) ve ana API okumalarının medyan süresini ve sorgu planını yazdırır (yalnız `acarvo_test`; `npm test`'in parçası değil).
+
+Ölçümler (10.000 araç, 100.000 km okuması, ~10.000 belge; yerel makine):
+
+| Uç | Önce | Sonra |
+|---|---|---|
+| Araç listesi, varsayılan (plaka sırası, 1. sayfa) | 181 ms | **25 ms** |
+| Araç listesi, son sayfa | 206 ms | **44 ms** |
+| Liste, şube sınırlı kullanıcı | 77 ms | **10 ms** |
+| Liste, belge filtresi | 421 ms | **195 ms** |
+| Liste, km'ye göre sıralama | 198 ms | 198 ms (aşağıya bakın) |
+| Araç detayı / geçmiş / belgeler | 4 / 7 / 4 ms | aynı |
+| Araç işlem geçmişi, en kötü durum (330.000 kayıt) | 374 ms | **0,1 ms** (yalnız test veritabanında) |
+
+Bulunan ve düzeltilen darboğazlar:
+1. **Liste, sayfadaki 25 araç için değil tüm araçlar için güncel km ve konum hesaplıyordu.** Artık sıralama km'ye göre değilse ve konum filtresi yoksa önce sayfanın araçları seçiliyor, km/konum yalnız onlar için türetiliyor. Sonuçlar aynı (tüm testler geçiyor).
+2. **İşlem geçmişi (`audit_log`) için kayıt bazında indeks yoktu.** Az kaydı olan bir aracın "Kayıt geçmişi" tüm şirket geçmişini tarıyordu; belge görüntüleme/indirme de kayıt eklediği için bu tablo hızla büyüyecek. Yalnız indeks ekleyen migration `0011_audit_entity_index.sql` hazırlandı ve **yalnız `acarvo_test`'e uygulandı** (ana veritabanı için bekleyen kararlara bakın).
+3. **Ön yüz tek parça yükleniyordu** (992 kB / sıkıştırılmış 286 kB). Araç 360° (sıkıştırılmış 37 kB) ve araç formu (10 kB) artık açıldıklarında yükleniyor; ilk yükleme ~247 kB. En büyük bağımlılıklar React DOM, zod ve ikon kütüphanesi; daha fazla küçültme yeniden yapılandırma gerektirir, gerek görmedim.
+
+İncelenen ve sorun bulunmayanlar: liste sayfalaması ve filtreleri sunucuda; N+1 sorgu yok (belge özetleri ve geçmiş tek sorguda); km/konum geçmişi indeksli ve görünümde 500 kayıtla sınırlı (kurallar pencereye bağlı değil, Aşama 2); 360° sayfasında aynı belge verisi tek istekle paylaşılıyor.
+
 ## Onay bekleyen kararlar
 
 1. **Şube saat dilimi mi, şirket saat dilimi mi?** `branches.timezone` alanı var, ancak şu an tüm saat girişi ve gösterimi şirket saat dilimiyle yapılıyor. Farklı ülkelerde şubesi olan bir şirkette (ör. Bosna + Hırvatistan aynı saat diliminde ama Türkiye farklı) km/konum saati aracın bulunduğu şubenin saatiyle mi girilsin? Öneri: şimdilik şirket saati (tutarlı ve basit); çok ülkeli şirketler gelince araç olaylarında olayın şubesinin saat dilimi.
@@ -106,6 +129,9 @@ Spec'e göre araç modülünde kalan ama **başka modül gerektiren** eksikler (
 2. **Uygulama rolünün `users.password_hash` sütununu okuyabilmesi.** Şu an güvenli (tüm SQL parametreli), ama ileride bir SQL enjeksiyonu tüm şirketlerin parola özetlerini açığa çıkarırdı. Düzeltme sütun düzeyinde yetki + giriş doğrulaması için `SECURITY DEFINER` bir fonksiyon gerektirir (migration). Gece uygulanmadı; ayrı, küçük bir güvenlik işi olarak öneriyorum.
 3. **Belge dosyasını görüntüleme/indirme bir GET isteğiyle işlem geçmişine yazılıyor.** Başka bir siteden verilen bağlantı, oturumu açık kullanıcının adına "görüntülendi" kaydı oluşturabilir (içerik okunamaz; yalnız kayıt gürültüsü). Kabul edilebilir görüyorum; istenirse işlem geçmişine "kaynak" bilgisi eklenebilir.
 4. **Girişte eski oturum iptal edilmiyor.** Aynı tarayıcıda yeniden giriş yeni bir oturum açar, eskisi süresi dolana kadar geçerli kalır (oturum sabitleme mümkün değil). İstenirse girişte aynı tarayıcının eski oturumu iptal edilebilir.
+
+5. **İşlem geçmişi indeksi (`0011_audit_entity_index.sql`) ana veritabanına uygulansın mı?** Yalnız indeks ekler, veri değiştirmez; test veritabanında doğrulandı. Uygulamak için önce `node --env-file=.env scripts/backup-db.mjs`, sonra `npm run db:migrate`. Uygulanmasa da kod çalışır (yalnız büyük geçmişte yavaşlar).
+6. **Km'ye göre sıralama büyük filolarda ~200 ms (10.000 araç).** Hızlandırmak için güncel km'nin ayrıca saklanması (ör. olay eklendiğinde güncellenen bir özet tablo) gerekir; bu "tek km gerçeği" ilkesini bozmadan yapılabilir ama bir şema kararıdır. Şimdilik gerek görmüyorum.
 
 ## Notlar
 
