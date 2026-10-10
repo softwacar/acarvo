@@ -41,13 +41,26 @@ import { can, useSession } from '@/session'
 
 const fmt = (d: string | null) => (d ? formatDate(d) : '—')
 const range = (from: string | null, until: string | null) => (from || until ? `${fmt(from)} – ${until ? fmt(until) : 'süresiz'}` : '—')
+const daysLeftText = (n: number | null) => (n === 0 ? 'bugün bitiyor' : `${n} gün sonra bitiyor`)
 const size = (b: number) => (b >= 1024 * 1024 ? `${(b / 1024 / 1024).toFixed(1).replace('.', ',')} MB` : `${Math.max(1, Math.round(b / 1024))} KB`)
 
 /** Row status of one type: icon + words, coloured only where it matters (V5: no badges). */
 function SummaryStatus({ s, required }: { s: DocumentTypeSummary; required: boolean }) {
   const map: Record<DocumentTypeSummary['state'], { icon: typeof CheckCircle; text: ReactNode; tone: string }> = {
     valid: { icon: CheckCircle, text: 'Geçerli', tone: 'text-ok' },
-    renewed: { icon: CheckCircle, text: <>Geçerli · yenisi {fmt(s.nextStartsOn)} tarihinde başlıyor</>, tone: 'text-ok' },
+    renewed: {
+      icon: CheckCircle,
+      text: (
+        <>
+          Yenileme hazır
+          <span className="block text-[12.5px] font-normal text-ink-2">
+            Kesinti yok · <span className="whitespace-nowrap">{s.daysLeft === 0 ? 'bugün bitiyor' : `${s.daysLeft} gün kaldı`}</span> ·{' '}
+            <span className="whitespace-nowrap">yenisi {fmt(s.nextStartsOn)}</span>
+          </span>
+        </>
+      ),
+      tone: 'text-ok',
+    },
     expiring: {
       icon: Warning,
       text: (
@@ -100,7 +113,7 @@ function FileLinks({ f, compact }: { f: DocumentFileVersion; compact?: boolean }
         title={`${f.displayName} · ${size(f.sizeBytes)}`}
       >
         <Icon size={17} />
-        {!compact && 'Görüntüle'}
+        {!compact && <span className="max-2xl:sr-only">Görüntüle</span>}
       </a>
       <a
         href={f.downloadUrl}
@@ -143,7 +156,7 @@ export function VehicleDocuments({ vehicleId, plate }: { vehicleId: string; plat
   const history = data.documents.filter((d) => !data.types.some((t) => t.summary.shownId === d.id || t.summary.nextId === d.id))
 
   return (
-    <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_340px]">
+    <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_280px]">
       <div className="min-w-0 space-y-5">
         <section className="rounded-xl border border-line bg-surface">
           <div className="flex flex-wrap items-center justify-between gap-3 px-5 pt-5 pb-4">
@@ -161,10 +174,10 @@ export function VehicleDocuments({ vehicleId, plate }: { vehicleId: string; plat
 
           {/* Desktop and tablet: table */}
           <div className="hidden overflow-x-auto md:block">
-            <table className="w-full min-w-[720px] text-[13.5px]">
+            <table className="w-full min-w-[680px] text-[13.5px]">
               <thead>
                 <tr className="border-y border-line bg-ground/50 text-left text-[12.5px] text-ink-2">
-                  <th className="h-10 px-5 font-medium">Belge</th>
+                  <th className="h-10 px-4 font-medium xl:px-5">Belge</th>
                   <th className="h-10 px-3 font-medium">Numara</th>
                   <th className="h-10 px-3 font-medium">Geçerlilik</th>
                   <th className="h-10 px-3 font-medium">Durum</th>
@@ -177,13 +190,13 @@ export function VehicleDocuments({ vehicleId, plate }: { vehicleId: string; plat
                   const d = docById(t.summary.shownId)
                   return (
                     <tr key={t.code} onClick={() => openRow(t)} className={cn('border-b border-line-soft last:border-b-0', (d || canManage) && 'cursor-pointer hover:bg-blue-soft/30')}>
-                      <td className="min-w-[150px] px-5 py-3">
+                      <td className="min-w-[128px] px-4 py-3 xl:px-5">
                         <span className="block font-medium text-ink">{t.name}</span>
                         <span className="block text-[12px] text-ink-3">{t.required ? 'Şirket için zorunlu' : 'İsteğe bağlı'}</span>
                       </td>
                       <td className="tnum px-3 py-3 whitespace-nowrap text-ink-2">{d?.documentNumber ?? '—'}</td>
                       <td className="tnum px-3 py-3 whitespace-nowrap text-ink">{d ? range(d.validFrom, d.validUntil) : '—'}</td>
-                      <td className="max-w-[260px] px-3 py-3">
+                      <td className="px-3 py-3">
                         <SummaryStatus s={t.summary} required={t.required} />
                       </td>
                       <td className="px-3 py-2 whitespace-nowrap">
@@ -261,14 +274,14 @@ export function VehicleDocuments({ vehicleId, plate }: { vehicleId: string; plat
 
       <div className="min-w-0">
         <section className="rounded-xl border border-line bg-surface p-5">
-          <h2 className="mb-4 text-[16px] font-semibold tracking-[-0.01em]">Açık riskler</h2>
-          <div className="grid place-items-center rounded-lg border border-dashed border-line px-6 py-8 text-center">
-            <div>
-              <WarningCircle size={22} className="mx-auto text-ink-3" />
-              <p className="mt-2 font-medium">Henüz bağlı değil</p>
-              <p className="mt-1 text-[13px] text-ink-2">Hasar, ceza ve olay kayıtları ilgili modüllerle bağlanacak.</p>
-            </div>
-          </div>
+          <h2 className="mb-3 text-[16px] font-semibold tracking-[-0.01em]">Açık riskler</h2>
+          <p className="flex items-start gap-2.5 rounded-lg border border-dashed border-line px-3.5 py-3 text-[13px] text-ink-2">
+            <WarningCircle size={18} className="mt-px shrink-0 text-ink-3" />
+            <span>
+              <span className="block font-medium text-ink">Henüz bağlı değil</span>
+              Hasar, ceza ve olay kayıtları ilgili modüllerle bağlanacak.
+            </span>
+          </p>
         </section>
       </div>
 
@@ -278,6 +291,8 @@ export function VehicleDocuments({ vehicleId, plate }: { vehicleId: string; plat
           plate={plate}
           docId={openId}
           typeName={(code) => data.types.find((t) => t.code === code)?.name ?? code}
+          summaryFor={(code) => data.types.find((t) => t.code === code)?.summary ?? null}
+          docFor={docById}
           canManage={canManage}
           uploadsEnabled={data.upload.enabled}
           onOpen={setOpenId}
@@ -455,6 +470,8 @@ function DocumentDrawer({
   plate,
   docId,
   typeName,
+  summaryFor,
+  docFor,
   canManage,
   uploadsEnabled,
   onOpen,
@@ -465,6 +482,8 @@ function DocumentDrawer({
   plate: string
   docId: string
   typeName: (code: string) => string
+  summaryFor: (code: string) => DocumentTypeSummary | null
+  docFor: (id: string | null) => VehicleDocument | null
   canManage: boolean
   uploadsEnabled: boolean
   onOpen: (id: string) => void
@@ -490,11 +509,13 @@ function DocumentDrawer({
   })
   const d = q.data
   const editable = d && d.recordState !== 'voided' && !d.lockedAt
+  const summary = d ? summaryFor(d.typeCode) : null
+  const coverage = d && summary ? coverageOf(d, summary, docFor) : null
 
   return (
     <Sheet
       title={d ? typeName(d.typeCode) : 'Belge'}
-      subtitle={d ? <>{plate} · <DocStatusText d={d} />{d.status.noFile && d.recordState !== 'voided' && <span className="font-medium text-hold"> · Dosya yok</span>}</> : undefined}
+      subtitle={d ? <>{plate} · {coverage ? <><span className="font-medium text-ink-2">{coverage.periodText}</span> · <span className="font-medium whitespace-nowrap text-ok">Kesinti yok</span></> : <DocStatusText d={d} />}{d.status.noFile && d.recordState !== 'voided' && <span className="font-medium text-hold"> · Dosya yok</span>}</> : undefined}
       onClose={onClose}
       footer={
         d && canManage && editable ? (
@@ -548,6 +569,18 @@ function DocumentDrawer({
                 <WarningCircle size={16} className="mt-px shrink-0" />
                 {error}
               </p>
+            )}
+            {coverage && (
+              <div className="flex items-start gap-2.5 rounded-lg border border-ok/25 bg-ok-soft px-3.5 py-3 text-[13px]">
+                <CheckCircle size={18} weight="fill" className="mt-px shrink-0 text-ok" />
+                <div className="min-w-0">
+                  <p className="font-semibold text-ok">Yenileme hazır · kesinti yok</p>
+                  <p className="mt-0.5 text-ink">{coverage.text}</p>
+                  <button type="button" onClick={() => onOpen(coverage.otherId)} className="mt-1.5 font-medium text-blue hover:text-blue-ink">
+                    {coverage.otherLabel}
+                  </button>
+                </div>
+              </div>
             )}
             {d.recordState === 'voided' && (
               <p className="rounded-lg border border-line bg-ground/60 px-3 py-2 text-[13px] text-ink-2">
@@ -621,7 +654,13 @@ function DocumentDrawer({
                         className={cn('flex w-full items-center justify-between gap-3 rounded-md px-3 py-2 text-left text-[13px] hover:bg-ground', c.id === d.id && 'bg-ground font-medium')}
                       >
                         <span className="tnum">{range(c.validFrom, c.validUntil)}</span>
-                        <span className="text-ink-2">{CHAIN_LABEL[c.status]}</span>
+                        <span className="text-ink-2">
+                          {summary?.state === 'renewed' && c.id === summary.currentId
+                            ? `Mevcut dönem · ${summary.daysLeft === 0 ? 'bugün bitiyor' : `${summary.daysLeft} gün kaldı`}`
+                            : summary?.state === 'renewed' && c.id === summary.nextId
+                              ? 'Yeni dönem · kesintisiz'
+                              : CHAIN_LABEL[c.status]}
+                        </span>
                       </button>
                     </li>
                   ))}
@@ -633,6 +672,34 @@ function DocumentDrawer({
       )}
     </Sheet>
   )
+}
+
+/**
+ * Coverage of the type when this record is the current period with a seamless renewal, or that renewal.
+ * Presentation only: the per-record status (e.g. "Yaklaşıyor") and the stored data are unchanged.
+ */
+function coverageOf(d: VehicleDocumentDetail, s: DocumentTypeSummary, docFor: (id: string | null) => VehicleDocument | null) {
+  if (s.state !== 'renewed' || d.recordState !== 'active') return null
+  const current = docFor(s.currentId)
+  const next = docFor(s.nextId)
+  if (!current || !next) return null
+  if (d.id === current.id) {
+    return {
+      periodText: `Bu dönem ${daysLeftText(s.daysLeft)}`,
+      text: `Bu dönem ${fmt(current.validUntil)} tarihinde bitiyor (${s.daysLeft === 0 ? 'bugün' : `${s.daysLeft} gün kaldı`}). Yeni dönem ${fmt(next.validFrom)} tarihinde başlıyor; araç arada boşluk olmadan kapsamda kalır.`,
+      otherId: next.id,
+      otherLabel: 'Yeni dönemi aç',
+    }
+  }
+  if (d.id === next.id) {
+    return {
+      periodText: `${fmt(next.validFrom)} tarihinde başlıyor`,
+      text: `Bu dönem ${fmt(next.validFrom)} tarihinde başlıyor. O güne kadar mevcut dönem (${fmt(current.validUntil)} tarihine kadar) geçerli; araç arada boşluk olmadan kapsamda kalır.`,
+      otherId: current.id,
+      otherLabel: 'Mevcut dönemi aç',
+    }
+  }
+  return null
 }
 
 const CHAIN_LABEL: Record<string, string> = {

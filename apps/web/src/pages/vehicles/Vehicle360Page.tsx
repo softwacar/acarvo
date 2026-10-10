@@ -821,9 +821,18 @@ function HistoryTab({ history, isLoading, vehicleId }: { history?: VehicleHistor
 // Page
 
 function Tabs({ tab, onTab, counts }: { tab: VehicleTab; onTab: (t: VehicleTab) => void; counts: Partial<Record<VehicleTab, number>> }) {
+  const list = useRef<HTMLDivElement>(null)
+  // Keep the selected tab visible in the horizontally scrolling bar (phones, narrow windows), also when opened from a link.
+  useEffect(() => {
+    const bar = list.current
+    const el = bar?.querySelector<HTMLElement>(`#tab-${tab}`)
+    if (!bar || !el) return
+    const left = el.offsetLeft - (bar.clientWidth - el.offsetWidth) / 2
+    bar.scrollTo({ left: Math.max(0, left), behavior: 'smooth' })
+  }, [tab])
   return (
     <div id="vehicle-tabs" className="sticky top-[calc(4rem+var(--bar,0px))] z-20 border-b border-line bg-surface/95 backdrop-blur-sm transition-[top] duration-300">
-      <div role="tablist" aria-label="Araç bölümleri" className="mx-auto flex max-w-[1400px] gap-1 overflow-x-auto px-4 [scrollbar-width:none] lg:px-8">
+      <div ref={list} role="tablist" aria-label="Araç bölümleri" className="mx-auto flex max-w-[1400px] gap-1 overflow-x-auto px-4 [scrollbar-width:none] lg:px-8">
         {VEHICLE_TABS.map((t) => (
           <button
             key={t}
