@@ -11,8 +11,8 @@ _Sprint ilerledikçe güncellenir._
 | 0 Güvenli çalışma ortamı | Tamamlandı | — |
 | 1 Tarih ve saat altyapısı | Tamamlandı | `08b19d0` |
 | 2 Güvenlik ve yetki denetimi | Tamamlandı | `da529b4` |
-| 3 Tarayıcı testleri | Sürüyor | |
-| 4 Kullanılabilirlik ve erişilebilirlik | Bekliyor | |
+| 3 Tarayıcı testleri | Tamamlandı | `eeebc0c` |
+| 4 Kullanılabilirlik ve erişilebilirlik | Sürüyor | |
 | 5 Araç modülünde küçük eksikler | Bekliyor | |
 | 6 Performans | Bekliyor | |
 | 7 Kod kalitesi ve dağıtım güvenliği | Bekliyor | |
@@ -54,6 +54,20 @@ Bulunan ve düzeltilen sorunlar (her biri için regresyon testi var, `apps/api/t
 5. **Düşük — yükleme uçlarında hız sınırı yoktu.** Fotoğraf ve belge yükleme kullanıcı başına dakikada 40 istekle sınırlandı.
 
 Testler: **156/156 geçti** (6 yeni). Tip kontrolü ve derleme hatasız.
+
+## Aşama 3 — Tarayıcı test altyapısı (`eeebc0c`)
+
+Yeni çalışma alanı `apps/e2e` (Playwright 1.63.0, iki haftadan eski sabit sürüm). Çalıştırma: `npm run test:e2e`.
+
+- Testler kendi API (3101) ve web (5181) sunucularını başlatır; API `acarvo_test` ve geçici depolama kullanır. Geliştirme sunucuları ve ana veritabanı kullanılmaz; yapılandırma, test adresleri `acarvo_test` değilse çalışmayı durdurur.
+- Her çalıştırmada test veritabanı korumalı sıfırlamayla yeniden kurulur; test kullanıcılarına o çalıştırmaya özel rastgele parola verilir. Kişisel parolanız veya Chrome oturumunuz kullanılmaz; Playwright'ın kendi Chromium'u, temiz profillerle.
+- **23 test, art arda iki çalıştırmada 23/23 geçti** (~1,3 dk): giriş/çıkış, oturumsuz erişimde girişe yönlendirme ve geri dönüş, şirket değiştirme ve başka şirketin araç adresi, liste arama ve filtrenin adreste kalması, araç ekleme, mükerrer plaka, iki sekmeyle sürüm çakışması, 360° sekmeleri ve bilinmeyen araç, fotoğraf yükleme/ana yapma/sıralama/kaldırma ve görsel olmayan dosyanın reddi, belge ekleme + görüntüleme (inline, sandbox, no-store) + indirme (sunucu adı) + kesintisiz yenileme, km düşüşü/büyük artış/kayıt/düzeltme, konum (servis → şube, ana şube değişmez), **tarayıcı İstanbul saatindeyken Saraybosna saatiyle geçmiş tarihli km girişi**, şube sınırlı kullanıcının yetkisiz araç/şube/düzeltme kısıtları, telefon (390 px).
+
+Testlerin yakaladığı ve düzeltilen hatalar:
+1. **Çıkış yaparken ekran bir an çöküyordu** ("useSession outside an authenticated route"); oturum silinip yönlendirme bitmeden düzen yeniden çiziliyordu. Artık oturum yokken düzen hiçbir şey çizmiyor (401 ile zorla çıkışı da kapsar).
+2. **Telefonda araç listesinde "Araç" sütunu sıfır genişliğe iniyordu**; başlıklar üst üste biniyor, araca götüren bağlantı görünmüyordu (araç yalnız satıra dokunarak açılabiliyordu, klavye/ekran okuyucuyla açılamıyordu). Tablo artık dar ekranda kendi kartı içinde yana kayıyor.
+3. **Sayfa yana taşıyordu**: tablodaki ekran okuyucu metni konumlanmamış olduğu için sayfayı genişletiyordu. Düzeltildi.
+4. **Fotoğraf yükleme hataları ekran okuyucuya hemen bildirilmiyordu**; hata satırları artık `role="alert"`.
 
 ## Onay bekleyen kararlar
 
