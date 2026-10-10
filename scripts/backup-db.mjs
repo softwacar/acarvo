@@ -99,7 +99,7 @@ for (const c of companies) {
 await client.end()
 
 const storage = path.resolve('storage')
-if (existsSync(storage)) cpSync(storage, path.join(root, 'storage'), { recursive: true })
+if (existsSync(storage) && !process.env.BACKUP_SKIP_STORAGE) cpSync(storage, path.join(root, 'storage'), { recursive: true })
 
 writeFileSync(path.join(root, 'report.json'), JSON.stringify({ ...report, verified: problems.length === 0, problems }, null, 2))
 if (problems.length) {

@@ -420,3 +420,22 @@ ACARVO uluslararası kullanılır; bilgisayarın saat dilimi hiçbir zaman sakla
 1. **Temel altyapı:** monorepo, veritabanı rolleri, migration, RLS, giriş/oturum/CSRF/oran sınırı, şirket seçimi, uygulama kabuğu (7 kategori / 36 bağlantı), izolasyon testleri. Teslim: giriş yapılan çalışan uygulama + geçen testler.
 2. **Araçlar ve Araç 360°:** liste, ekleme, düzenleme, detay (V5 tasarımı), belgeler, km ve konum geçmişi, tanıtım fotoğrafı yükleme, testler.
 3. Sonraki modüller spesifikasyondaki öncelik sırasıyla (Rezervasyonlar, Kiralamalar, Finans ...).
+
+## 12. Güvenli dağıtım ve migration süreci
+
+Sıra her zaman: **yedek → migration → doğrulama → kod**. Kod, migration'ı uygulanmamış bir veritabanına dağıtılmaz (Araç fotoğrafları aşamasında bu sıra bozulduğunda geçici 500 hataları görüldü).
+
+1. **Prova:** `node --env-file=.env scripts/safe-migrate.mjs --test` — aynı süreci `acarvo_test` üzerinde çalıştırır.
+2. **Ne uygulanacak:** `node --env-file=.env scripts/safe-migrate.mjs --dry-run` — ana veritabanında bekleyen migration'ları yalnız listeler (salt okuma).
+3. **Uygulama:** `node --env-file=.env scripts/safe-migrate.mjs` — sırasıyla:
+   - doğrulanmış yedek (`scripts/backup-db.mjs`: şema, global veri, her şirketin kendi RLS bağlamında verisi, satır sayısı karşılaştırması, özel depolama kopyası); doğrulanamazsa **durur**;
+   - her tablonun (şirket tablolarında şirket bazında) satır sayısı fotoğrafı;
+   - migration (Drizzle tek işlemde uygular; hata olursa veritabanı değişmez) + tekrarlanabilir rol şablonu yükseltmesi;
+   - doğrulama: tüm migration'lar uygulanmış mı, hiçbir tabloda satır azalmış mı, RLS'li her tablo hâlâ RLS'li ve zorunlu mu, yeni tablo RLS'siz mi; sorun varsa yedek klasörünü ve geri yükleme adımlarını yazıp **sıfır olmayan kodla durur**.
+4. **Kod dağıtımı** ancak bundan sonra.
+
+Üretim ortamı ayarları (sunucu açılışta eksikleri uyarı olarak yazar, `productionWarnings`):
+- `NODE_ENV=production`, `WEB_ORIGIN=https://…` (gerçek adres), `COOKIE_SECRET` (en az 32 karakter, gizli),
+- `STORAGE_DIR` (kod dışında, yedeklenen kalıcı klasör),
+- `TRUST_PROXY` (ters vekil sunucunun adresi; tanımlanmazsa `X-Forwarded-For` yok sayılır),
+- `MALWARE_SCANNER=clamav` (+ `CLAMAV_HOST/PORT`); tanımlanmazsa belge yükleme kapalı kalır.

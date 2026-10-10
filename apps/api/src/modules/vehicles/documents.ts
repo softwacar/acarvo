@@ -20,6 +20,7 @@ import { documentFiles, vehicleDocumentFiles, vehicleDocuments } from '../../db/
 import { audit } from '../../lib/audit'
 import { cleanDisplayName, MAX_DOCUMENT_BYTES, validateDocumentFile } from '../../lib/document-files'
 import { AppError, notFound } from '../../lib/errors'
+import { toIsoOrNull } from '../../lib/timestamps'
 import { documentUploadPolicy } from '../../lib/malware'
 import { withCompany } from '../../plugins/auth'
 import { UPLOAD_RATE_LIMIT } from '../../plugins/security'
@@ -38,7 +39,7 @@ function params<T>(schema: z.ZodType<T>, value: unknown, message = VEHICLE_NOT_F
   if (!r.success) throw notFound(message)
   return r.data
 }
-const iso = (v: unknown) => (v == null ? null : v instanceof Date ? v.toISOString() : new Date(String(v).replace(' ', 'T').replace(/([+-]\d{2})$/, '$1:00')).toISOString())
+const iso = toIsoOrNull
 const day = (v: unknown) => (v == null ? null : String(v).slice(0, 10))
 
 async function visibleVehicle(tx: Tx, access: CompanyAccess, vehicleId: string, lock = false) {

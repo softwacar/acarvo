@@ -21,6 +21,7 @@ import { z } from 'zod'
 import type { Tx } from '../../db/client'
 import { audit } from '../../lib/audit'
 import { AppError, notFound } from '../../lib/errors'
+import { toIso } from '../../lib/timestamps'
 import { withCompany } from '../../plugins/auth'
 import type { CompanyAccess } from '../auth/context'
 import { inScope } from './repository'
@@ -42,7 +43,7 @@ function params<T>(schema: z.ZodType<T>, value: unknown, message = VEHICLE_NOT_F
   if (!r.success) throw notFound(message)
   return r.data
 }
-const iso = (v: unknown) => (v instanceof Date ? v.toISOString() : new Date(String(v).replace(' ', 'T').replace(/([+-]\d{2})$/, '$1:00')).toISOString())
+const iso = toIso
 const str = (v: unknown) => (v == null ? null : (v as string))
 
 interface VisibleVehicle {

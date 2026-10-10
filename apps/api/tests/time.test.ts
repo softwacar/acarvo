@@ -173,3 +173,14 @@ describe('API with a different server/computer zone', () => {
     expect(v.acquisitionDate).toBe('2023-03-14')
   })
 })
+
+describe('database timestamps to ISO 8601', () => {
+  it('parses Date objects and PostgreSQL text with whole-hour and half-hour offsets', async () => {
+    const { toIso, toIsoOrNull } = await import('../src/lib/timestamps')
+    expect(toIso(new Date('2026-10-09T20:41:23.500Z'))).toBe('2026-10-09T20:41:23.500Z')
+    expect(toIso('2026-10-09 22:41:23.5+02')).toBe('2026-10-09T20:41:23.500Z')
+    expect(toIso('2026-10-09 22:41:23+05:30')).toBe('2026-10-09T17:11:23.000Z')
+    expect(toIso('2026-01-09 08:00:00-05')).toBe('2026-01-09T13:00:00.000Z')
+    expect(toIsoOrNull(null)).toBeNull()
+  })
+})

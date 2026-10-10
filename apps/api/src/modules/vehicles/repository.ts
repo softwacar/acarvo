@@ -9,6 +9,7 @@ import {
 } from '@acarvo/shared'
 import { and, eq, ne, type SQL, sql } from 'drizzle-orm'
 import type { Tx } from '../../db/client'
+import { toIso } from '../../lib/timestamps'
 import { documentOverviews } from './document-overview'
 import { branches, vehicleClasses, vehicles } from '../../db/schema'
 import { AppError } from '../../lib/errors'
@@ -58,9 +59,7 @@ const FROM = sql`${BASE_FROM}
   ) l on true`
 
 type Row = Record<string, unknown>
-/** Timestamps arrive as Date or as PostgreSQL text ("2026-10-09 22:41:23.5+02"); the API always answers ISO 8601. */
-const iso = (v: unknown) =>
-  v instanceof Date ? v.toISOString() : new Date(String(v).replace(' ', 'T').replace(/([+-]\d{2})$/, '$1:00')).toISOString()
+const iso = toIso
 const odometerOf = (r: Row) => (r.km == null ? null : { km: Number(r.km), at: iso(r.km_at) })
 const locationOf = (r: Row): LocationSummary | null =>
   r.location_type == null ? null : { type: r.location_type as LocationSummary['type'], branchName: (r.location_branch as string) ?? null, at: iso(r.location_at) }

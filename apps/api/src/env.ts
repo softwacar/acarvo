@@ -36,3 +36,15 @@ export function loadEnv(source: NodeJS.ProcessEnv = process.env): Env {
   }
   return parsed.data
 }
+
+/** Settings that work in development but are unsafe or fragile in production; logged at start-up (docs §12). */
+export function productionWarnings(env: Env): string[] {
+  if (env.NODE_ENV !== 'production') return []
+  const w: string[] = []
+  if (!env.STORAGE_DIR) w.push('STORAGE_DIR is not set: files go to <repo>/storage. Set a persistent, backed-up folder outside the code.')
+  if (/localhost|127\.0\.0\.1/.test(env.WEB_ORIGIN)) w.push(`WEB_ORIGIN is ${env.WEB_ORIGIN}: set the public https address, or every change request is refused.`)
+  if (!env.WEB_ORIGIN.startsWith('https://')) w.push('WEB_ORIGIN is not https: session cookies require HTTPS.')
+  if (!env.TRUST_PROXY) w.push('TRUST_PROXY is not set: behind a reverse proxy all clients share one address (sign-in limits, session IPs).')
+  if (env.MALWARE_SCANNER === 'none') w.push('MALWARE_SCANNER is none: document uploads stay closed until a scanner is configured.')
+  return w
+}

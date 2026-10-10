@@ -122,3 +122,14 @@ describe('upload rate limit', () => {
     expect((await selma.upload(`/api/vehicles/${id}/photos`, tiny, 'x.jpg')).statusCode).not.toBe(429)
   })
 })
+
+describe('production configuration warnings', () => {
+  it('flags development defaults only in production', async () => {
+    const { productionWarnings } = await import('../src/env')
+    const { env } = await import('./helpers')
+    expect(productionWarnings({ ...env, NODE_ENV: 'development' })).toEqual([])
+    const w = productionWarnings({ ...env, NODE_ENV: 'production', STORAGE_DIR: undefined, WEB_ORIGIN: 'http://localhost:5173', TRUST_PROXY: undefined, MALWARE_SCANNER: 'none' })
+    expect(w).toHaveLength(5)
+    expect(productionWarnings({ ...env, NODE_ENV: 'production', STORAGE_DIR: '/srv/acarvo/files', WEB_ORIGIN: 'https://app.acarvo.example', TRUST_PROXY: '10.0.0.5', MALWARE_SCANNER: 'clamav' })).toEqual([])
+  })
+})
