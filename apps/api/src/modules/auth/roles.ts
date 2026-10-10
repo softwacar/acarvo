@@ -9,13 +9,28 @@ export const ROLE_PRESETS: Record<string, readonly Permission[]> = {
     'vehicles.documents.read',
     'vehicles.documents.manage',
     'vehicles.photos.manage',
+    'vehicles.odometer.record',
+    'vehicles.location.record',
+    'vehicles.history.correct',
     'branches.read',
     'users.read',
     'roles.read',
     'audit.read',
   ],
-  Yönetici: ['vehicles.read', 'vehicles.create', 'vehicles.update', 'vehicles.documents.read', 'vehicles.documents.manage', 'vehicles.photos.manage', 'branches.read', 'users.read'],
-  Operasyon: ['vehicles.read', 'vehicles.documents.read', 'vehicles.documents.manage', 'vehicles.photos.manage', 'branches.read'],
+  Yönetici: [
+    'vehicles.read',
+    'vehicles.create',
+    'vehicles.update',
+    'vehicles.documents.read',
+    'vehicles.documents.manage',
+    'vehicles.photos.manage',
+    'vehicles.odometer.record',
+    'vehicles.location.record',
+    'vehicles.history.correct',
+    'branches.read',
+    'users.read',
+  ],
+  Operasyon: ['vehicles.read', 'vehicles.documents.read', 'vehicles.documents.manage', 'vehicles.photos.manage', 'vehicles.odometer.record', 'vehicles.location.record', 'branches.read'],
 }
 
 /**
@@ -30,6 +45,15 @@ export const ROLE_PRESET_HISTORY: { version: number; presets: Record<string, rea
       Sahip: ['vehicles.read', 'vehicles.create', 'vehicles.update', 'vehicles.documents.manage', 'vehicles.photos.manage', 'branches.read', 'users.read', 'roles.read', 'audit.read'],
       Yönetici: ['vehicles.read', 'vehicles.create', 'vehicles.update', 'vehicles.documents.manage', 'vehicles.photos.manage', 'branches.read', 'users.read'],
       Operasyon: ['vehicles.read', 'vehicles.documents.manage', 'vehicles.photos.manage', 'branches.read'],
+    },
+  },
+  {
+    // Vehicle documents (docs §8.4) added vehicles.documents.read.
+    version: 2,
+    presets: {
+      Sahip: ['vehicles.read', 'vehicles.create', 'vehicles.update', 'vehicles.documents.read', 'vehicles.documents.manage', 'vehicles.photos.manage', 'branches.read', 'users.read', 'roles.read', 'audit.read'],
+      Yönetici: ['vehicles.read', 'vehicles.create', 'vehicles.update', 'vehicles.documents.read', 'vehicles.documents.manage', 'vehicles.photos.manage', 'branches.read', 'users.read'],
+      Operasyon: ['vehicles.read', 'vehicles.documents.read', 'vehicles.documents.manage', 'vehicles.photos.manage', 'branches.read'],
     },
   },
 ]

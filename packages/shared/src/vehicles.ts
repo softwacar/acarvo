@@ -201,20 +201,6 @@ export interface VehicleClassSummary {
   name: string
 }
 
-export interface VehicleHistory {
-  odometer: { id: string; km: number; eventType: string; occurredAt: string; note: string | null; recordedByName: string | null }[]
-  locations: {
-    id: string
-    type: LocationSummary['type']
-    eventType: string
-    description: string | null
-    branchName: string | null
-    branchCode: string | null
-    occurredAt: string
-    recordedByName: string | null
-  }[]
-}
-
 export interface VehicleActivityItem {
   id: string
   action: string

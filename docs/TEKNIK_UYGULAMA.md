@@ -271,6 +271,109 @@ Araç × tür özeti (Belgeler tablosundaki satır):
 
 Kiralama, rezervasyon, müsaitlik, bakım ve finans verileri ilgili modüller geliştirilince bağlanır. O zamana kadar Araç 360° bu bölümlerde açık bir "modül henüz geliştirilmedi" durumu gösterir; kirada/müsait durumu uydurulmaz.
 
+### 8.5 Araç kilometre ve konum yönetimi — uygulama planı (onaylı 10.10.2026, kullanıcı kararlarıyla güncellendi)
+
+Kaynak: spec §59CY (tek km gerçeği), §59CG (konum geçmişi, canlı GPS değil), §13.3 Sekme 8 (Konum & Geçmiş), §13.2 (bilgi şeridi: km ve fiziksel konum ayrı; "Km doğrulanmadı"), §59R (transfer ana şubeyi değiştirmez), §2 (şube bağlılığı ≠ fiziksel konum), §13.1 madde 3 (güncel değer serbest düzenlenmez; kaynak olay veya yetkili düzeltme). Mevcut mimari korunur: güncel km ve konum, yalnız ekleme yapılan olay tablolarından (`odometer_readings`, `vehicle_location_events`) **türetilir**; araç tablosunda düzenlenebilir km veya konum alanı açılmaz.
+
+Kullanıcı kararları (10.10.2026): (1) şirket genelinde yetkili kullanıcı aracı herhangi bir şirket şubesinde kaydedebilir, şube sınırlı kullanıcı yalnız kendi şubelerine; bu kayıt transfer değildir ve transfer tamamlanmış gibi gösterilmez; (2) büyük km artışında ek onay **ve gerekçe**, API'de de zorunlu; (3) 48 saatten eski km girişinde açıklama zorunlu, geçmiş tarihli kayıt daha yeni doğru değeri güncel değer olarak değiştiremez; (4) **gösterge değişimi bu sürümde yok**, km'yi düşürecek her normal giriş engellenir, gösterge değişimi için ileride ayrı plan; (5) düzeltmeler gerekçeli yeni kayıt, düzeltilen kayıt yeniden düzeltilebilir (izlenebilir zincir); (6) eşzamanlı işlemler ve tekrarlanan gönderimler güvenli.
+
+Mevcut durum (ana veritabanı, 10.10.2026, salt okuma sayımı): Drina'da 23 araç, 22 km okuması (bir aracın okuması yok → "Km doğrulanmadı"), 23 konum kaydı; Neretva'da 4 araç, 4 okuma, 4 konum. Kayıtların tümü araç oluşturulurken yazılan `initial` olaylarıdır. Uygulama rolünün bu tablolarda UPDATE/DELETE yetkisi yoktur ve böyle kalır.
+
+#### 8.5.1 Kilometre kaydı
+
+Veri modeli (yalnız ekleme):
+- `odometer_readings` tablosuna **boş bırakılabilir yeni sütunlar** eklenir; mevcut satırlar değişmez: `source_type` (`vehicle_create`, `manual`, ileride `rental_handover`, `rental_return`, `vehicle_swap`, `maintenance`, `transfer_start`, `transfer_end`, `supplier_receive`, `supplier_return`), `source_id`, `client_request_id` (çift tıklama koruması; şirket içinde tekil), `jump_reason` (büyük artış gerekçesi). Kayıt zamanı mevcut `created_at`, olay zamanı mevcut `occurred_at` sütunudur; yeni zaman sütunu gerekmez. `event_type` izinli değerleri genişletilir: `initial`, `manual`, `correction` (kontrol kısıtı yeniden tanımlanır; mevcut değerler geçerli kalır). Mevcut `initial` satırlar `source_type` boş olduğunda “araç kaydı” olarak yorumlanır; veri güncellemesi yapılmaz.
+- Yeni tablo `odometer_corrections` (şirket, RLS): düzeltilen okuma, eylem (`replace` = doğru değerle değiştir / `void` = hatalı say, yerine değer yok), **zorunlu gerekçe** (5–300 karakter), yapan, zaman, `client_request_id`. Düzeltilen okuma üzerinde **tekil** kısıt: bir okuma yalnız bir kez düzeltilir (eşzamanlı ikinci düzeltme 409). Sıra: önce düzeltme satırı yazılır (eski okuma geçerlilikten çıkar), `replace` ise ardından yerine geçen okuma `event_type = correction`, `source_type = correction`, `source_id = <düzeltme>` ve **eski okumanın olay zamanıyla** yazılır; böylece kronolojik kontrol eski okuma hesaba katılmadan yapılır. Yerine geçen okuma da gerekirse yeniden düzeltilebilir; zincir (ilk okuma → düzeltme → yeni okuma → düzeltme …) geçmişte izlenir.
+- **Geçerli okuma** = düzeltme kaydı olmayan okuma. Güncel km = geçerli okumalar arasında olay zamanı en geç olan (eşitlikte kayıt zamanı). Bu kural tek bir saf fonksiyonda (`packages/shared`) ve aynı mantıkla veritabanı sorgusunda uygulanır; araç listesi, 360 bilgi şeridi ve Genel bakış aynı sonucu gösterir.
+
+Giriş kuralları (API doğrular, veritabanı tetikleyicisi son güvencedir):
+- Yetkili kullanıcı km, olay tarihi/saati (şirket saat diliminde girilir, `timestamptz` saklanır), açıklama girer. Kaynak manuel girişte `manual`; kullanıcı ve zaman sunucu tarafından yazılır, istemciden alınmaz.
+- **Kronolojik tutarlılık:** yeni okuma, olay zamanındaki bir önceki geçerli okumadan düşük **ve** sonraki geçerli okumadan yüksek olamaz (`önceki ≤ km ≤ sonraki`). Böylece geçmiş tarihli bir giriş güncel km'yi düşüremez ve geçmişteki sırayı bozamaz (spec §59CY).
+- **Gelecek tarih** reddedilir (sunucu saatine göre 5 dakika toleransla).
+- **Geçmiş tarihli giriş:** izinli; 48 saatten eskiyse açıklama zorunlu ve kayıt “geç girildi” olarak işaretlenir (kayıt zamanı ile olay zamanı arasındaki fark görünür). Araç oluşturulmadan önceki bir tarihe giriş reddedilir.
+- **Beklenmedik düşüş:** önceki geçerli okumadan düşük (veya sonraki geçerli okumadan yüksek) değer **hiçbir zaman kabul edilmez**; 422 `ODOMETER_OUT_OF_ORDER` döner ve çakışan okuma (km, tarih, giren) gösterilir. Tek meşru yol, önceki okuma hatalıysa onu gerekçeli düzeltmektir. **Gösterge değişimi bu sürümde yoktur**; yeni göstergenin değeri aracın gerçek toplam km'sinden farklı olabileceği için ileride ayrı planla ele alınacaktır.
+- **Beklenmedik büyük artış:** engellenmez ama ek onay ve gerekçe ister: önceki geçerli okumadan bu yana günlük ortalama 1.500 km'yi (gün sayısı en az 1 alınır) veya tek seferde 20.000 km'yi aşan artışta form “Bu okuma bir öncekinden 25.400 km fazla” uyarısını ve gerekçe alanını gösterir. API aynı kontrolü yapar: gerekçe (`largeJumpReason`, 5–300 karakter) yoksa 422 `LARGE_JUMP_REASON_REQUIRED` döner; gerekçe `jump_reason` sütununda saklanır ve geçmişte görünür. Aynı kural düzeltmeyle girilen yeni değere de uygulanır. Eşikler sabit olarak başlar, ileride Ayarlar'a taşınabilir. Üst sınır mevcut kısıt (3.000.000 km).
+- **Kaynağa bağlı okumalar** (ileride teslim/iade/bakım): bu ekrandan düzeltilmez; düzeltme kendi kaynağının akışıyla yapılır. V1'de tüm okumalar `initial`/`manual` olduğundan bu kural yalnız şemada hazırlanır.
+
+Düzeltme kuralları:
+- Yalnız `vehicles.history.correct` yetkisi; gerekçe zorunlu. Düzeltme, düzeltilen okumanın olay zamanını korur; zamanı yanlışsa okuma `void` edilip doğru zamanla yeni okuma girilir.
+- `replace`: yeni değer, düzeltilen okumanın olay zamanında komşu geçerli okumalara göre aynı kronolojik kurala uyar (düzeltilen okuma hesaba katılmadan).
+- `void`: okuma geçersiz sayılır. Sıralı bir diziden okuma çıkarmak sırayı bozmadığı için kalan geçmiş tutarlı kalır.
+- Asıl okuma silinmez, değişmez; geçmişte üstü çizili görünür, yanında “Düzeltildi · gerekçe · kim · ne zaman” ve varsa yeni değer bulunur. Her düzeltme işlem geçmişine eski ve yeni değerle yazılır.
+
+#### 8.5.2 Konum yönetimi
+
+Veri modeli (yalnız ekleme):
+- `vehicle_location_events` tablosuna boş bırakılabilir sütunlar: `source_type`, `source_id`, `reason` (değişiklik nedeni), `client_request_id`. `event_type` için izinli değerler kısıtla tanımlanır: `initial`, `manual`, `correction` (+ ileride kaynak olaylar). Mevcut satırlar (`initial`) değişmez.
+- Yeni tablo `vehicle_location_corrections` (şirket, RLS): hatalı konum kaydı, eylem (`replace` / `void`), gerekçe, yapan, zaman, `client_request_id`; düzeltilen kayıt üzerinde tekil kısıt. Yerine geçen kayıt km'deki gibi düzeltmeye `source_id` ile bağlanır ve eski kaydın olay zamanını taşır; zincir izlenebilir.
+- Güncel konum = düzeltilmemiş konum kayıtları arasında olay zamanı en geç olan. Önceki→sonraki geçişi bu sıradan türetilir; ayrıca saklanmaz.
+
+Kurallar:
+- **Ana şube ile fiziksel konum ayrıdır.** Konum değişikliği `vehicles.home_branch_id`'ye dokunmaz; ana şube yalnız araç düzenleme formundan (mevcut `vehicles.update` akışı, sürüm kontrolü ve işlem geçmişiyle) değişir. Arayüz ikisini her yerde ayrı etiketle gösterir (“Ana şube” / “Şu an bulunduğu yer”), ana şubede olmayan araçlar için “Ana şubesi dışında” notu düşer.
+- Manuel girişte izinli konum türleri: **şubede** (şube seçilir) ve **serviste** (servis/yer adı zorunlu). **Yolda**, **müşteride** ve **tedarikçide** manuel seçilemez: bunlar ileride Transfer, teslim ve tedarikçi teslim alma olaylarından gelir; elle girilirse yarım kalmış bir transfer veya sahte kiralama durumu oluşurdu.
+- **Bu kayıt transfer değildir.** Arayüzde ve geçmişte “Konum kaydı (elle)” olarak görünür; “transfer tamamlandı”, “teslim edildi” gibi bir ifade kullanılmaz. Formda “Ana şube değişmez; şubeler arası teslim ve transfer ileride Transfer modülünden yapılacak” notu yer alır.
+- Değişiklik nedeni zorunlu (ör. “servise bırakıldı”, “sayımda farklı şubede bulundu”). Olay tarihi geçmiş olabilir; gelecek tarih reddedilir. Geçmiş tarihli kayıt yalnız en geç kayıt olursa güncel konumu değiştirir; arayüz kaydetmeden önce “Bu kayıt güncel konumu değiştirmeyecek; daha yeni bir konum kaydı var” bilgisini gösterir.
+- Aynı konuma art arda giriş (ör. zaten Sarajevo Aerodrom'da iken yine Sarajevo Aerodrom) uyarıyla engellenir; yalnız açıklama ekleme amacı varsa kullanıcı not alanını kullanır.
+
+#### 8.5.3 Yetkiler ve şube kapsamı
+
+- Yeni yetkiler: `vehicles.odometer.record` (km okuması girme), `vehicles.location.record` (konum güncelleme), `vehicles.history.correct` (km/konum düzeltme; hassas). Görüntüleme mevcut `vehicles.read` ile.
+- Şablonlar: Sahip ve Yönetici üçünü de alır; Operasyon kayıt yetkilerini alır, düzeltme yetkisini almaz. Mevcut şirketlerdeki **değiştirilmemiş** şablon rolleri, §8.4.5'teki aynı tekrarlanabilir yükseltme adımıyla (yeni `ROLE_PRESET_HISTORY` sürümü) güncellenir; özel ve elle değiştirilmiş roller, kullanıcılar ve şirketler değişmez.
+- Şube kapsamı: araç, kullanıcının erişebildiği bir ana şubeye bağlı değilse tüm km/konum uçları **404** döner (varlığı sızdırılmaz). Konum hedefi bir şubeyse şube aynı şirkette ve aktif olmalıdır (bileşik yabancı anahtar + API kontrolü); başka şirketin şubesi seçilemez.
+- **Hedef şube yetkisi (kullanıcı kararı):** şirket genelinde yetkili kullanıcı (Sahip/Yönetici, tüm şubeler) aracı herhangi bir aktif şirket şubesinde kaydedebilir. Şube sınırlı kullanıcı yalnız yetkili olduğu şubeleri hedef seçebilir; başka şube seçerse 403 `BRANCH_FORBIDDEN` döner ve arayüz şube listesinde yalnız izinli şubeleri gösterir. Düzeltmede de aynı kural yerine geçen kaydın şubesine ve düzeltilen kaydın şubesine uygulanır.
+- Konum kaydı aracı hedef şube kullanıcılarına görünür yapmaz: görünürlük spec gereği ana şubeye (operasyonel/güvenlik şubesi) bağlı kalır. Gerçek şubeler arası teslim ve hedef şubenin karşılaması Transfer modülünde ele alınır.
+- RLS: yeni tablolarda zorunlu RLS ve 4 politika; uygulama rolüne yalnız SELECT/INSERT. Şirket bağlamı her istekte `withCompany` ile kurulur.
+
+#### 8.5.4 Eşzamanlılık, geçmiş tarih ve veri bütünlüğü
+
+- **Araç başına sıraya alma:** her km/konum yazma işlemi tek veritabanı işleminde, araç kimliğinden türetilen işlem süreli kilitle (`pg_advisory_xact_lock`) sıraya alınır; veritabanı tetikleyicisi de aynı kilidi alır. İki kullanıcının aynı anda girdiği okumalar sırayla değerlendirilir, ikisi birden kronolojik kuralı delemez. Kilit araç kaydını kilitlemez; araç düzenlemeyi beklemeye almaz.
+- **Bayat ekran koruması:** geçmiş yalnız eklendiği için kayıt sayısı geri gitmez; API her geçmiş yanıtında km ve konum için bir sürüm değeri (`okuma+düzeltme sayısı`) döner. Form bu değeri (`expectedVersion`) gönderir; bu arada başka bir kayıt veya düzeltme girildiyse 409 `HISTORY_CHANGED` döner ve güncel durum gösterilir (“Siz formu doldururken başka bir kayıt girildi”).
+- **Çift tıklama:** istemci her gönderimde bir `clientRequestId` üretir; aynı kimlikle gelen ikinci istek yeni kayıt oluşturmaz, ilk sonucu döner.
+- **Veritabanı tetikleyicileri** (API atlanırsa da geçerli): okuma eklemede kronolojik kural ve gelecek tarih; düzeltmede düzeltilen kaydın aynı araca ait olması; yerine geçen kaydın düzeltmeye ve eski olay zamanına bağlı olması; konum eklemede manuel türlerin sınırı ve şube zorunluluğu. Hata kodları API'de anlaşılır Türkçe iletilere çevrilir.
+- **Silme/değiştirme yok:** olay ve düzeltme tablolarında UPDATE/DELETE yetkisi verilmez; düzeltme her zaman yeni satırdır. İşlem geçmişine (`audit_log`) her kayıt ve düzeltme yazılır.
+- **Migration yalnız ekler:** yeni sütunlar boş bırakılabilir ve varsayılansızdır; yeni tablolar, kısıtlar, tetikleyiciler, RLS ve yetkiler eklenir. Mevcut araç, okuma ve konum satırları değişmez. `event_type` kontrol kısıtı genişletilirken mevcut değerlerin geçerli olduğu migration içinde doğrulanır.
+- **Uygulama sırası** (belge modülündeki gibi): doğrulanmış yedek (`scripts/backup-db.mjs`; yedek doğrulanmazsa ana veritabanına migration uygulanmaz) → `acarvo_test` migration ve doğrulama → ana veritabanı migration + öncesi/sonrası sayım karşılaştırması → API → arayüz → testler ve tarayıcı kontrolü.
+
+#### 8.5.5 Araç 360° entegrasyonu (Konum ve geçmiş sekmesi, V5 dili)
+
+- Üstte iki panel: **Kilometre** (güncel değer, olay tarihi, kaynak, giren; okuma yoksa “Km doğrulanmadı”; “Kilometre gir” düğmesi) ve **Konum** (şu an bulunduğu yer, ne zamandan beri, neden; ayrı satırda ana şube; “Konumu güncelle” düğmesi). Düğmeler yalnız yetkisi olana görünür.
+- **Kilometre geçmişi** tablosu: tarih, km, önceki okumaya göre fark, kaynak, giren, açıklama, “⋯” (Düzelt — yalnız düzeltme yetkisiyle). Düzeltilmiş satırlar üstü çizili ve gerekçeli; geç girilen kayıtlar “geç girildi”, büyük artışlar gerekçesiyle. 390 px'te kart listesine döner.
+- **Konum geçmişi** zaman çizelgesi: önceki → sonraki konum, neden, kaynak, kim, ne zaman; düzeltilenler işaretli. “Canlı GPS değildir” açıklaması korunur.
+- **İşlem geçmişi** mevcut haliyle kalır (değişen alanların eski/yeni değeri).
+- Formlar belge modülündeki gibi sağdan açılan panelde: km formu önceki geçerli okumayı ve izinli aralığı gösterir, düşüş ve büyük artışı kaydetmeden önce açıklar; konum formu ana şubenin değişmeyeceğini açıkça yazar. Hatalar alan düzeyinde ve sade Türkçe.
+- Bilgi şeridi, Genel bakış “Son kayıtlar” ve Araçlar listesi aynı türetilmiş değeri kullanmaya devam eder; araç düzenleme formunda km/konum alanı açılmaz.
+
+#### 8.5.6 Gelecek modüllerle ilişki (bu aşamada geliştirilmez)
+
+- **Kiralama teslim/iade:** teslimde `rental_handover`, iadede `rental_return` okuması ve konum olayı (teslimde “müşteride”, iadede iade şubesi) aynı işlemde, `source_type/source_id` ile yazılır; aynı kronolojik kurallar geçerlidir. Kaynağa bağlı okuma ancak kaynak akışından düzeltilir; fazla km ücreti bu okumalardan hesaplanır.
+- **Araç değişimi (swap):** eski aracın iade ve yeni aracın teslim okumaları ayrı araçlara yazılır; bir aracın km'si diğerine taşınmaz.
+- **Rezervasyon:** km/konum yazmaz; ileride beklenen konum projeksiyonu için yalnız okur.
+- **Bakım:** servise bırakma konum olayı (“serviste”), bakım tamamlamada okuma; bakım ve lastik hatırlatmaları türetilmiş km'yi kullanır.
+- **Transfer (§59R):** başlangıçta “yolda” konumu ve başlangıç okuması, varışta hedef şube konumu ve bitiş okuması; **ana şube değişmez**. Manuel “yolda” girişi Transfer modülü gelince bu akışa yönlendirilir.
+- **Tedarikçi teslim alma/iade:** dış araçlarda “tedarikçide”/şube konumları ve muayene okumaları.
+- **GPS:** V1 kapsamı dışında. İleride eklenirse ham konum verisi ayrı bir telemetri tablosunda tutulur ve yetkili konum geçmişinin yerine geçmez; yalnız öneri veya karşılaştırma olarak gösterilir.
+
+#### 8.5.7 Test stratejisi
+
+- **Mevcut 112 test korunur:** testler ayrı `acarvo_test` veritabanında çalışır; mevcut beklentiler değiştirilmez. Yalnız izolasyon testindeki RLS tablo listesine yeni tablolar eklenir. Araç oluşturma testleri, yeni sütunlar boş kaldığı için aynı sonucu vermelidir.
+- **Saf fonksiyon testleri** (`packages/shared`): geçerli okumaların seçimi, güncel km, komşu okumalara göre izinli aralık, düzeltme zinciri, büyük artış eşiği, geç giriş işareti, güncel konum ve önceki→sonraki geçiş.
+- **API testleri:**
+  - km girişi, düşüşün reddi (önceki okuma bilgisiyle), geçmiş tarihli girişin komşular arasında kabulü ve sonrakini aşınca reddi, gelecek tarihin reddi, büyük artışta onay zorunluluğu
+  - büyük artışta gerekçesiz isteğin API'de reddi (arayüz atlanmış olsa da), gerekçeyle kabulü ve saklanması
+  - `replace` ve `void` düzeltmeleri, düzeltilen kaydın yeniden düzeltilmesi (zincir), aynı kaydın ikinci düzeltmesinin 409'u, düzeltme değerinin komşulara uymadığında reddi, düzeltme yetkisi
+  - aynı anda iki okuma (biri 409 veya ikisi sırayla geçerli), bayat `expectedVersion` → 409, aynı `clientRequestId` → tek kayıt
+  - konum: izinli türler, “yolda”/“müşteride”/“tedarikçide” manuel reddi, ana şubenin değişmediği, başka şirket şubesinin reddi, şube sınırlı kullanıcının yetkisiz şubeye kaydının 403'ü, şirket geneli kullanıcının başka şubeye kaydı, geçmiş tarihli konumun güncel konumu değiştirmemesi
+  - izolasyon: Drina kullanıcısı → Neretva aracı 404; şube sınırlı kullanıcı → kapsam dışı araç 404; oturumsuz 401; CSRF 403; yetkisiz 403
+  - veritabanı: uygulama rolünün UPDATE/DELETE yapamaması; tetikleyicinin doğrudan eklenen tutarsız okumayı reddetmesi
+  - rol yükseltme: değiştirilmemiş şablonların yeni yetkileri alması, özel ve düzenlenmiş rollerin değişmemesi, ikinci çalıştırmanın etkisizliği
+  - işlem geçmişi kayıtları
+- **Migration kontrolü:** ana veritabanında öncesi/sonrası satır sayıları (araç, okuma, konum, kullanıcı, rol) karşılaştırılır; tek beklenen fark rol yükseltme işlem geçmişi satırlarıdır.
+- **Tarayıcı:** 1440/768/390 px'te sekme, iki form, düzeltme akışı, düşüş ve büyük artış iletileri; yatay taşma ve panel kapatma ölçümü; onaylı V5 tasarımının bozulmadığı ekran görüntüleriyle doğrulanır.
+
+#### 8.5.8 Kapsam
+
+İlk sürüm: manuel km okuması, gerekçeli düzeltme ve düzeltme zinciri, büyük artış onayı, manuel konum güncelleme ve düzeltme, eşzamanlılık ve geçmiş tarih kuralları, 360 Konum ve geçmiş sekmesi, yetkiler ve rol yükseltme, testler. Sonra: gösterge değişimi (ayrı plan), kiralama teslim/iade, rezervasyon projeksiyonu, bakım, transfer, tedarikçi olayları, km eşiklerinin Ayarlar'a taşınması, Araçlar listesinde konum/km filtresi, GPS (V1 dışı).
+
 ## 9. API kuralları
 
 - REST, JSON; tüm uçlar `/api` altında. Liste uçları sunucu tarafında arama, filtre, sıralama ve sayfalama yapar.

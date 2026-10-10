@@ -65,7 +65,7 @@ export async function resetDatabase(): Promise<DevData> {
   await ensureTestDatabase()
   passwordHash ??= await hash(PASSWORD, ARGON2_OPTIONS)
   await ownerDb.execute(
-    sql`truncate vehicle_document_files, document_files, vehicle_documents, company_document_type_settings, vehicle_promo_photos, files, vehicle_location_events, odometer_readings, vehicles, vehicle_classes, audit_log, membership_branches, membership_roles, memberships, roles, branches, sessions, users, companies restart identity cascade`,
+    sql`truncate vehicle_document_files, document_files, vehicle_documents, company_document_type_settings, vehicle_promo_photos, files, vehicle_location_corrections, odometer_corrections, vehicle_location_events, odometer_readings, vehicles, vehicle_classes, audit_log, membership_branches, membership_roles, memberships, roles, branches, sessions, users, companies restart identity cascade`,
   )
   const data = await loadDevData(ownerDb, passwordHash)
   await ensureDevFleet(ownerDb)

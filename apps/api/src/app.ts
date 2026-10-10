@@ -8,6 +8,7 @@ import { authRoutes } from './modules/auth/routes'
 import { sessionStore } from './modules/auth/sessions'
 import { branchRoutes } from './modules/branches/routes'
 import { documentFileRoutes, vehicleDocumentRoutes } from './modules/vehicles/documents'
+import { vehicleHistoryRoutes } from './modules/vehicles/history'
 import { fileRoutes, vehiclePhotoRoutes } from './modules/vehicles/photos'
 import { createScanner, type MalwareScanner } from './lib/malware'
 import { vehicleClassRoutes, vehicleRoutes } from './modules/vehicles/routes'
@@ -40,6 +41,7 @@ export async function buildApp({ env, database, logger = true, scanner }: { env:
   await app.register(vehicleClassRoutes, { prefix: '/api/vehicle-classes' })
   await app.register(fileRoutes, { prefix: '/api/files' })
   await app.register(vehicleDocumentRoutes, { prefix: '/api/vehicles' })
+  await app.register(vehicleHistoryRoutes, { prefix: '/api/vehicles' })
   await app.register(documentFileRoutes, { prefix: '/api/document-files' })
   return app
 }

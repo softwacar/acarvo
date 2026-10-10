@@ -36,7 +36,7 @@ const SORT_SQL: Record<VehicleSort, string> = {
 
 const escapeLike = (s: string) => s.replace(/[\\%_]/g, (m) => `\\${m}`)
 
-/** Current odometer and physical location are the latest events, never columns on the vehicle. */
+/** Current odometer and physical location are the latest effective (not corrected) events, never columns on the vehicle. */
 const FROM = sql`
   from vehicles v
   join vehicle_classes c on c.company_id = v.company_id and c.id = v.class_id
@@ -44,12 +44,14 @@ const FROM = sql`
   left join lateral (
     select r.km, r.occurred_at from odometer_readings r
     where r.company_id = v.company_id and r.vehicle_id = v.id
+      and not exists (select 1 from odometer_corrections oc where oc.company_id = r.company_id and oc.reading_id = r.id)
     order by r.occurred_at desc, r.created_at desc limit 1
   ) o on true
   left join lateral (
     select e.location_type, e.occurred_at, lb.name as branch_name from vehicle_location_events e
     left join branches lb on lb.company_id = e.company_id and lb.id = e.branch_id
     where e.company_id = v.company_id and e.vehicle_id = v.id
+      and not exists (select 1 from vehicle_location_corrections lc where lc.company_id = e.company_id and lc.event_id = e.id)
     order by e.occurred_at desc, e.created_at desc limit 1
   ) l on true`
 
@@ -245,42 +247,6 @@ export function mapUniqueViolation(e: unknown): never {
     throw new AppError(409, 'DUPLICATE_CODE', 'Bu araç kodu zaten kullanılıyor.', { vehicleCode: 'Bu araç kodu zaten kullanılıyor' }, null)
   }
   throw e
-}
-
-/** Odometer and physical location events of one vehicle, newest first. Append-only sources. */
-export async function vehicleHistory(tx: Tx, vehicleId: string) {
-  const odometer = await tx.execute(sql`
-    select r.id, r.km, r.event_type, r.occurred_at, r.note, u.name as recorded_by_name
-    from odometer_readings r left join users u on u.id = r.recorded_by
-    where r.vehicle_id = ${vehicleId}
-    order by r.occurred_at desc, r.created_at desc limit 200`)
-  const locations = await tx.execute(sql`
-    select e.id, e.location_type, e.event_type, e.description, e.occurred_at, b.name as branch_name, b.code as branch_code, u.name as recorded_by_name
-    from vehicle_location_events e
-    left join branches b on b.company_id = e.company_id and b.id = e.branch_id
-    left join users u on u.id = e.recorded_by
-    where e.vehicle_id = ${vehicleId}
-    order by e.occurred_at desc, e.created_at desc limit 200`)
-  return {
-    odometer: (odometer.rows as Row[]).map((r) => ({
-      id: r.id as string,
-      km: Number(r.km),
-      eventType: r.event_type as string,
-      occurredAt: iso(r.occurred_at),
-      note: (r.note as string) ?? null,
-      recordedByName: (r.recorded_by_name as string) ?? null,
-    })),
-    locations: (locations.rows as Row[]).map((r) => ({
-      id: r.id as string,
-      type: r.location_type as LocationSummary['type'],
-      eventType: r.event_type as string,
-      description: (r.description as string) ?? null,
-      branchName: (r.branch_name as string) ?? null,
-      branchCode: (r.branch_code as string) ?? null,
-      occurredAt: iso(r.occurred_at),
-      recordedByName: (r.recorded_by_name as string) ?? null,
-    })),
-  }
 }
 
 /** Audit entries about one vehicle, newest first. */

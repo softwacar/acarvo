@@ -6,7 +6,7 @@ import { odometerReadings, vehicleClasses, vehicleLocationEvents, vehicles } fro
 import { audit } from '../../lib/audit'
 import { AppError, notFound } from '../../lib/errors'
 import { withCompany } from '../../plugins/auth'
-import { assertReferences, assertUnique, getVehicle, inScope, listVehicles, mapUniqueViolation, vehicleActivity, vehicleColumns, vehicleHistory } from './repository'
+import { assertReferences, assertUnique, getVehicle, inScope, listVehicles, mapUniqueViolation, vehicleActivity, vehicleColumns } from './repository'
 
 const idParams = z.object({ id: z.uuid() })
 const VEHICLE_NOT_FOUND = 'Araç bulunamadı veya bu araca erişim yetkiniz yok.'
@@ -20,16 +20,6 @@ export async function vehicleRoutes(app: FastifyInstance) {
     const parsed = idParams.safeParse(req.params)
     if (!parsed.success) throw notFound(VEHICLE_NOT_FOUND)
     return withCompany(req, 'vehicles.read', async (tx, access) => (await getVehicle(tx, access, parsed.data.id)) ?? Promise.reject(notFound(VEHICLE_NOT_FOUND)))
-  })
-
-  /** Odometer and location history; the vehicle must be visible to the user (company + branch scope). */
-  app.get('/:id/history', async (req) => {
-    const parsed = idParams.safeParse(req.params)
-    if (!parsed.success) throw notFound(VEHICLE_NOT_FOUND)
-    return withCompany(req, 'vehicles.read', async (tx, access) => {
-      if (!(await getVehicle(tx, access, parsed.data.id))) throw notFound(VEHICLE_NOT_FOUND)
-      return vehicleHistory(tx, parsed.data.id)
-    })
   })
 
   /** Who created and changed the vehicle, and what. Requires the audit permission. */
@@ -61,6 +51,7 @@ export async function vehicleRoutes(app: FastifyInstance) {
           vehicleId: row!.id,
           km: input.initialOdometerKm,
           eventType: 'initial',
+          sourceType: 'vehicle_create',
           occurredAt: now,
           note: 'Araç kaydında girilen başlangıç kilometresi',
           recordedBy: userId,
@@ -72,6 +63,7 @@ export async function vehicleRoutes(app: FastifyInstance) {
         locationType: 'branch',
         branchId: locationBranchId,
         eventType: 'initial',
+        sourceType: 'vehicle_create',
         description: 'Araç kaydında girilen başlangıç konumu',
         occurredAt: now,
         recordedBy: userId,

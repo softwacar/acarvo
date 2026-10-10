@@ -64,6 +64,20 @@
       "when": 1791583002778,
       "tag": "0008_vehicle_documents_rls",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1791597938045,
+      "tag": "0009_vehicle_history",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1791597967541,
+      "tag": "0010_vehicle_history_rls",
+      "breakpoints": true
     }
   ]
 }

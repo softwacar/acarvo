@@ -11,6 +11,9 @@ export const PERMISSIONS = [
   'vehicles.documents.read',
   'vehicles.documents.manage',
   'vehicles.photos.manage',
+  'vehicles.odometer.record',
+  'vehicles.location.record',
+  'vehicles.history.correct',
   'branches.read',
   'users.read',
   'roles.read',
@@ -50,3 +53,4 @@ export interface ApiError {
 
 export * from './vehicles'
 export * from './documents'
+export * from './history'

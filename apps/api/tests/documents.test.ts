@@ -6,6 +6,7 @@ import { PDFDocument, PDFHexString, PDFName, StandardFonts } from 'pdf-lib'
 import sharp from 'sharp'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { upgradePresetRoles } from '../src/db/role-upgrade'
+import { ROLE_PRESETS } from '../src/modules/auth/roles'
 import type { MalwareScanner, ScanResult } from '../src/lib/malware'
 import { appPool, asApp, asOwner, Client, type DevData, EMAILS, makeApp, ownerPool, resetDatabase, TEST_STORAGE } from './helpers'
 import { drizzle } from 'drizzle-orm/node-postgres'
@@ -134,18 +135,21 @@ describe('types and company decisions', () => {
     const before = (await asOwner(null, `select (select count(*) from users) u, (select count(*) from companies) c`)).rows[0]
     try {
       const first = await upgradePresetRoles(owner)
-      expect(first.filter((r) => r.company === 'Drina Rent a Car')).toEqual([{ company: 'Drina Rent a Car', role: 'Sahip', added: ['vehicles.documents.read'] }])
+      // A v1 Sahip is brought up to the current preset; the documents read permission is part of what it gains.
+      const gained = ROLE_PRESETS.Sahip!.filter((p) => !v1Sahip.includes(p))
+      expect(gained).toContain('vehicles.documents.read')
+      expect(first.filter((r) => r.company === 'Drina Rent a Car')).toEqual([{ company: 'Drina Rent a Car', role: 'Sahip', added: gained }])
       expect(await upgradePresetRoles(owner)).toEqual([])
       const roles = (await asOwner(data.companies.drina, `select name, permissions from roles order by name`)).rows as { name: string; permissions: string[] }[]
-      expect(roles.find((r) => r.name === 'Sahip')!.permissions.sort()).toEqual([...v1Sahip, 'vehicles.documents.read'].sort())
+      expect(roles.find((r) => r.name === 'Sahip')!.permissions.sort()).toEqual([...ROLE_PRESETS.Sahip!].sort())
       expect(roles.find((r) => r.name === 'Yönetici')!.permissions).toEqual(['vehicles.read', 'branches.read', 'users.read'])
       expect(roles.find((r) => r.name === 'Muhasebe')!.permissions).not.toContain('vehicles.documents.read')
       expect((await asOwner(null, `select (select count(*) from users) u, (select count(*) from companies) c`)).rows[0]).toEqual(before)
       const log = await asOwner(data.companies.drina, `select summary from audit_log where action = 'role.preset_upgrade'`)
       expect(log.rows).toHaveLength(1)
     } finally {
-      await asOwner(data.companies.drina, `update roles set permissions = $1 where name = 'Sahip'`, [[...v1Sahip, 'vehicles.documents.read']])
-      await asOwner(data.companies.drina, `update roles set permissions = array['vehicles.read','vehicles.create','vehicles.update','vehicles.documents.read','vehicles.documents.manage','vehicles.photos.manage','branches.read','users.read'] where name = 'Yönetici'`)
+      await asOwner(data.companies.drina, `update roles set permissions = $1 where name = 'Sahip'`, [[...ROLE_PRESETS.Sahip!]])
+      await asOwner(data.companies.drina, `update roles set permissions = $1 where name = 'Yönetici'`, [[...ROLE_PRESETS['Yönetici']!]])
     }
   })
 

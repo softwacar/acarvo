@@ -224,9 +224,14 @@ export const vehicles = pgTable(
   ],
 )
 
-export const ODOMETER_EVENTS = ['initial', 'correction'] as const
+export const ODOMETER_EVENTS = ['initial', 'manual', 'correction'] as const
+/** Where a reading or location event came from. Later modules add rental, transfer, maintenance and supplier sources. */
+export const HISTORY_SOURCES = ['vehicle_create', 'manual', 'correction'] as const
 
-/** Append-only. The latest reading (by time) is the vehicle's current odometer. */
+/**
+ * Append-only. The vehicle's current odometer is the latest *effective* reading by time, where
+ * effective means no row in odometer_corrections points at it (docs §8.5).
+ */
 export const odometerReadings = pgTable(
   'odometer_readings',
   {
@@ -239,17 +244,52 @@ export const odometerReadings = pgTable(
     note: text('note'),
     recordedBy: uuid('recorded_by').references(() => users.id),
     createdAt: createdAt(),
+    // Added in 0009 (nullable, existing rows untouched).
+    sourceType: text('source_type'),
+    sourceId: uuid('source_id'),
+    clientRequestId: uuid('client_request_id'),
+    jumpReason: text('jump_reason'),
   },
   (t) => [
+    unique('odometer_readings_company_id_key').on(t.companyId, t.id),
     index('odometer_vehicle_time_idx').on(t.companyId, t.vehicleId, t.occurredAt),
+    uniqueIndex('odometer_readings_request_key').on(t.companyId, t.clientRequestId).where(sql`${t.clientRequestId} is not null`),
+    uniqueIndex('odometer_readings_correction_key').on(t.companyId, t.sourceId).where(sql`${t.sourceType} = 'correction'`),
     foreignKey({ columns: [t.companyId, t.vehicleId], foreignColumns: [vehicles.companyId, vehicles.id] }),
     check('odometer_km_check', sql`${t.km} between 0 and 3000000`),
   ],
 )
 
+export const CORRECTION_ACTIONS = ['replace', 'void'] as const
+
+/** A reading taken out of the effective history, with a reason. At most one per reading. */
+export const odometerCorrections = pgTable(
+  'odometer_corrections',
+  {
+    id: id(),
+    companyId: uuid('company_id').notNull().references(() => companies.id),
+    vehicleId: uuid('vehicle_id').notNull(),
+    readingId: uuid('reading_id').notNull(),
+    action: text('action', { enum: CORRECTION_ACTIONS }).notNull(),
+    reason: text('reason').notNull(),
+    clientRequestId: uuid('client_request_id'),
+    createdBy: uuid('created_by').references(() => users.id),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    unique('odometer_corrections_company_id_key').on(t.companyId, t.id),
+    unique('odometer_corrections_reading_key').on(t.companyId, t.readingId),
+    uniqueIndex('odometer_corrections_request_key').on(t.companyId, t.clientRequestId).where(sql`${t.clientRequestId} is not null`),
+    index('odometer_corrections_vehicle_idx').on(t.companyId, t.vehicleId),
+    foreignKey({ columns: [t.companyId, t.vehicleId], foreignColumns: [vehicles.companyId, vehicles.id] }),
+    foreignKey({ columns: [t.companyId, t.readingId], foreignColumns: [odometerReadings.companyId, odometerReadings.id] }),
+    check('odometer_corrections_reason_check', sql`char_length(${t.reason}) between 5 and 300`),
+  ],
+)
+
 export const LOCATION_TYPES = ['branch', 'in_transit', 'with_customer', 'service_provider', 'supplier'] as const
 
-/** Append-only physical location history. Not live GPS. */
+/** Append-only physical location history. Not live GPS. Current location = latest effective event by time. */
 export const vehicleLocationEvents = pgTable(
   'vehicle_location_events',
   {
@@ -263,12 +303,45 @@ export const vehicleLocationEvents = pgTable(
     occurredAt: timestamp('occurred_at', { withTimezone: true }).notNull(),
     recordedBy: uuid('recorded_by').references(() => users.id),
     createdAt: createdAt(),
+    // Added in 0009 (nullable, existing rows untouched).
+    sourceType: text('source_type'),
+    sourceId: uuid('source_id'),
+    reason: text('reason'),
+    clientRequestId: uuid('client_request_id'),
   },
   (t) => [
+    unique('vehicle_location_events_company_id_key').on(t.companyId, t.id),
     index('location_vehicle_time_idx').on(t.companyId, t.vehicleId, t.occurredAt),
+    uniqueIndex('location_events_request_key').on(t.companyId, t.clientRequestId).where(sql`${t.clientRequestId} is not null`),
+    uniqueIndex('location_events_correction_key').on(t.companyId, t.sourceId).where(sql`${t.sourceType} = 'correction'`),
     foreignKey({ columns: [t.companyId, t.vehicleId], foreignColumns: [vehicles.companyId, vehicles.id] }),
     foreignKey({ columns: [t.companyId, t.branchId], foreignColumns: [branches.companyId, branches.id] }),
     check('location_branch_check', sql`${t.locationType} <> 'branch' or ${t.branchId} is not null`),
+  ],
+)
+
+/** A location event taken out of the effective history, with a reason. At most one per event. */
+export const vehicleLocationCorrections = pgTable(
+  'vehicle_location_corrections',
+  {
+    id: id(),
+    companyId: uuid('company_id').notNull().references(() => companies.id),
+    vehicleId: uuid('vehicle_id').notNull(),
+    eventId: uuid('event_id').notNull(),
+    action: text('action', { enum: CORRECTION_ACTIONS }).notNull(),
+    reason: text('reason').notNull(),
+    clientRequestId: uuid('client_request_id'),
+    createdBy: uuid('created_by').references(() => users.id),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    unique('vehicle_location_corrections_company_id_key').on(t.companyId, t.id),
+    unique('vehicle_location_corrections_event_key').on(t.companyId, t.eventId),
+    uniqueIndex('vehicle_location_corrections_request_key').on(t.companyId, t.clientRequestId).where(sql`${t.clientRequestId} is not null`),
+    index('vehicle_location_corrections_vehicle_idx').on(t.companyId, t.vehicleId),
+    foreignKey({ columns: [t.companyId, t.vehicleId], foreignColumns: [vehicles.companyId, vehicles.id] }),
+    foreignKey({ columns: [t.companyId, t.eventId], foreignColumns: [vehicleLocationEvents.companyId, vehicleLocationEvents.id] }),
+    check('vehicle_location_corrections_reason_check', sql`char_length(${t.reason}) between 5 and 300`),
   ],
 )
 
