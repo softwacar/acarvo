@@ -504,3 +504,93 @@ export const vehicleDocumentFiles = pgTable(
     check('vehicle_document_files_version_check', sql`${t.versionNo} >= 1`),
   ],
 )
+
+// ---------------------------------------------------------------------------
+// Customers (people), M1 — docs/MUSTERILER_KURUMSAL_HESAPLAR_PLANI.md §4, §15.
+// A person belongs to exactly one company: no shared pool, no cross-company identity or matching.
+// Identity / passport / licence numbers are not stored here (M2, encrypted, in their own table).
+
+/** Per-company counters for human-readable numbers (M-000123, K-00042). Never reused. */
+export const companySequences = pgTable(
+  'company_sequences',
+  {
+    companyId: uuid('company_id').notNull().references(() => companies.id),
+    kind: text('kind', { enum: ['customer', 'corporate_account'] }).notNull(),
+    nextValue: bigint('next_value', { mode: 'number' }).notNull(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.companyId, t.kind] }),
+    check('company_sequences_kind_check', sql`${t.kind} in ('customer', 'corporate_account')`),
+    check('company_sequences_next_check', sql`${t.nextValue} >= 1`),
+  ],
+)
+
+export const customers = pgTable(
+  'customers',
+  {
+    id: id(),
+    companyId: uuid('company_id').notNull().references(() => companies.id),
+    customerNo: text('customer_no').notNull(),
+    givenName: text('given_name'),
+    familyName: text('family_name'),
+    displayName: text('display_name').notNull(),
+    /** Accent- and case-free name for search and duplicate suggestions. */
+    nameNormalized: text('name_normalized').notNull(),
+    phoneRaw: text('phone_raw'),
+    phoneE164: text('phone_e164'),
+    email: text('email'),
+    residency: text('residency', { enum: ['local', 'foreign'] }).notNull(),
+    nationality: text('nationality'),
+    dateOfBirth: date('date_of_birth'),
+    addressLine1: text('address_line1'),
+    addressLine2: text('address_line2'),
+    city: text('city'),
+    postalCode: text('postal_code'),
+    region: text('region'),
+    addressCountry: text('address_country'),
+    preferredLanguage: text('preferred_language'),
+    contactPreference: text('contact_preference'),
+    operationalNote: text('operational_note'),
+    status: text('status', { enum: ['active', 'archived', 'merged', 'anonymized'] }).notNull().default('active'),
+    archivedAt: timestamp('archived_at', { withTimezone: true }),
+    archivedReason: text('archived_reason'),
+    archivedBy: uuid('archived_by').references(() => users.id),
+    /** Reserved for M5 (merge) and M6 (privacy requests); not used in M1. */
+    mergedIntoId: uuid('merged_into_id'),
+    anonymizedAt: timestamp('anonymized_at', { withTimezone: true }),
+    processingRestricted: boolean('processing_restricted').notNull().default(false),
+    /** Where the record was opened. Informational only: every authorised user of the company can find the customer. */
+    createdBranchId: uuid('created_branch_id'),
+    version: integer('version').notNull().default(1),
+    createdAt: createdAt(),
+    createdBy: uuid('created_by').references(() => users.id),
+    updatedAt: updatedAt(),
+    updatedBy: uuid('updated_by').references(() => users.id),
+  },
+  (t) => [
+    unique('customers_company_id_key').on(t.companyId, t.id),
+    unique('customers_company_no_key').on(t.companyId, t.customerNo),
+    index('customers_company_name_idx').on(t.companyId, t.status, t.nameNormalized),
+    index('customers_company_phone_idx').on(t.companyId, t.phoneE164),
+    index('customers_company_email_idx').on(t.companyId, t.email),
+    index('customers_company_created_idx').on(t.companyId, t.createdAt),
+    foreignKey({ columns: [t.companyId, t.createdBranchId], foreignColumns: [branches.companyId, branches.id] }),
+    foreignKey({ columns: [t.companyId, t.mergedIntoId], foreignColumns: [t.companyId, t.id] }),
+    check('customers_no_check', sql`${t.customerNo} ~ '^M-[0-9]{6,}$'`),
+    check('customers_name_check', sql`coalesce(btrim(${t.givenName}), '') <> '' or coalesce(btrim(${t.familyName}), '') <> ''`),
+    check('customers_contact_check', sql`${t.phoneE164} is not null or ${t.email} is not null or ${t.status} = 'anonymized'`),
+    check('customers_phone_check', sql`${t.phoneE164} is null or ${t.phoneE164} ~ '^[+][1-9][0-9]{6,14}$'`),
+    check('customers_email_check', sql`${t.email} is null or (${t.email} = lower(${t.email}) and ${t.email} like '%_@_%')`),
+    check('customers_residency_check', sql`${t.residency} in ('local', 'foreign')`),
+    check('customers_status_check', sql`${t.status} in ('active', 'archived', 'merged', 'anonymized')`),
+    check('customers_country_check', sql`(${t.nationality} is null or ${t.nationality} ~ '^[A-Z]{2}$') and (${t.addressCountry} is null or ${t.addressCountry} ~ '^[A-Z]{2}$')`),
+    check('customers_dob_check', sql`${t.dateOfBirth} is null or ${t.dateOfBirth} >= date '1900-01-01'`),
+    check('customers_archive_check', sql`(${t.status} = 'archived') = (${t.archivedAt} is not null and ${t.archivedReason} is not null)`),
+    check(
+      'customers_archive_reason_check',
+      sql`${t.archivedReason} is null or ${t.archivedReason} in ('duplicate', 'inactive', 'customer_request', 'entry_error', 'other')`,
+    ),
+    check('customers_merged_check', sql`(${t.status} = 'merged') = (${t.mergedIntoId} is not null) and ${t.mergedIntoId} is distinct from ${t.id}`),
+    check('customers_version_check', sql`${t.version} >= 1`),
+  ],
+)

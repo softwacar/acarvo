@@ -14,6 +14,8 @@ export const PERMISSIONS = [
   'vehicles.odometer.record',
   'vehicles.location.record',
   'vehicles.history.correct',
+  'customers.read',
+  'customers.manage',
   'branches.read',
   'users.read',
   'roles.read',
@@ -55,3 +57,4 @@ export * from './vehicles'
 export * from './documents'
 export * from './history'
 export * from './time'
+export * from './customers'

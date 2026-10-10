@@ -12,6 +12,8 @@ export const ROLE_PRESETS: Record<string, readonly Permission[]> = {
     'vehicles.odometer.record',
     'vehicles.location.record',
     'vehicles.history.correct',
+    'customers.read',
+    'customers.manage',
     'branches.read',
     'users.read',
     'roles.read',
@@ -27,10 +29,22 @@ export const ROLE_PRESETS: Record<string, readonly Permission[]> = {
     'vehicles.odometer.record',
     'vehicles.location.record',
     'vehicles.history.correct',
+    'customers.read',
+    'customers.manage',
     'branches.read',
     'users.read',
   ],
-  Operasyon: ['vehicles.read', 'vehicles.documents.read', 'vehicles.documents.manage', 'vehicles.photos.manage', 'vehicles.odometer.record', 'vehicles.location.record', 'branches.read'],
+  Operasyon: [
+    'vehicles.read',
+    'vehicles.documents.read',
+    'vehicles.documents.manage',
+    'vehicles.photos.manage',
+    'vehicles.odometer.record',
+    'vehicles.location.record',
+    'customers.read',
+    'customers.manage',
+    'branches.read',
+  ],
 }
 
 /**
@@ -54,6 +68,21 @@ export const ROLE_PRESET_HISTORY: { version: number; presets: Record<string, rea
       Sahip: ['vehicles.read', 'vehicles.create', 'vehicles.update', 'vehicles.documents.read', 'vehicles.documents.manage', 'vehicles.photos.manage', 'branches.read', 'users.read', 'roles.read', 'audit.read'],
       Yönetici: ['vehicles.read', 'vehicles.create', 'vehicles.update', 'vehicles.documents.read', 'vehicles.documents.manage', 'vehicles.photos.manage', 'branches.read', 'users.read'],
       Operasyon: ['vehicles.read', 'vehicles.documents.read', 'vehicles.documents.manage', 'vehicles.photos.manage', 'branches.read'],
+    },
+  },
+  {
+    // Odometer and location records (docs §8.5) added vehicles.odometer.record, vehicles.location.record and vehicles.history.correct.
+    version: 3,
+    presets: {
+      Sahip: [
+        'vehicles.read', 'vehicles.create', 'vehicles.update', 'vehicles.documents.read', 'vehicles.documents.manage', 'vehicles.photos.manage',
+        'vehicles.odometer.record', 'vehicles.location.record', 'vehicles.history.correct', 'branches.read', 'users.read', 'roles.read', 'audit.read',
+      ],
+      Yönetici: [
+        'vehicles.read', 'vehicles.create', 'vehicles.update', 'vehicles.documents.read', 'vehicles.documents.manage', 'vehicles.photos.manage',
+        'vehicles.odometer.record', 'vehicles.location.record', 'vehicles.history.correct', 'branches.read', 'users.read',
+      ],
+      Operasyon: ['vehicles.read', 'vehicles.documents.read', 'vehicles.documents.manage', 'vehicles.photos.manage', 'vehicles.odometer.record', 'vehicles.location.record', 'branches.read'],
     },
   },
 ]

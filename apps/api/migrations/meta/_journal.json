@@ -85,6 +85,20 @@
       "when": 1791604130046,
       "tag": "0011_audit_entity_index",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1791624274537,
+      "tag": "0012_customers",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1791624290932,
+      "tag": "0013_customers_rls",
+      "breakpoints": true
     }
   ]
 }
