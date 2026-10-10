@@ -2,7 +2,8 @@ import { defineConfig } from 'vitest/config'
 
 // Connection strings come from the local .env written by scripts/setup-db.ps1.
 try {
-  process.loadEnvFile(new URL('../../.env', import.meta.url))
+  // ACARVO_ENV_FILE lets a second worktree use the repository's local .env without copying it.
+  process.loadEnvFile(process.env.ACARVO_ENV_FILE ?? new URL('../../.env', import.meta.url))
 } catch {
   // tests/helpers.ts reports the missing configuration
 }

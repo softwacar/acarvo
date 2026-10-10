@@ -10,7 +10,9 @@ import { defineConfig, devices } from '@playwright/test'
  * never used. Each run resets acarvo_test with a fresh random password (no personal credentials).
  */
 const root = path.resolve(import.meta.dirname, '../..')
-const env = parseEnv(readFileSync(path.join(root, '.env'), 'utf8'))
+// ACARVO_ENV_FILE lets a second worktree use the repository's local .env without copying it.
+export const ENV_FILE = process.env.ACARVO_ENV_FILE ?? path.join(root, '.env')
+const env = parseEnv(readFileSync(ENV_FILE, 'utf8'))
 const testUrl = env.TEST_DATABASE_URL
 const testOwnerUrl = env.TEST_DATABASE_OWNER_URL
 const dbName = (url?: string) => (url ? decodeURIComponent(new URL(url).pathname.slice(1)) : '')
