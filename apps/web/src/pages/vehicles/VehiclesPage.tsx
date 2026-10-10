@@ -253,14 +253,14 @@ export function VehiclesPage() {
             </FilterSelect>
             <FilterSelect label="Güncel konum" value={search.location} onChange={(location) => set({ location: location as VehicleSearch['location'] })}>
               <option value="">Tüm konumlar</option>
-              <option value="away">Ana şube dışında</option>
+              <option value="away">Şube dışında</option>
               <option value="service">Serviste</option>
             </FilterSelect>
             {canDocs && (
               <FilterSelect label="Belgeler" value={search.documents} onChange={(documents) => set({ documents: documents as VehicleSearch['documents'] })}>
                 <option value="">Tüm belgeler</option>
-                <option value="attention">Belge uyarısı olanlar</option>
-                <option value="critical">Kritik belge sorunu</option>
+                <option value="attention">Belge uyarısı</option>
+                <option value="critical">Kritik belge</option>
               </FilterSelect>
             )}
             {filtersActive && (
@@ -319,7 +319,7 @@ export function VehiclesPage() {
                     <th scope="col" className="hidden w-[96px] px-3 font-medium xl:table-cell">
                       Yakıt / vites
                     </th>
-                    <th scope="col" className="w-[116px] px-3 font-medium">
+                    <th scope="col" className="w-[116px] px-3 font-medium xl:w-[156px]">
                       Durum
                     </th>
                     {canEdit && (
