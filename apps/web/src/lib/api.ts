@@ -1,4 +1,4 @@
-import type { ApiError, SessionInfo, VehicleActivityItem, VehiclePhoto, VehiclePhotoList, VehicleClassSummary, VehicleDetail, VehicleHistory, VehicleListResponse } from '@acarvo/shared'
+import type { ApiError, SessionInfo, VehicleActivityItem, VehicleDocumentDetail, VehicleDocumentsResponse, VehiclePhoto, VehiclePhotoList, VehicleClassSummary, VehicleDetail, VehicleHistory, VehicleListResponse } from '@acarvo/shared'
 
 export class ApiRequestError extends Error {
   constructor(
@@ -142,4 +142,18 @@ export const photosApi = {
   reorder: (vehicleId: string, photoIds: string[]) => api<VehiclePhotoList>(`/vehicles/${vehicleId}/photos/order`, { method: 'PUT', body: { photoIds } }),
   makePrimary: (vehicleId: string, photoId: string) => api<VehiclePhotoList>(`/vehicles/${vehicleId}/photos/${photoId}/primary`, { method: 'POST' }),
   remove: (vehicleId: string, photoId: string) => api<VehiclePhotoList>(`/vehicles/${vehicleId}/photos/${photoId}`, { method: 'DELETE' }),
+}
+
+export const documentsApi = {
+  list: (vehicleId: string) => api<VehicleDocumentsResponse>(`/vehicles/${vehicleId}/documents`),
+  get: (vehicleId: string, docId: string) => api<VehicleDocumentDetail>(`/vehicles/${vehicleId}/documents/${docId}`),
+  create: (vehicleId: string, body: unknown) => api<VehicleDocumentDetail>(`/vehicles/${vehicleId}/documents`, { method: 'POST', body }),
+  update: (vehicleId: string, docId: string, body: unknown) => api<VehicleDocumentDetail>(`/vehicles/${vehicleId}/documents/${docId}`, { method: 'PUT', body }),
+  activate: (vehicleId: string, docId: string, version: number) =>
+    api<VehicleDocumentDetail>(`/vehicles/${vehicleId}/documents/${docId}/activate`, { method: 'POST', body: { version } }),
+  renew: (vehicleId: string, docId: string, body: unknown) => api<VehicleDocumentDetail>(`/vehicles/${vehicleId}/documents/${docId}/renew`, { method: 'POST', body }),
+  void: (vehicleId: string, docId: string, version: number, reason: string) =>
+    api<VehicleDocumentDetail>(`/vehicles/${vehicleId}/documents/${docId}/void`, { method: 'POST', body: { version, reason } }),
+  upload: (vehicleId: string, docId: string, file: File, onProgress?: (f: number) => void) =>
+    uploadFile<VehicleDocumentDetail>(`/vehicles/${vehicleId}/documents/${docId}/files`, file, onProgress),
 }

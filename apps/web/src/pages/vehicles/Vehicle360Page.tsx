@@ -18,7 +18,6 @@ import {
   MapPin,
   PencilSimple,
   Tag,
-  WarningCircle,
   Wrench,
 } from '@phosphor-icons/react'
 import { useQuery } from '@tanstack/react-query'
@@ -27,7 +26,7 @@ import { DropdownMenu } from 'radix-ui'
 import { type ReactNode, useEffect, useRef, useState } from 'react'
 import { Plate } from '@/components/Plate'
 import { ErrorState, StatePanel } from '@/components/states'
-import { ApiRequestError, vehicle360Api, vehiclesApi } from '@/lib/api'
+import { ApiRequestError, documentsApi, vehicle360Api, vehiclesApi } from '@/lib/api'
 import { cn } from '@/lib/utils'
 import {
   ACQUISITION_LABELS,
@@ -42,6 +41,7 @@ import {
 } from '@/lib/vehicle-labels'
 import { can, useSession } from '@/session'
 import { listSearchToReturnTo } from './search'
+import { VehicleDocuments } from './VehicleDocuments'
 import { VehicleGallery } from './VehicleGallery'
 
 // ---------------------------------------------------------------------------
@@ -135,7 +135,7 @@ const btnSecondary =
   'inline-flex h-10 items-center gap-2 rounded-lg border border-line bg-surface px-4 font-medium text-ink shadow-[0_1px_2px_rgb(16_24_40/0.04)] transition-colors hover:bg-line-soft'
 
 /** Spec §13.3 quick actions. Shown so the user knows where they will live; each says why it is not available yet. */
-const LATER_ACTIONS = ['Yeni rezervasyon', 'Kiralama aç', 'Müsaitliği kontrol et', 'Bakım planla', 'Hasar bildir', 'Ceza kaydet', 'Transfer başlat', 'Belge ekle']
+const LATER_ACTIONS = ['Yeni rezervasyon', 'Kiralama aç', 'Müsaitliği kontrol et', 'Bakım planla', 'Hasar bildir', 'Ceza kaydet', 'Transfer başlat']
 
 function MoreMenu({ vehicleId, canEdit }: { vehicleId: string; canEdit: boolean }) {
   const navigate = useNavigate()
@@ -210,9 +210,39 @@ function Fact({ icon: Ico, label, value, note, muted }: { icon: Icon; label: str
   )
 }
 
+/** One-line document headline from the server's overview (facts strip, overview list). */
+function useDocumentsHeadline(vehicleId: string) {
+  const session = useSession()
+  const allowed = can(session, 'vehicles.documents.read')
+  const q = useQuery({ queryKey: ['vehicle-documents', session.company?.id, vehicleId], queryFn: () => documentsApi.list(vehicleId), enabled: allowed })
+  if (!allowed) return { value: 'Yetki gerekli', note: 'Belge görüntüleme yetkisi yok', tone: 'muted' as const }
+  if (!q.data) return { value: '…', note: 'Yükleniyor', tone: 'muted' as const }
+  const { overview, types } = q.data
+  const h = overview.headline
+  const counts = [overview.critical && `${overview.critical} kritik`, overview.warning && `${overview.warning} uyarı`, overview.ok && `${overview.ok} geçerli`].filter(Boolean).join(' · ')
+  if (!h) return { value: overview.ok ? 'Tümü geçerli' : 'Kayıt yok', note: overview.ok ? counts : 'Zorunlu belge yok', tone: overview.ok ? ('ok' as const) : ('muted' as const) }
+  const name = types.find((t) => t.code === h.code)?.name ?? ''
+  const text: Record<string, string> = {
+    expiring: `${name} · ${h.daysLeft === 0 ? 'bugün bitiyor' : `${h.daysLeft} gün`}`,
+    expired: `${name} süresi dolmuş`,
+    missing: `${name} eksik`,
+    not_started: `${name} başlamadı`,
+    draft: `${name} taslak`,
+    valid: 'Tümü geçerli',
+    renewed: 'Tümü geçerli',
+  }
+  return { value: text[h.state] ?? name, note: counts, tone: h.level === 'critical' ? ('alert' as const) : h.level === 'warning' ? ('hold' as const) : ('ok' as const) }
+}
+
 function locationText(v: { location: VehicleDetail['location'] }) {
   if (!v.location) return null
   return v.location.type === 'branch' ? v.location.branchName : LOCATION_LABELS[v.location.type]
+}
+
+function DocumentsFact({ vehicleId }: { vehicleId: string }) {
+  const h = useDocumentsHeadline(vehicleId)
+  const tone = { alert: 'text-alert', hold: 'text-hold', ok: '', muted: '' }[h.tone]
+  return <Fact icon={Files} label="Belgeler" value={<span className={tone}>{h.value}</span>} muted={h.tone === 'muted'} note={h.note} />
 }
 
 function FactsStrip({ v }: { v: VehicleDetail }) {
@@ -242,7 +272,7 @@ function FactsStrip({ v }: { v: VehicleDetail }) {
         muted={!v.acquisitionType}
         note={v.acquisitionDate ? formatDate(v.acquisitionDate) : 'Edinim tarihi girilmemiş'}
       />
-      <Fact icon={Files} label="Belgeler" value="Kayıt yok" muted note="Yükleme sonraki aşamada" />
+      <DocumentsFact vehicleId={v.id} />
       <Fact
         icon={ClockCounterClockwise}
         label="Son değişiklik"
@@ -444,6 +474,14 @@ const ACTION_TITLES: Record<string, string> = {
   'vehicle.photo.remove': 'Tanıtım fotoğrafı kaldırıldı',
   'vehicle.photo.primary': 'Ana fotoğraf değiştirildi',
   'vehicle.photo.reorder': 'Fotoğraf sırası değiştirildi',
+  'vehicle.document.create': 'Belge kaydı eklendi',
+  'vehicle.document.update': 'Belge bilgileri düzeltildi',
+  'vehicle.document.activate': 'Belge etkinleştirildi',
+  'vehicle.document.renew': 'Belge yenilendi (yeni dönem)',
+  'vehicle.document.void': 'Belge geçersiz sayıldı',
+  'vehicle.document.file_add': 'Belge dosyası yüklendi',
+  'vehicle.document.view': 'Belge dosyası görüntülendi',
+  'vehicle.document.download': 'Belge dosyası indirildi',
 }
 
 function ActivityEntry({ a }: { a: VehicleActivityItem }) {
@@ -515,13 +553,13 @@ function recentItems(history: VehicleHistory | undefined): TimelineItem[] {
 function Overview({ v, history, onTab, canEdit }: { v: VehicleDetail; history?: VehicleHistory; onTab: (t: VehicleTab) => void; canEdit: boolean }) {
   const navigate = useNavigate()
   const items = recentItems(history).slice(0, 5)
+  const docs = useDocumentsHeadline(v.id)
   const edit = () => navigate({ to: '/araclar/$vehicleId/duzenle', params: { vehicleId: v.id }, search: { geri: 'arac' } })
   const links: [VehicleTab, Icon, string][] = [
     ['musaitlik', CalendarCheck, 'Müsaitlik ve planlama'],
     ['kiralamalar', Key, 'Kiralamalar ve rezervasyonlar'],
     ['kontroller', ClipboardText, 'Teslime hazırlık ve kontroller'],
     ['bakim', Wrench, 'Bakım ve lastikler'],
-    ['belgeler', Files, 'Belgeler ve açık riskler'],
     ['finans', Coins, 'Finans ve performans'],
   ]
   return (
@@ -614,6 +652,13 @@ function Overview({ v, history, onTab, canEdit }: { v: VehicleDetail; history?: 
 
         <Panel title="Bağlı kayıtlar">
           <ul className="-mx-2">
+            <li>
+              <button type="button" onClick={() => onTab('belgeler')} className="flex h-10 w-full items-center gap-3 rounded-lg px-2 text-left hover:bg-ground">
+                <Files size={17} className="shrink-0 text-ink-3" />
+                <span className="flex-1 truncate text-ink">Belgeler</span>
+                <span className={cn('truncate text-[12.5px]', { alert: 'font-medium text-alert', hold: 'font-medium text-hold', ok: 'text-ok', muted: 'text-ink-3' }[docs.tone])}>{docs.value}</span>
+              </button>
+            </li>
             {links.map(([tab, Ico, label]) => (
               <li key={tab}>
                 <button type="button" onClick={() => onTab(tab)} className="flex h-10 w-full items-center gap-3 rounded-lg px-2 text-left hover:bg-ground">
@@ -657,52 +702,6 @@ function Pending({ tab }: { tab: VehicleTab }) {
         </div>
       </div>
     </section>
-  )
-}
-
-const DOCUMENT_TYPES = ['Ruhsat', 'Trafik sigortası', 'Kasko', 'Muayene']
-
-function Documents() {
-  return (
-    <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_380px]">
-      <Panel title="Belgeler ve süreler">
-        <div className="-mx-5 overflow-x-auto">
-          <table className="w-full min-w-[520px] text-[13.5px]">
-            <thead>
-              <tr className="border-y border-line bg-ground/50 text-left text-[12.5px] text-ink-2">
-                <th className="h-10 px-5 font-medium">Belge</th>
-                <th className="h-10 px-5 font-medium">Referans</th>
-                <th className="h-10 px-5 font-medium">Geçerlilik</th>
-                <th className="h-10 px-5 font-medium">Durum</th>
-              </tr>
-            </thead>
-            <tbody>
-              {DOCUMENT_TYPES.map((d) => (
-                <tr key={d} className="border-b border-line-soft last:border-b-0">
-                  <td className="h-12 px-5 font-medium">{d}</td>
-                  <td className="h-12 px-5 text-ink-3">—</td>
-                  <td className="h-12 px-5 text-ink-3">—</td>
-                  <td className="h-12 px-5 text-ink-2">Yüklenmedi</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-        <p className="mt-4 flex items-start gap-1.5 text-[13px] text-ink-2">
-          <Files size={15} className="mt-0.5 shrink-0 text-ink-3" />
-          Belge yükleme ve süre takibi sonraki aşamada. Kayıtlı belge yok.
-        </p>
-      </Panel>
-      <Panel title="Açık riskler">
-        <div className="grid place-items-center rounded-lg border border-dashed border-line px-6 py-8 text-center">
-          <div>
-            <WarningCircle size={22} className="mx-auto text-ink-3" />
-            <p className="mt-2 font-medium">Henüz bağlı değil</p>
-            <p className="mt-1 text-[13px] text-ink-2">Hasar, ceza ve olay kayıtları ilgili Operasyon modülleriyle bu araca bağlanacak.</p>
-          </div>
-        </div>
-      </Panel>
-    </div>
   )
 }
 
@@ -908,7 +907,7 @@ export function Vehicle360Page() {
       <Tabs tab={tab} onTab={onTab} counts={counts} />
       <div key={tab} id="vehicle-tabpanel" role="tabpanel" aria-labelledby={`tab-${tab}`} className="mx-auto max-w-[1400px] animate-fade px-4 py-6 lg:px-8">
         {tab === 'genel' && <Overview v={v} history={history.data} onTab={onTab} canEdit={canEdit} />}
-        {tab === 'belgeler' && <Documents />}
+        {tab === 'belgeler' && <VehicleDocuments vehicleId={v.id} plate={v.plate} />}
         {tab === 'gecmis' && <HistoryTab history={history.data} isLoading={history.isPending} vehicleId={v.id} />}
         {PENDING[tab] && <Pending tab={tab} />}
       </div>

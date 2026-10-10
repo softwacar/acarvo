@@ -185,7 +185,7 @@ Spec §13.3'e göre ayrım:
 
 API: `GET /api/vehicles/:id/history` (vehicles.read) ve `GET /api/vehicles/:id/activity` (audit.read). İkisi de önce aracın şirket ve şube kapsamında görünür olduğunu doğrular; değilse 404. Sekme adres çubuğunda (`?sekme=`) tutulur.
 
-### 8.4 Araç belgeleri — uygulama planı (onaylı, henüz uygulanmadı)
+### 8.4 Araç belgeleri — uygulama planı (onaylı, uygulandı 10.10.2026)
 
 Kaynak: spec §59C (türler, alanlar, 30/15/7 gün uyarıları), §13.3 Sekme 6, §33 (Belge Merkezi ikinci depo değildir; belgenin asıl kaydı sahibinin altında kalır), §59F.4 (şirket tanımlı türler), §59D (readiness), §9 (kiralama dosyası belge sürümünü sabitler). Kullanıcı kararları: şirket bazlı zorunluluk, dosyasız kayıt, ayrı görüntüleme yetkisi, görüntüleme/indirme kaydı.
 
@@ -225,7 +225,7 @@ Tek belge için (öncelik sırasıyla):
 
 Araç × tür özeti (Belgeler tablosundaki satır):
 - **Güncel** = bugünü kapsayan `active` kayıtlar arasında son geçerlilik tarihi en geç olan. **Sıradaki** = başlangıcı ileride olan en erken `active` kayıt.
-- Güncel varsa durum ondan gelir. Güncel “Yaklaşıyor” ise ve sıradaki kayıt güncelin bitişinin ertesi günü veya öncesinde başlıyorsa satır **“Geçerli · yenisi DD.MM’de başlıyor”** gösterir ve uyarı seviyesi düşer. Arada boşluk varsa **“Yaklaşıyor · yenisiyle arasında n gün boşluk”** uyarısı verilir.
+- Güncel varsa durum ondan gelir. Güncel “Yaklaşıyor” ise ve sıradaki kayıt güncelin bitişinin ertesi günü veya öncesinde başlıyorsa satır **“Geçerli · yenisi DD.MM.YYYY tarihinde başlıyor”** gösterir ve uyarı seviyesi düşer. Arada boşluk varsa **“Yaklaşıyor · yenisiyle arasında n gün boşluk”** uyarısı verilir.
 - Güncel yoksa: sıradaki varsa “Henüz başlamadı (DD.MM)” ve tür zorunluysa ek olarak “Şu an geçerli belge yok” uyarısı; yalnız süresi dolmuş kayıt varsa “Süresi dolmuş”; yalnız taslak varsa “Taslak” (zorunluysa “Eksik · taslak var”); hiç kayıt yoksa zorunluysa **Eksik**, değilse **Kayıt yok** (nötr).
 - Aynı fonksiyon araç düzeyinde özet üretir (360 bilgi şeridi, Genel bakış). Testler her satırı ve gün sınırını (son gün, ertesi gün, saat dilimi) kapsar.
 
@@ -240,12 +240,17 @@ Araç × tür özeti (Belgeler tablosundaki satır):
   - **Yerel geliştirme sınırlaması:** bu makinede antivirüs motoru yok; geliştirmede `MALWARE_SCANNER=none` ile yükleme açıktır ve dosyalar yalnız içerik doğrulamasından geçer. Bu durum arayüzde yalnız geliştirme ortamında küçük bir notla belirtilir. Üretime geçişte ClamAV (veya eşdeğeri) kurulumu zorunludur.
   - Testler: üretim + `none` → 503; sahte tarayıcı “zararlı” → 422 ve depoda dosya yok; “erişilemiyor” → 503.
 - Depolama: mevcut özel depolama modülü, ayrı önek `storage/documents/<şirket>/<yıl>/<uuid>`; herkese açık adres yok.
-- Sunum: `GET /api/document-files/:id` her istekte oturum → `vehicles.documents.read` → RLS → aracın şube kapsamı; değilse 404 (oturumsuz 401). Başlıklar: `Cache-Control: private, no-store, max-age=0`, `X-Content-Type-Options: nosniff`, görüntülemede `Content-Security-Policy: sandbox`, indirmede `Content-Disposition: attachment` ve sunucunun ürettiği güvenli ad (ör. `A12-K-345_trafik-sigortasi_2027-03-14.pdf`). Tarayıcı PDF görüntüleyicisi bu başlıklarla çalışmazsa PDF yalnız indirme olarak sunulur. Her görüntüleme/indirme işlem geçmişine yazılır.
+- Sunum: `GET /api/document-files/:id` her istekte oturum → `vehicles.documents.read` → RLS → aracın şube kapsamı; değilse 404 (oturumsuz 401). Başlıklar: `Cache-Control: private, no-store, max-age=0`, `X-Content-Type-Options: nosniff`, görüntülemede `Content-Security-Policy: sandbox`, indirmede `Content-Disposition: attachment` ve sunucunun ürettiği güvenli ad (ör. `A12-K-345_trafik-sigortasi_2027-03-14.pdf`). Chrome'da denendi: yerleşik PDF görüntüleyici `sandbox` başlığıyla PDF'i açıyor; bu yüzden görüntüleme açık bırakıldı (çalışmayan bir tarayıcıda “İndir” her zaman kullanılabilir). Her görüntüleme/indirme işlem geçmişine yazılır.
 
 #### 8.4.5 Veri bütünlüğü (konu 4)
 
 - **Migration yalnız ekler:** yeni tabloları, RLS'i, kısıtları, yetkileri ve global `document_types` satırlarını oluşturur. Mevcut şirket, rol, araç, fotoğraf veya dosya satırlarını **değiştirmez ve silmez**; mevcut tablolara sütun eklemez. Şirket ayarı satırı oluşturmaz (varsayılan “zorunlu değil”).
-- **Yeni yetki** `vehicles.documents.read`: kod tarafında rol şablonlarına (yeni şirketler) eklenir. Mevcut rollere migration ile eklenmez; geliştirme verisinde seed betiği ekler, gerçek şirketlerde ileride Roller ve Yetkiler ekranından verilir.
+- **Yeni yetki** `vehicles.documents.read`: rol şablonlarına (Sahip, Yönetici, Operasyon) eklendi. Mevcut şirketlerdeki roller kullanıcı kararıyla tekrarlanabilir bir veri adımıyla yükseltilir (`src/db/role-upgrade.ts`, `npm run db:migrate` sonunda çalışır):
+  - Bir rol yalnız adı bir şablonla aynıysa **ve** yetki kümesi o şablonun önceki bir sürümüyle (`ROLE_PRESET_HISTORY`) birebir aynıysa yükseltilir; yalnız eksik yetkiler eklenir, hiçbir yetki çıkarılmaz.
+  - Elle değiştirilmiş şablon rolleri ve özel roller hiç değişmez; kullanıcılar, şirketler ve üyelikler değişmez.
+  - Her şirket kendi RLS bağlamında, rol satırı kilitlenerek işlenir; her yükseltme `role.preset_upgrade` olarak işlem geçmişine yazılır. İkinci çalıştırma hiçbir şey yapmaz.
+  - Ana veritabanında sonuç: iki şirketin 6 şablon rolüne yalnız `vehicles.documents.read` eklendi; tek fark işlem geçmişinde şirket başına 3 kayıt.
+- **Yedek:** ana veritabanında migration'dan önce `node scripts/backup-db.mjs` çalıştırılır. Betik şema, global veri ve her şirket için kendi RLS bağlamında veri dökümü alır, satır sayılarını kaynakla karşılaştırarak doğrular ve özel depolamayı kopyalar; doğrulanmayan yedekle ana veritabanına migration uygulanmaz. Yedekler `backups/` altındadır (git dışı).
 - **Drina'nın örnek zorunlu belge ayarları** (ruhsat, muayene, trafik sigortası) yalnız geliştirme seed'inde oluşturulur: seed yalnız `NODE_ENV !== 'production'` iken ve yalnız geliştirme şirketleri (seed'in oluşturduğu adlar) için çalışır, yalnız ekleme yapar, mevcut ayar satırı varsa dokunmaz. Neretva için ayar oluşturulmaz. Testler kendi verisini `acarvo_test` üzerinde kurar.
 - **Başarısız işlemler mevcut belgeyi bozmaz:**
   - Yükleme sırası: doğrulama ve tarama → depoya yazma → tek veritabanı işleminde dosya kaydı + sürüm satırı + işlem geçmişi. İşlem başarısız olursa depoya yazılan dosya silinir; belge kaydı, önceki sürümler ve güncel geçerli belge değişmeden kalır. Sürüm numarası belge satırı kilitlenerek verilir.

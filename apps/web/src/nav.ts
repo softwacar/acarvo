@@ -138,6 +138,7 @@ export const PERMISSION_LABELS: Record<Permission, string> = {
   'vehicles.read': 'Araçları görüntüleme',
   'vehicles.create': 'Araç ekleme',
   'vehicles.update': 'Araç düzenleme',
+  'vehicles.documents.read': 'Araç belgelerini görüntüleme',
   'vehicles.documents.manage': 'Araç belgelerini yönetme',
   'vehicles.photos.manage': 'Araç fotoğraflarını yönetme',
   'branches.read': 'Şubeleri görüntüleme',
