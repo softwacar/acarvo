@@ -4,6 +4,7 @@ import type { Database, Tx } from '../db/client'
 import type { Env } from '../env'
 import type { MalwareScanner } from '../lib/malware'
 import type { DocumentAccessGrants } from '../lib/document-access'
+import type { CustomerCrypto } from '../lib/customer-crypto'
 import type { Storage } from '../lib/storage'
 import { AppError, forbidden, unauthorized } from '../lib/errors'
 import { loadAccess, type CompanyAccess } from '../modules/auth/context'
@@ -19,6 +20,9 @@ declare module 'fastify' {
     storage: Storage
     scanner: MalwareScanner
     documentGrants: DocumentAccessGrants
+    /** Null when customer keys are missing or invalid: numbers and files are then not written. */
+    customerCrypto: CustomerCrypto | null
+    customerCryptoProblem: string | null
   }
   interface FastifyRequest {
     auth: ValidSession | null

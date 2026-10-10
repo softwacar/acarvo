@@ -15,6 +15,7 @@
 //   pg_restore -d <db> schema.dump
 //   pg_restore -d <db> --data-only --disable-triggers global.dump
 //   pg_restore -d <db> --data-only --disable-triggers company-<id>.dump   (each company)
+import { createHash } from 'node:crypto'
 import { spawnSync } from 'node:child_process'
 import { cpSync, existsSync, mkdirSync, writeFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
@@ -101,10 +102,22 @@ await client.end()
 const storage = path.resolve('storage')
 if (existsSync(storage) && !process.env.BACKUP_SKIP_STORAGE) cpSync(storage, path.join(root, 'storage'), { recursive: true })
 
+// Customer data keys are NOT part of this backup (M2 plan §4.4). The report names their fingerprints so it is clear
+// which separately kept key file opens the encrypted customer numbers and files in this backup. No key value is written.
+const ringFingerprints = (spec) =>
+  (spec ?? '')
+    .split(',')
+    .filter(Boolean)
+    .map((p) => ({ id: p.split(':')[0], fingerprint: createHash('sha256').update('acarvo-key-fingerprint|').update(Buffer.from(p.split(':')[1] ?? '', 'base64')).digest('hex').slice(0, 8) }))
+report.customerKeys = process.env.CUSTOMER_DATA_KEYS
+  ? { note: 'Keys are not in this backup; keep the key file separately.', data: ringFingerprints(process.env.CUSTOMER_DATA_KEYS), lookup: ringFingerprints(process.env.CUSTOMER_LOOKUP_KEYS) }
+  : { note: 'No customer data keys configured in this environment.' }
+
 writeFileSync(path.join(root, 'report.json'), JSON.stringify({ ...report, verified: problems.length === 0, problems }, null, 2))
 if (problems.length) {
   console.error('BACKUP NOT VERIFIED:\n' + problems.join('\n'))
   process.exit(1)
 }
 console.log(`Backup verified: ${root}`)
+console.log(`Customer data keys are not included in this backup: ${report.customerKeys.data ? report.customerKeys.data.map((k) => `${k.id} ${k.fingerprint}`).join(', ') + ' (keep the key file separately)' : 'none configured'}`)
 console.log(JSON.stringify(report, null, 1))

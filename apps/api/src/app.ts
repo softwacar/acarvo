@@ -14,6 +14,7 @@ import { vehicleHistoryRoutes } from './modules/vehicles/history'
 import { fileRoutes, vehiclePhotoRoutes } from './modules/vehicles/photos'
 import { createDocumentAccessGrants } from './lib/document-access'
 import { errorForLog, requestForLog } from './lib/log-safety'
+import { customerCryptoFromEnv } from './lib/customer-crypto'
 import { createScanner, type MalwareScanner } from './lib/malware'
 import { vehicleClassRoutes, vehicleRoutes } from './modules/vehicles/routes'
 import { MAX_PHOTO_BYTES } from './lib/images'
@@ -54,6 +55,9 @@ export async function buildApp({
   app.decorate('sessions', sessionStore(database))
   app.decorate('scanner', scanner ?? createScanner(env))
   app.decorate('documentGrants', createDocumentAccessGrants(documentAccessTtlMs))
+  const keys = customerCryptoFromEnv(env)
+  app.decorate('customerCrypto', keys.crypto)
+  app.decorate('customerCryptoProblem', keys.problem)
   app.decorate('storage', createStorage(env.STORAGE_DIR ?? fileURLToPath(new URL('../../../storage', import.meta.url))))
 
   await registerSecurity(app, env)

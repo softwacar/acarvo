@@ -17,6 +17,7 @@ import { createDatabase } from '../src/db/client'
 import * as schema from '../src/db/schema'
 import { loadEnv } from '../src/env'
 import { ARGON2_OPTIONS } from '../src/modules/auth/password'
+import { generateTestKeyEnv } from '../src/lib/customer-crypto'
 import { assertConnectedToTestDatabase, assertSeparateDatabases } from './db-guard'
 
 const base = loadEnv()
@@ -35,6 +36,8 @@ export const env = {
   DATABASE_URL: base.TEST_DATABASE_URL,
   DATABASE_OWNER_URL: base.TEST_DATABASE_OWNER_URL,
   STORAGE_DIR: TEST_STORAGE,
+  // Synthetic keys for this run only (M2): never the keys of the local .env, never written anywhere.
+  ...generateTestKeyEnv(),
 }
 
 /** Random per run; never stored anywhere. Browser tests pass their own run password in E2E_PASSWORD. */

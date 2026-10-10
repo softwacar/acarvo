@@ -22,6 +22,15 @@ const schema = z.object({
    * Defaults to the local dev proxy outside production; in production, set it to the real reverse proxy.
    */
   TRUST_PROXY: z.string().optional(),
+  /**
+   * Customer identity data encryption (M2 plan §4). Key rings "k1:<base64 32 bytes>,k2:…" and the active key id.
+   * Data keys encrypt document numbers and files; lookup keys build the exact-match HMAC. Both rings are required
+   * together; without them numbers and files cannot be written (nothing is ever stored in plaintext).
+   */
+  CUSTOMER_DATA_KEYS: z.string().optional(),
+  CUSTOMER_DATA_KEY_ACTIVE: z.string().optional(),
+  CUSTOMER_LOOKUP_KEYS: z.string().optional(),
+  CUSTOMER_LOOKUP_KEY_ACTIVE: z.string().optional(),
   /** Signs the CSRF secret cookie. */
   COOKIE_SECRET: z.string().min(32),
 })
@@ -46,5 +55,6 @@ export function productionWarnings(env: Env): string[] {
   if (!env.WEB_ORIGIN.startsWith('https://')) w.push('WEB_ORIGIN is not https: session cookies require HTTPS.')
   if (!env.TRUST_PROXY) w.push('TRUST_PROXY is not set: behind a reverse proxy all clients share one address (sign-in limits, session IPs).')
   if (env.MALWARE_SCANNER === 'none') w.push('MALWARE_SCANNER is none: document uploads stay closed until a scanner is configured.')
+  if (!env.CUSTOMER_DATA_KEYS || !env.CUSTOMER_LOOKUP_KEYS) w.push('Customer data keys are not set: customer document numbers and files cannot be stored (see docs, customer key setup).')
   return w
 }
