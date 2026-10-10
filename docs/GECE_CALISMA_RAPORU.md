@@ -4,7 +4,7 @@ Dal: `gece-sprint-2026-10-10` (çıkış noktası `main` @ `e74352d`). `main` da
 
 ## Özet (sabah için)
 
-- **8 aşamanın hepsi tamamlandı.** Ana dal `main` ve ana veritabanı olduğu gibi duruyor; tüm iş `gece-sprint-2026-10-10` dalında, 17 commit.
+- **8 aşamanın hepsi tamamlandı.** Ana dal `main` ve ana veritabanı olduğu gibi duruyor; tüm iş `gece-sprint-2026-10-10` dalında: gece **16 commit** (`git rev-list --count main..gece-sprint-2026-10-10`; rapor düzeltmesi bunlara dahil değil). İlk raporda "17", özet mesajında "18" yazmıştı; ikisi de yanlıştı.
 - **Testler:** API **165/165** (gece başında 139; +26), tarayıcı **34/34** (yeni; ayrıca 3 isteğe bağlı ekran görüntüsü testi). Tip kontrolü ve üretim derlemesi hatasız.
 - **Düzeltilen önemli hatalar:**
   - askıya alınmış şirketin kullanılmaya devam edebilmesi (güvenlik);
@@ -193,7 +193,9 @@ Test veritabanında alındı (`SCREENSHOTS=1 npx playwright test screens`, klas�
 | `d9d5b4c` | Güvenli migration aracı, üretim uyarıları, ortak zaman damgası |
 | `d5c87ed` | Gelecek modüller planı |
 | `9883bb3` | Ekran görüntüsü testi, liste sütun/etiket düzeltmesi |
-| `682086e`, `25dbf02`, `0e610a8`, `ba18f8b`, `332bc9c`, `6d29b52` | Rapor güncellemeleri |
+| `682086e`, `25dbf02`, `0e610a8`, `ba18f8b`, `332bc9c`, `6d29b52`, `edbcae9` | Rapor güncellemeleri (7) |
+
+Toplam: 9 iş commit'i + 7 rapor commit'i = **16**. Birleştirme öncesi incelemede bu sayı düzeltildi (ayrı bir rapor commit'i).
 
 Sabah inceleme önerisi: `git log --stat main..gece-sprint-2026-10-10`. Beğenirseniz `main`'e birleştirme ve (isterseniz) 0011 migration'ı ayrı adımlar olarak onayınıza bağlı.
 
@@ -202,7 +204,7 @@ Sabah inceleme önerisi: `git log --stat main..gece-sprint-2026-10-10`. Beğenir
 1. **Şube saat dilimi mi, şirket saat dilimi mi?** `branches.timezone` alanı var, ancak şu an tüm saat girişi ve gösterimi şirket saat dilimiyle yapılıyor. Farklı ülkelerde şubesi olan bir şirkette (ör. Bosna + Hırvatistan aynı saat diliminde ama Türkiye farklı) km/konum saati aracın bulunduğu şubenin saatiyle mi girilsin? Öneri: şimdilik şirket saati (tutarlı ve basit); çok ülkeli şirketler gelince araç olaylarında olayın şubesinin saat dilimi.
 
 2. **Uygulama rolünün `users.password_hash` sütununu okuyabilmesi.** Şu an güvenli (tüm SQL parametreli), ama ileride bir SQL enjeksiyonu tüm şirketlerin parola özetlerini açığa çıkarırdı. Düzeltme sütun düzeyinde yetki + giriş doğrulaması için `SECURITY DEFINER` bir fonksiyon gerektirir (migration). Gece uygulanmadı; ayrı, küçük bir güvenlik işi olarak öneriyorum.
-3. **Belge dosyasını görüntüleme/indirme bir GET isteğiyle işlem geçmişine yazılıyor.** Başka bir siteden verilen bağlantı, oturumu açık kullanıcının adına "görüntülendi" kaydı oluşturabilir (içerik okunamaz; yalnız kayıt gürültüsü). Kabul edilebilir görüyorum; istenirse işlem geçmişine "kaynak" bilgisi eklenebilir.
+3. **Belge dosyasını görüntüleme/indirme bir GET isteğiyle işlem geçmişine yazılıyor.** Başka bir siteden verilen bağlantı, oturumu açık kullanıcının adına "görüntülendi" kaydı oluşturabilir (içerik okunamaz; yalnız kayıt gürültüsü). **Kullanıcı kararı (11.10.2026): yanıltıcı denetim kaydı kabul edilmiyor.** Bu sorun gece çalışmasından önce de vardı (belge modülü). Çözüm analizi birleştirme öncesi inceleme raporunda; API henüz değiştirilmedi.
 4. **Girişte eski oturum iptal edilmiyor.** Aynı tarayıcıda yeniden giriş yeni bir oturum açar, eskisi süresi dolana kadar geçerli kalır (oturum sabitleme mümkün değil). İstenirse girişte aynı tarayıcının eski oturumu iptal edilebilir.
 
 5. **İşlem geçmişi indeksi (`0011_audit_entity_index.sql`) ana veritabanına uygulansın mı?** Yalnız indeks ekler, veri değiştirmez; test veritabanında doğrulandı. Uygulamak için önce `node --env-file=.env scripts/backup-db.mjs`, sonra `npm run db:migrate`. Uygulanmasa da kod çalışır (yalnız büyük geçmişte yavaşlar).
