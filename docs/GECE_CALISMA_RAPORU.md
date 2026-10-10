@@ -2,9 +2,29 @@
 
 Dal: `gece-sprint-2026-10-10` (çıkış noktası `main` @ `e74352d`). `main` dalına dokunulmadı, hiçbir şey GitHub'a gönderilmedi.
 
-## Özet
+## Özet (sabah için)
 
-_Sprint ilerledikçe güncellenir._
+- **8 aşamanın hepsi tamamlandı.** Ana dal `main` ve ana veritabanı olduğu gibi duruyor; tüm iş `gece-sprint-2026-10-10` dalında, 17 commit.
+- **Testler:** API **165/165** (gece başında 139; +26), tarayıcı **34/34** (yeni; ayrıca 3 isteğe bağlı ekran görüntüsü testi). Tip kontrolü ve üretim derlemesi hatasız.
+- **Düzeltilen önemli hatalar:**
+  - askıya alınmış şirketin kullanılmaya devam edebilmesi (güvenlik);
+  - giriş sınırının herkes için tek adrese düşmesi (güvenlik);
+  - oturum düşünce önbelleğin temizlenmemesi;
+  - takvim tarihlerinin bazı saat dilimlerinde bir gün kayması;
+  - km/konum saatinin bilgisayar saatine göre girilmesi;
+  - çıkışta ekranın bir an çökmesi;
+  - telefonda araç listesinde araç sütununun kaybolması;
+  - yan paneller kapanınca odağın kaybolması;
+  - kaydedilmemiş bilgilerin uyarısız kaybolması;
+  - API hatasında "kayıt yok" denmesi;
+  - büyük filoda listenin yavaşlaması.
+- **Yeni küçük özellikler:** araç listesinde belge uyarısı, "Belgeler" ve "Güncel konum" filtreleri.
+- **Yeni altyapı:**
+  - tekrar çalıştırılabilir tarayıcı testleri (`npm run test:e2e`, yalnız test veritabanı);
+  - güvenli migration aracı (`scripts/safe-migrate.mjs`);
+  - performans ölçüm betiği.
+- **Onayınızı bekleyen 6 karar** aşağıda. En acil olanı yok; hiçbiri çalışmayı engellemiyor.
+- **Sıradaki modül için öneri** `docs/GELECEK_MODULLER_PLANI.md` içinde: önce Müşteriler + Kurumsal hesaplar, ardından küçük Araç transferi modülü ("Yolda" kararını çözer) ve Bakım.
 
 | Aşama | Durum | Commit |
 |---|---|---|
@@ -16,7 +36,7 @@ _Sprint ilerledikçe güncellenir._
 | 5 Araç modülünde küçük eksikler | Tamamlandı | `ba9675e` |
 | 6 Performans | Tamamlandı | `325b1e0` |
 | 7 Kod kalitesi ve dağıtım güvenliği | Tamamlandı | `d9d5b4c` |
-| 8 Gelecek modüllerin planı | Sürüyor | |
+| 8 Gelecek modüllerin planı | Tamamlandı (yalnız plan) | `d5c87ed` |
 
 ## Aşama 0 — Güvenli çalışma ortamı
 
@@ -137,6 +157,46 @@ Bilinçli olarak yapılmayanlar: `Vehicle360Page.tsx` (~950 satır) ve `VehicleD
 
 Testler: API **165/165**, tarayıcı **34/34**; tip kontrolü ve derleme hatasız.
 
+## Aşama 8 — Gelecek modüllerin planı (`d5c87ed`)
+
+Kod yazılmadı. `docs/GELECEK_MODULLER_PLANI.md`: mevcut temelin gelecek modüllere bağlantı noktaları, bağımlılık haritası, her modül (Müşteriler + Kurumsal hesaplar, Ayarlar temeli, Rezervasyonlar, Kiralamalar, Finans, Araç transferi, Bakım ve Servis, Hasar) için amaç, önerilen tablolar, araç/km/konum/belge kayıtlarıyla ilişki, riskler ve büyüklük; önerilen sıra (ve gelir öncelikli alternatif); kiralamadan önce verilmesi gereken kararlar (kişisel veri, sözleşme/imza, vergi, kanıt fotoğrafları, saat dilimi, zararlı dosya tarayıcısı).
+
+## Ana veritabanına dokunulmadığının doğrulaması
+
+- Gece başında ve sonunda ana veritabanının **salt okunur** parmak izi alındı: her şirket için 17 tablonun (araçlar, km/konum ve düzeltmeleri, fotoğraflar, dosyalar, belgeler, roller, üyelikler, şubeler, işlem geçmişi…) satır sayısı ve **tüm satırların içerik özeti**, kullanıcılar (parola özetleri dahil özet), şirketler, migration sayısı.
+- **Sonuç: hiçbir fark yok.** Migration sayısı başta ve sonda 11 (0011 yalnız test veritabanında).
+- Özel dosya deposundaki 16 dosyanın SHA-256 özetleri başta ve sonda **aynı**.
+- Ana veritabanına yapılan tek erişimler: başlangıç/bitiş parmak izi (salt okuma işlemi) ve `safe-migrate --dry-run` (yalnız migration sayısını okur).
+- Tüm testler, ölçümler ve provalar `acarvo_test` üzerinde; tarayıcı testleri kendi API (3101) ve web (5181) sunucularıyla, geçici depolamayla çalıştı.
+
+## Ekran görüntüleri
+
+Test veritabanında alındı (`SCREENSHOTS=1 npx playwright test screens`, klasör `apps/e2e/screenshots/`, Git dışı):
+1. `01-liste-belge-uyarilari-1440.png` — araç listesinde belge uyarıları
+2. `02-liste-filtreler-1440.png` — "Şube dışında" + "Kritik belge" filtreleri
+3. `03-liste-telefon-390.png` — telefonda liste (tablo kart içinde kayar, araç sütunu görünür)
+4. `04-km-formu-saat-dilimi-1440.png` — İstanbul saatindeki bilgisayardan km formu (şirket saati ve uyarı)
+5. `05-kaydedilmemis-degisiklik-sorusu-1440.png` — kaydedilmemiş bilgiyle kapatma sorusu
+6. `06-gecmis-yuklenemedi-1440.png` — API hatasında "Tekrar dene"
+7. `07-konum-formu-telefon-390.png` — telefonda konum formu
+
+## Commit listesi (`gece-sprint-2026-10-10`)
+
+| Commit | İçerik |
+|---|---|
+| `08b19d0` | Saat dilimi altyapısı ve testleri |
+| `da529b4` | Güvenlik düzeltmeleri ve regresyon testleri |
+| `eeebc0c` | Tarayıcı test altyapısı + bulduğu hataların düzeltmeleri |
+| `652146a` | Erişilebilirlik ve kullanılabilirlik |
+| `ba9675e` | Araç listesinde belge uyarısı, belge ve konum filtreleri |
+| `325b1e0` | Performans (liste, tembel yükleme, işlem geçmişi indeksi) |
+| `d9d5b4c` | Güvenli migration aracı, üretim uyarıları, ortak zaman damgası |
+| `d5c87ed` | Gelecek modüller planı |
+| `9883bb3` | Ekran görüntüsü testi, liste sütun/etiket düzeltmesi |
+| `682086e`, `25dbf02`, `0e610a8`, `ba18f8b`, `332bc9c`, `6d29b52` | Rapor güncellemeleri |
+
+Sabah inceleme önerisi: `git log --stat main..gece-sprint-2026-10-10`. Beğenirseniz `main`'e birleştirme ve (isterseniz) 0011 migration'ı ayrı adımlar olarak onayınıza bağlı.
+
 ## Onay bekleyen kararlar
 
 1. **Şube saat dilimi mi, şirket saat dilimi mi?** `branches.timezone` alanı var, ancak şu an tüm saat girişi ve gösterimi şirket saat dilimiyle yapılıyor. Farklı ülkelerde şubesi olan bir şirkette (ör. Bosna + Hırvatistan aynı saat diliminde ama Türkiye farklı) km/konum saati aracın bulunduğu şubenin saatiyle mi girilsin? Öneri: şimdilik şirket saati (tutarlı ve basit); çok ülkeli şirketler gelince araç olaylarında olayın şubesinin saat dilimi.
@@ -154,4 +214,8 @@ Testler: API **165/165**, tarayıcı **34/34**; tip kontrolü ve derleme hatası
 
 ## Yarım kalan işler
 
-_Henüz yok._
+Yarım kalan iş yok. Bilinçli olarak sonraya bırakılanlar:
+- `Vehicle360Page.tsx` ve `VehicleDocuments.tsx` dosyalarının bölünmesi: bir sonraki modülde ortak sekme bileşenleri çıkarılırken.
+- Kaydedilmemiş değişiklik uyarısı araç düzenleme formunda zaten vardı. Yan panellere eklendi; galeri yönetimine gerekmedi, çünkü orada her işlem anında kaydediliyor.
+- Kilometreye göre sıralamanın hızlanması (karar 6).
+- Tarayıcı testlerinde bir kez görülen geçici web sunucusu bağlantı hatası (`ERR_CONNECTION_REFUSED`) yeniden çalıştırmada görülmedi. Tekrarlarsa test sunucusu için Vite yerine derlenmiş sürümle (`vite preview`) çalışmayı öneririm.
