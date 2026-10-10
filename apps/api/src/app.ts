@@ -1,3 +1,4 @@
+import type { Writable } from 'node:stream'
 import { fileURLToPath } from 'node:url'
 import multipart from '@fastify/multipart'
 import Fastify from 'fastify'
@@ -7,10 +8,12 @@ import type { Env } from './env'
 import { authRoutes } from './modules/auth/routes'
 import { sessionStore } from './modules/auth/sessions'
 import { branchRoutes } from './modules/branches/routes'
+import { customerRoutes } from './modules/customers/routes'
 import { documentFileRoutes, vehicleDocumentRoutes } from './modules/vehicles/documents'
 import { vehicleHistoryRoutes } from './modules/vehicles/history'
 import { fileRoutes, vehiclePhotoRoutes } from './modules/vehicles/photos'
 import { createDocumentAccessGrants } from './lib/document-access'
+import { errorForLog, requestForLog } from './lib/log-safety'
 import { createScanner, type MalwareScanner } from './lib/malware'
 import { vehicleClassRoutes, vehicleRoutes } from './modules/vehicles/routes'
 import { MAX_PHOTO_BYTES } from './lib/images'
@@ -24,6 +27,7 @@ export async function buildApp({
   logger = true,
   scanner,
   documentAccessTtlMs,
+  logStream,
 }: {
   env: Env
   database: Database
@@ -31,10 +35,20 @@ export async function buildApp({
   scanner?: MalwareScanner
   /** Tests shorten the document access grant lifetime. */
   documentAccessTtlMs?: number
+  /** Tests capture the log output to check that no personal data reaches it. */
+  logStream?: Writable
 }) {
   // Without a trusted proxy every request behind the web proxy would share one address (rate limits, session IPs).
   const trustProxy = env.TRUST_PROXY ?? (env.NODE_ENV === 'production' ? false : 'loopback')
-  const app = Fastify({ logger: logger && { level: env.NODE_ENV === 'production' ? 'info' : 'debug' }, bodyLimit: 1_000_000, trustProxy })
+  const app = Fastify({
+    logger: (logger || logStream) && {
+      level: env.NODE_ENV === 'production' ? 'info' : 'debug',
+      serializers: { req: requestForLog, err: errorForLog },
+      ...(logStream ? { stream: logStream } : {}),
+    },
+    bodyLimit: 1_000_000,
+    trustProxy,
+  })
   app.decorate('env', env)
   app.decorate('database', database)
   app.decorate('sessions', sessionStore(database))
@@ -60,5 +74,6 @@ export async function buildApp({
   await app.register(vehicleDocumentRoutes, { prefix: '/api/vehicles' })
   await app.register(vehicleHistoryRoutes, { prefix: '/api/vehicles' })
   await app.register(documentFileRoutes, { prefix: '/api/document-files' })
+  await app.register(customerRoutes, { prefix: '/api/customers' })
   return app
 }

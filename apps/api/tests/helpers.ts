@@ -1,6 +1,7 @@
 import { randomBytes } from 'node:crypto'
 import os from 'node:os'
 import path from 'node:path'
+import type { Writable } from 'node:stream'
 import { hash } from '@node-rs/argon2'
 import { sql } from 'drizzle-orm'
 import { drizzle } from 'drizzle-orm/node-postgres'
@@ -9,6 +10,7 @@ import pg from 'pg'
 import { loadDevData } from '../seed/dev-data'
 import { ensureDevDocumentSettings } from '../seed/dev-documents'
 import { ensureDevFleet } from '../seed/dev-fleet'
+import { ensureTestCustomers } from '../seed/test-customers'
 import { buildApp } from '../src/app'
 import type { MalwareScanner } from '../src/lib/malware'
 import { createDatabase } from '../src/db/client'
@@ -65,11 +67,12 @@ export async function resetDatabase(): Promise<DevData> {
   await ensureTestDatabase()
   passwordHash ??= await hash(PASSWORD, ARGON2_OPTIONS)
   await ownerDb.execute(
-    sql`truncate vehicle_document_files, document_files, vehicle_documents, company_document_type_settings, vehicle_promo_photos, files, vehicle_location_corrections, odometer_corrections, vehicle_location_events, odometer_readings, vehicles, vehicle_classes, audit_log, membership_branches, membership_roles, memberships, roles, branches, sessions, users, companies restart identity cascade`,
+    sql`truncate customers, company_sequences, vehicle_document_files, document_files, vehicle_documents, company_document_type_settings, vehicle_promo_photos, files, vehicle_location_corrections, odometer_corrections, vehicle_location_events, odometer_readings, vehicles, vehicle_classes, audit_log, membership_branches, membership_roles, memberships, roles, branches, sessions, users, companies restart identity cascade`,
   )
   const data = await loadDevData(ownerDb, passwordHash)
   await ensureDevFleet(ownerDb)
   await ensureDevDocumentSettings(ownerDb, 'test')
+  await ensureTestCustomers(ownerDb)
   return data
 }
 
@@ -105,11 +108,11 @@ export async function asApp<T>(companyId: string | null, fn: (c: pg.PoolClient) 
   }
 }
 
-export async function makeApp(opts: { scanner?: MalwareScanner; nodeEnv?: 'production' | 'test'; documentAccessTtlMs?: number } = {}) {
+export async function makeApp(opts: { scanner?: MalwareScanner; nodeEnv?: 'production' | 'test'; documentAccessTtlMs?: number; logStream?: Writable } = {}) {
   // The app connects with env.DATABASE_URL, the same connection string as appPool.
   await ensureTestDatabase()
   const database = createDatabase(env.DATABASE_URL)
-  const app = await buildApp({ env: { ...env, NODE_ENV: opts.nodeEnv ?? env.NODE_ENV }, database, logger: false, scanner: opts.scanner, documentAccessTtlMs: opts.documentAccessTtlMs })
+  const app = await buildApp({ env: { ...env, NODE_ENV: opts.nodeEnv ?? env.NODE_ENV }, database, logger: false, scanner: opts.scanner, documentAccessTtlMs: opts.documentAccessTtlMs, logStream: opts.logStream })
   app.addHook('onClose', () => database.close())
   return app
 }
