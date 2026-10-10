@@ -399,6 +399,16 @@ ACARVO uluslararası kullanılır; bilgisayarın saat dilimi hiçbir zaman sakla
 - Testler (`apps/api/tests/time.test.ts`) senaryoları bilgisayar saat dilimi Berlin, İstanbul, New York, Tokyo, UTC ve Honolulu iken çalıştırır.
 - Açık karar: şubelerin de kendi `timezone` alanı var; şu an tüm giriş/gösterim şirket saat dilimini kullanır (bkz. gece raporu, bekleyen kararlar).
 
+### 9.2 Otomatik testler
+
+- **API testleri** (`npm test`, Vitest, `apps/api/tests`): yalnız `acarvo_test` üzerinde çalışır; bağlantı adresleri ana veritabanıyla aynıysa veya canlı bağlantı başka bir veritabanındaysa hiçbir veriye dokunmadan durur (`tests/db-guard.ts`).
+- **Tarayıcı testleri** (`npm run test:e2e`, Playwright, `apps/e2e`):
+  - Ayrı bir API (port 3101) ve web sunucusu (port 5181) başlatır; API `acarvo_test` ve geçici bir depolama klasörü kullanır. Geliştirme sunucularına (3001/5173) ve ana veritabanına dokunmaz; yapılandırma test adresleri `acarvo_test` değilse durur.
+  - Her çalıştırmada `acarvo_test` aynı korumalı sıfırlamayla yeniden kurulur ve test kullanıcılarına **o çalıştırmaya özel rastgele bir parola** verilir; kişisel parola veya açık tarayıcı oturumu kullanılmaz. Tarayıcı Playwright'ın kendi Chromium'udur, her test temiz bir profil kullanır.
+  - Giriş hız sınırı nedeniyle her test kullanıcısı bir kez giriş yapar (`auth.setup.ts`), oturum `apps/e2e/.auth/` altında saklanır (Git dışı).
+  - API testleri ve tarayıcı testleri aynı test veritabanını sıfırladığı için **aynı anda çalıştırılmaz**.
+  - Kapsam: giriş/çıkış, şirket değiştirme, liste arama/filtre, araç ekleme/düzenleme ve sürüm çakışması, 360° sekmeleri, fotoğraf yükleme/ana fotoğraf/sıralama/kaldırma, belge ekleme/görüntüleme/indirme/yenileme, km girişi ve düzeltme, konum, saat dilimi (tarayıcı İstanbul saatinde), şube sınırlı kullanıcı, telefon (390 px). Rapor: `apps/e2e/playwright-report/` (Git dışı).
+
 ## 10. Git ve gizli bilgiler
 
 - `.gitignore`: `.env*` (`.env.example` hariç), `node_modules`, `dist`, `storage/`, `*.log`, test çıktıları, Playwright raporları, `.playwright-mcp/`, yerel veritabanı dökümleri (`*.dump`, `*.sql.gz`, `pgdata/`), editör geçici dosyaları.

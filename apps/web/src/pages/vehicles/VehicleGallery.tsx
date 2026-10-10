@@ -108,7 +108,7 @@ function UploadStatus({ items, onClear }: { items: UploadItem[]; onClear: () => 
   return (
     <ul className="mt-3 space-y-1.5" aria-live="polite">
       {items.map((i) => (
-        <li key={i.key} className={cn('flex items-center gap-3 rounded-lg border px-3 py-2 text-[13px]', i.error ? 'border-alert/25 bg-alert-soft text-alert' : 'border-line bg-surface')}>
+        <li key={i.key} role={i.error ? 'alert' : undefined} className={cn('flex items-center gap-3 rounded-lg border px-3 py-2 text-[13px]', i.error ? 'border-alert/25 bg-alert-soft text-alert' : 'border-line bg-surface')}>
           {i.error ? <WarningCircle size={16} className="shrink-0" /> : <SpinnerGap size={16} className="shrink-0 animate-spin text-ink-3" />}
           <span className="min-w-0 flex-1 truncate">
             <span className="font-medium">{i.name}</span>

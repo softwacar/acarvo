@@ -260,6 +260,10 @@ export function AppLayout() {
   const [open, setOpen] = useState(false)
   const pathname = useRouterState({ select: (s) => s.location.pathname })
   useEffect(() => setOpen(false), [pathname])
+  // On sign-out (or a forced 401) the session is cleared just before the redirect to /giris:
+  // render nothing in between instead of letting children ask for a session that is gone.
+  const { data: session } = useQuery(sessionQuery)
+  if (!session) return null
 
   return (
     <div className="flex min-h-dvh">

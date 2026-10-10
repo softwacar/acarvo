@@ -277,8 +277,9 @@ export function VehiclesPage() {
               </StatePanel>
             )
           ) : (
-            <div className="overflow-x-auto">
-              <table className={cn('w-full table-fixed text-left transition-opacity', q.isPlaceholderData && 'opacity-60')}>
+            <div className="relative overflow-x-auto">
+              {/* min width: on phones the table scrolls inside its card instead of collapsing the vehicle column (and its link) to zero */}
+              <table className={cn('w-full min-w-[600px] table-fixed text-left transition-opacity', q.isPlaceholderData && 'opacity-60')}>
                 <thead>
                   <tr className="h-10 border-b border-line text-[12.5px] whitespace-nowrap text-ink-2">
                     <SortHeader label="Plaka" sort="plate" search={search} className="w-[140px] sm:w-[148px]" />

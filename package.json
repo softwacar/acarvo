@@ -1,7 +1,10 @@
 {
   "name": "acarvo",
   "private": true,
-  "workspaces": ["apps/*", "packages/*"],
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
   "scripts": {
     "dev": "npm run dev --workspace @acarvo/api & npm run dev --workspace @acarvo/web",
     "dev:api": "npm run dev --workspace @acarvo/api",
@@ -11,6 +14,7 @@
     "db:migrate:test": "npm run db:migrate:test --workspace @acarvo/api",
     "db:seed": "npm run db:seed --workspace @acarvo/api",
     "test": "npm run test --workspace @acarvo/api",
-    "typecheck": "npm run typecheck --workspaces --if-present"
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "test:e2e": "npm run test --workspace @acarvo/e2e"
   }
 }

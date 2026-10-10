@@ -35,8 +35,8 @@ export const env = {
   STORAGE_DIR: TEST_STORAGE,
 }
 
-/** Random per run; never stored anywhere. */
-export const PASSWORD = randomBytes(12).toString('base64url')
+/** Random per run; never stored anywhere. Browser tests pass their own run password in E2E_PASSWORD. */
+export const PASSWORD = process.env.E2E_PASSWORD || randomBytes(12).toString('base64url')
 let passwordHash: string | undefined
 
 export const ownerPool = new pg.Pool({ connectionString: env.DATABASE_OWNER_URL, max: 2 })
