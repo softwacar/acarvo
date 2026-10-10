@@ -100,29 +100,73 @@ function DocStatusText({ d }: { d: VehicleDocument }) {
   return <span className={cn('font-medium', tone)}>{text}</span>
 }
 
+/**
+ * Opening a file is an explicit action: a CSRF-checked request creates a short-lived grant for this session, then the
+ * browser opens or downloads the file. A link pasted elsewhere cannot open it (docs §8.4.4).
+ */
+function useFileActions() {
+  const [busy, setBusy] = useState<string | null>(null)
+  const fail = (e: unknown) => toast(e instanceof ApiRequestError ? e.message : 'Belge açılamadı. Bağlantınızı kontrol edip yeniden deneyin.')
+  const view = async (f: DocumentFileVersion) => {
+    // Open the tab inside the click so pop-up blockers allow it; point it at the file once the grant exists.
+    const tab = window.open('', '_blank')
+    setBusy(`${f.id}:view`)
+    try {
+      const { url } = await documentsApi.access(f.id, 'view')
+      if (tab) {
+        tab.opener = null
+        tab.location.replace(url)
+      } else toast('Tarayıcı yeni sekmeyi engelledi. Bu site için açılır pencerelere izin verip yeniden deneyin.')
+    } catch (e) {
+      tab?.close()
+      fail(e)
+    } finally {
+      setBusy(null)
+    }
+  }
+  const download = async (f: DocumentFileVersion) => {
+    setBusy(`${f.id}:download`)
+    try {
+      const { url } = await documentsApi.access(f.id, 'download')
+      const a = document.createElement('a')
+      a.href = url
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+    } catch (e) {
+      fail(e)
+    } finally {
+      setBusy(null)
+    }
+  }
+  return { view, download, busy }
+}
+
 function FileLinks({ f, compact }: { f: DocumentFileVersion; compact?: boolean }) {
   const Icon = f.mimeType === 'application/pdf' ? FilePdf : FileImage
+  const files = useFileActions()
   return (
     <span className="inline-flex items-center gap-1">
-      <a
-        href={f.url}
-        target="_blank"
-        rel="noopener noreferrer"
-        onClick={(e) => e.stopPropagation()}
-        className="inline-flex h-8 items-center gap-1.5 rounded-md px-1.5 font-medium text-blue hover:bg-blue-soft"
+      <button
+        type="button"
+        onClick={(e) => (e.stopPropagation(), void files.view(f))}
+        disabled={files.busy !== null}
+        aria-label={compact ? `Sürüm ${f.versionNo} görüntüle` : undefined}
+        className="inline-flex h-8 items-center gap-1.5 rounded-md px-1.5 font-medium text-blue hover:bg-blue-soft disabled:opacity-60"
         title={`${f.displayName} · ${size(f.sizeBytes)}`}
       >
         <Icon size={17} />
         {!compact && <span className="max-2xl:sr-only">Görüntüle</span>}
-      </a>
-      <a
-        href={f.downloadUrl}
-        onClick={(e) => e.stopPropagation()}
+      </button>
+      <button
+        type="button"
+        onClick={(e) => (e.stopPropagation(), void files.download(f))}
+        disabled={files.busy !== null}
         aria-label="İndir"
-        className="grid size-8 place-items-center rounded-md text-ink-2 hover:bg-ground hover:text-ink"
+        className="grid size-8 place-items-center rounded-md text-ink-2 hover:bg-ground hover:text-ink disabled:opacity-60"
       >
         <DownloadSimple size={16} />
-      </a>
+      </button>
     </span>
   )
 }
@@ -688,29 +732,62 @@ const CHAIN_LABEL: Record<string, string> = {
   valid: 'Geçerli',
 }
 
-function FilePreview({ f }: { f: DocumentFileVersion }) {
-  if (f.mimeType !== 'application/pdf') {
-    return (
-      <a href={f.url} target="_blank" rel="noopener noreferrer" className="block overflow-hidden rounded-lg border border-line bg-ground">
-        <img src={f.url} alt={`Belge görseli, sürüm ${f.versionNo}`} className="max-h-[320px] w-full object-contain" />
-      </a>
-    )
-  }
+/**
+ * Inline image preview in the detail panel. It has its own grant purpose ("preview") and audit entry, so an
+ * automatic preview is never recorded as the user pressing Görüntüle.
+ */
+function PreviewImage({ f, onOpen }: { f: DocumentFileVersion; onOpen: () => void }) {
+  const session = useSession()
+  const q = useQuery({
+    queryKey: ['document-preview', session.company?.id, f.id],
+    queryFn: () => documentsApi.access(f.id, 'preview'),
+    staleTime: 90_000,
+    gcTime: 90_000,
+    retry: false,
+    refetchOnWindowFocus: false,
+  })
+  if (q.isPending) return <div className="h-48 animate-pulse rounded-lg bg-line-soft/70" aria-busy="true" aria-label="Önizleme yükleniyor" />
+  if (q.isError) return <p className="rounded-lg border border-line bg-ground/60 px-3 py-2 text-[13px] text-ink-2">Önizleme yüklenemedi. Belgeyi Aç ile görüntüleyebilirsiniz.</p>
   return (
-    <div className="flex items-center gap-3 rounded-lg border border-line px-3.5 py-3">
-      <FilePdf size={30} className="shrink-0 text-alert" />
-      <span className="min-w-0 flex-1">
-        <span className="block truncate font-medium">{f.displayName}</span>
-        <span className="block text-[12.5px] text-ink-2">
-          Sürüm {f.versionNo} · {f.pageCount} sayfa · {size(f.sizeBytes)}
+    <button type="button" onClick={onOpen} aria-label="Belgeyi yeni sekmede görüntüle" className="block w-full overflow-hidden rounded-lg border border-line bg-ground">
+      <img src={q.data.url} alt={`Belge görseli, sürüm ${f.versionNo}`} className="max-h-[320px] w-full object-contain" />
+    </button>
+  )
+}
+
+function FilePreview({ f }: { f: DocumentFileVersion }) {
+  const files = useFileActions()
+  const isPdf = f.mimeType === 'application/pdf'
+  return (
+    <div className="space-y-2">
+      {!isPdf && <PreviewImage f={f} onOpen={() => void files.view(f)} />}
+      <div className="flex items-center gap-3 rounded-lg border border-line px-3.5 py-3">
+        {isPdf ? <FilePdf size={30} className="shrink-0 text-alert" /> : <FileImage size={30} className="shrink-0 text-ink-3" />}
+        <span className="min-w-0 flex-1">
+          <span className="block truncate font-medium">{f.displayName}</span>
+          <span className="block text-[12.5px] text-ink-2">
+            Sürüm {f.versionNo}
+            {isPdf && ` · ${f.pageCount} sayfa`} · {size(f.sizeBytes)}
+          </span>
         </span>
-      </span>
-      <a href={f.url} target="_blank" rel="noopener noreferrer" className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-line px-3 font-medium hover:bg-ground">
-        <ArrowSquareOut size={15} /> Aç
-      </a>
-      <a href={f.downloadUrl} aria-label="İndir" className="grid size-9 place-items-center rounded-lg border border-line hover:bg-ground">
-        <DownloadSimple size={16} />
-      </a>
+        <button
+          type="button"
+          onClick={() => void files.view(f)}
+          disabled={files.busy !== null}
+          className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-line px-3 font-medium hover:bg-ground disabled:opacity-60"
+        >
+          {files.busy === `${f.id}:view` ? <SpinnerGap size={15} className="animate-spin" /> : <ArrowSquareOut size={15} />} Aç
+        </button>
+        <button
+          type="button"
+          onClick={() => void files.download(f)}
+          disabled={files.busy !== null}
+          aria-label="İndir"
+          className="grid size-9 place-items-center rounded-lg border border-line hover:bg-ground disabled:opacity-60"
+        >
+          {files.busy === `${f.id}:download` ? <SpinnerGap size={16} className="animate-spin" /> : <DownloadSimple size={16} />}
+        </button>
+      </div>
     </div>
   )
 }

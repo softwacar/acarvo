@@ -152,7 +152,11 @@ export const photosApi = {
   remove: (vehicleId: string, photoId: string) => api<VehiclePhotoList>(`/vehicles/${vehicleId}/photos/${photoId}`, { method: 'DELETE' }),
 }
 
+/** Asks for a short-lived, session-bound grant before a document file can be opened (docs §8.4.4). */
+export type DocumentAccessMode = 'view' | 'download' | 'preview'
+
 export const documentsApi = {
+  access: (fileId: string, mode: DocumentAccessMode) => api<{ url: string; expiresAt: string }>(`/document-files/${fileId}/access`, { method: 'POST', body: { mode } }),
   list: (vehicleId: string) => api<VehicleDocumentsResponse>(`/vehicles/${vehicleId}/documents`),
   get: (vehicleId: string, docId: string) => api<VehicleDocumentDetail>(`/vehicles/${vehicleId}/documents/${docId}`),
   create: (vehicleId: string, body: unknown) => api<VehicleDocumentDetail>(`/vehicles/${vehicleId}/documents`, { method: 'POST', body }),

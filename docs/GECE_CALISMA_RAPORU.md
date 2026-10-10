@@ -204,11 +204,13 @@ Sabah inceleme önerisi: `git log --stat main..gece-sprint-2026-10-10`. Beğenir
 1. **Şube saat dilimi mi, şirket saat dilimi mi?** `branches.timezone` alanı var, ancak şu an tüm saat girişi ve gösterimi şirket saat dilimiyle yapılıyor. Farklı ülkelerde şubesi olan bir şirkette (ör. Bosna + Hırvatistan aynı saat diliminde ama Türkiye farklı) km/konum saati aracın bulunduğu şubenin saatiyle mi girilsin? Öneri: şimdilik şirket saati (tutarlı ve basit); çok ülkeli şirketler gelince araç olaylarında olayın şubesinin saat dilimi.
 
 2. **Uygulama rolünün `users.password_hash` sütununu okuyabilmesi.** Şu an güvenli (tüm SQL parametreli), ama ileride bir SQL enjeksiyonu tüm şirketlerin parola özetlerini açığa çıkarırdı. Düzeltme sütun düzeyinde yetki + giriş doğrulaması için `SECURITY DEFINER` bir fonksiyon gerektirir (migration). Gece uygulanmadı; ayrı, küçük bir güvenlik işi olarak öneriyorum.
-3. **Belge dosyasını görüntüleme/indirme bir GET isteğiyle işlem geçmişine yazılıyor.** Başka bir siteden verilen bağlantı, oturumu açık kullanıcının adına "görüntülendi" kaydı oluşturabilir (içerik okunamaz; yalnız kayıt gürültüsü). **Kullanıcı kararı (11.10.2026): yanıltıcı denetim kaydı kabul edilmiyor.** Bu sorun gece çalışmasından önce de vardı (belge modülü). Çözüm analizi birleştirme öncesi inceleme raporunda; API henüz değiştirilmedi.
+3. ~~Belge dosyasını görüntüleme/indirme bir GET isteğiyle işlem geçmişine yazılıyor.~~ **Çözüldü (birleştirme öncesi):** görüntüleme/indirme artık CSRF denetimli bir izin isteğiyle başlıyor; kayıt yalnız bu istekte "istendi" olarak yazılıyor; dosyayı sunan GET kayıt yazmıyor, izin ve Fetch Metadata istiyor (teknik belge §8.4.4).
 4. **Girişte eski oturum iptal edilmiyor.** Aynı tarayıcıda yeniden giriş yeni bir oturum açar, eskisi süresi dolana kadar geçerli kalır (oturum sabitleme mümkün değil). İstenirse girişte aynı tarayıcının eski oturumu iptal edilebilir.
 
 5. **İşlem geçmişi indeksi (`0011_audit_entity_index.sql`) ana veritabanına uygulansın mı?** Yalnız indeks ekler, veri değiştirmez; test veritabanında doğrulandı. Uygulamak için önce `node --env-file=.env scripts/backup-db.mjs`, sonra `npm run db:migrate`. Uygulanmasa da kod çalışır (yalnız büyük geçmişte yavaşlar).
 6. **Km'ye göre sıralama büyük filolarda ~200 ms (10.000 araç).** Hızlandırmak için güncel km'nin ayrıca saklanması (ör. olay eklendiğinde güncellenen bir özet tablo) gerekir; bu "tek km gerçeği" ilkesini bozmadan yapılabilir ama bir şema kararıdır. Şimdilik gerek görmüyorum.
+
+7. **Belge erişim izinleri API sürecinin belleğinde.** Tek süreçli kurulumda güvenli ve yeterli; API birden çok sunucuya çoğaltılırsa izinler için ortak bir depo (veritabanı tablosu veya Redis) gerekir. O aşamada küçük bir migration ile taşınabilir.
 
 ## Notlar
 

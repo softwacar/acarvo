@@ -105,11 +105,11 @@ export async function asApp<T>(companyId: string | null, fn: (c: pg.PoolClient) 
   }
 }
 
-export async function makeApp(opts: { scanner?: MalwareScanner; nodeEnv?: 'production' | 'test' } = {}) {
+export async function makeApp(opts: { scanner?: MalwareScanner; nodeEnv?: 'production' | 'test'; documentAccessTtlMs?: number } = {}) {
   // The app connects with env.DATABASE_URL, the same connection string as appPool.
   await ensureTestDatabase()
   const database = createDatabase(env.DATABASE_URL)
-  const app = await buildApp({ env: { ...env, NODE_ENV: opts.nodeEnv ?? env.NODE_ENV }, database, logger: false, scanner: opts.scanner })
+  const app = await buildApp({ env: { ...env, NODE_ENV: opts.nodeEnv ?? env.NODE_ENV }, database, logger: false, scanner: opts.scanner, documentAccessTtlMs: opts.documentAccessTtlMs })
   app.addHook('onClose', () => database.close())
   return app
 }

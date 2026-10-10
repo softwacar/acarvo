@@ -3,6 +3,7 @@ import type { FastifyInstance, FastifyRequest } from 'fastify'
 import type { Database, Tx } from '../db/client'
 import type { Env } from '../env'
 import type { MalwareScanner } from '../lib/malware'
+import type { DocumentAccessGrants } from '../lib/document-access'
 import type { Storage } from '../lib/storage'
 import { AppError, forbidden, unauthorized } from '../lib/errors'
 import { loadAccess, type CompanyAccess } from '../modules/auth/context'
@@ -17,6 +18,7 @@ declare module 'fastify' {
     sessions: SessionStore
     storage: Storage
     scanner: MalwareScanner
+    documentGrants: DocumentAccessGrants
   }
   interface FastifyRequest {
     auth: ValidSession | null

@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test'
-import { authFile, expectNoHorizontalOverflow, openVehicle } from './fixtures'
+import { authFile, expectNoHorizontalOverflow, fixture, openVehicle } from './fixtures'
 
 // Runs in the "mobile" project (390 × 844, touch).
 test.use({ storageState: authFile('adnan') })
@@ -35,4 +35,32 @@ test('phone: list, 360° tabs, forms and side panels are usable without sideways
   await docForm.getByRole('button', { name: 'Kapat' }).click()
   await expect(docForm).toHaveCount(0)
   await expectNoHorizontalOverflow(page)
+})
+
+test('phone: an image document is previewed, opened and downloaded; the preview is not recorded as a view', async ({ page }) => {
+  await openVehicle(page, 'M33-T-120', 'Belgeler ve riskler')
+  await page.getByRole('button', { name: 'Belge ekle' }).click()
+  const form = page.getByRole('dialog', { name: 'Belge ekle' })
+  await form.locator('#typeCode').selectOption('registration')
+  await form.locator('#docFile').setInputFiles(fixture('foto-mavi.jpg'))
+  await form.getByRole('button', { name: 'Kaydet', exact: true }).click()
+  const drawer = page.getByRole('dialog', { name: 'Ruhsat' })
+  await expect(drawer).toBeVisible()
+  // Automatic preview in the panel (its own grant purpose).
+  const preview = drawer.getByRole('img', { name: /Belge görseli/ })
+  await expect(preview).toBeVisible({ timeout: 15_000 })
+  expect(await preview.evaluate((img: HTMLImageElement) => img.complete && img.naturalWidth > 0)).toBe(true)
+  await expectNoHorizontalOverflow(page)
+  const [tab] = await Promise.all([page.waitForEvent('popup'), drawer.getByRole('button', { name: 'Aç', exact: true }).click()])
+  const served = await tab.waitForResponse((r) => r.url().includes('/api/document-files/'))
+  expect(served.status()).toBe(200)
+  expect(served.headers()['content-type']).toBe('image/jpeg')
+  await tab.close()
+  const [download] = await Promise.all([page.waitForEvent('download'), drawer.getByRole('button', { name: 'İndir' }).click()])
+  expect(download.suggestedFilename()).toMatch(/^M33-T-120_ruhsat_.*_v1\.jpg$/)
+  const vehicleId = page.url().split('?')[0]!.split('/').pop()!
+  const actions = ((await (await page.request.get(`/api/vehicles/${vehicleId}/activity`)).json()).items as { action: string }[]).map((a) => a.action)
+  expect(actions.filter((a) => a === 'vehicle.document.preview_request').length).toBeGreaterThanOrEqual(1)
+  expect(actions.filter((a) => a === 'vehicle.document.view_request')).toHaveLength(1)
+  expect(actions.filter((a) => a === 'vehicle.document.download_request')).toHaveLength(1)
 })

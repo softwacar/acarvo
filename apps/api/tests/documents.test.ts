@@ -19,6 +19,15 @@ let lejla: Client
 let selma: Client
 const T = todayIn('Europe/Sarajevo')
 
+/** Opens a document file like the web app: grant request (POST, CSRF), then the file (GET). */
+async function openFile(c: Client, url: string) {
+  const id = url.split('/').pop()!.split('?')[0]!
+  const mode = url.includes('indir=1') ? 'download' : 'view'
+  const grant = await c.post(`/api/document-files/${id}/access`, { mode })
+  if (grant.statusCode !== 200) return grant
+  return c.get(grant.json().url)
+}
+
 // ---------------------------------------------------------------------------
 // Fixtures
 
@@ -247,12 +256,12 @@ describe('files and history', () => {
       [2, 'image/jpeg', null],
       [1, 'application/pdf', 2],
     ])
-    const img = await adnan.get(det.files[0]!.url)
+    const img = await openFile(adnan, det.files[0]!.url)
     expect(img.statusCode).toBe(200)
     const meta = await sharp(img.rawPayload).metadata()
     expect(meta.exif).toBeUndefined()
     expect(img.rawPayload.toString('latin1')).not.toContain('Gizli Sahip')
-    const pdf = await adnan.get(det.files[1]!.downloadUrl)
+    const pdf = await openFile(adnan, det.files[1]!.downloadUrl)
     expect(pdf.statusCode).toBe(200)
     expect(pdf.rawPayload.subarray(0, 5).toString()).toBe('%PDF-')
   })
@@ -260,15 +269,16 @@ describe('files and history', () => {
   it('serves files with no-store, nosniff, a sandbox policy and a server-made file name', async () => {
     const id = await idOf(adnan, 'M62-A-238')
     const d = (await list(adnan, id)).documents.find((x) => x.typeCode === 'registration')!
-    const view = await adnan.get(d.latestFile!.url)
+    const view = await openFile(adnan, d.latestFile!.url)
     expect(view.headers['cache-control']).toBe('private, no-store, max-age=0')
     expect(view.headers['x-content-type-options']).toBe('nosniff')
     expect(view.headers['content-security-policy']).toContain('sandbox')
     expect(view.headers['content-disposition']).toMatch(/^inline; filename="M62-A-238_ruhsat_\d{4}-\d{2}-\d{2}_v2\.jpg"$/)
-    const dl = await adnan.get(d.latestFile!.downloadUrl)
+    const dl = await openFile(adnan, d.latestFile!.downloadUrl)
     expect(dl.headers['content-disposition']).toMatch(/^attachment; /)
-    const log = await asOwner(data.companies.drina, `select action from audit_log where action in ('vehicle.document.view','vehicle.document.download')`)
-    expect(new Set(log.rows.map((r) => r.action))).toEqual(new Set(['vehicle.document.view', 'vehicle.document.download']))
+    // Audited when requested (POST), not when the file is streamed.
+    const log = await asOwner(data.companies.drina, `select action from audit_log where action like 'vehicle.document.%request'`)
+    expect(new Set(log.rows.map((r) => r.action))).toEqual(new Set(['vehicle.document.view_request', 'vehicle.document.download_request']))
   })
 
   it('rejects disguised, active, encrypted, embedded-file and oversized documents', async () => {
@@ -321,7 +331,7 @@ describe('files and history', () => {
     expect(after).toMatchObject({ fileCount: before.fileCount, version: before.version, recordState: 'active', status: before.status })
     expect(after.files.map((f) => f.id)).toEqual(before.files.map((f) => f.id))
     expect(await storedDocuments()).toBe(storedBefore)
-    expect((await adnan.get(before.files[0]!.url)).statusCode).toBe(200)
+    expect((await openFile(adnan, before.files[0]!.url)).statusCode).toBe(200)
   })
 
   it('voiding keeps the record and its files; a voided period cannot be changed', async () => {
@@ -333,7 +343,7 @@ describe('files and history', () => {
     const v = await adnan.post(`/api/vehicles/${id}/documents/${d.id}/void`, { version: fresh.version, reason: 'Yanlış araca yüklendi' })
     expect(v.statusCode).toBe(200)
     expect(v.json()).toMatchObject({ recordState: 'voided', voidedReason: 'Yanlış araca yüklendi', status: { status: 'voided' }, fileCount: 1 })
-    expect((await adnan.get(fresh.files[0]!.url)).statusCode).toBe(200)
+    expect((await openFile(adnan, fresh.files[0]!.url)).statusCode).toBe(200)
     expect((await adnan.put(`/api/vehicles/${id}/documents/${d.id}`, { documentNumber: 'X', version: fresh.version + 1 })).statusCode).toBe(409)
     expect((await upload(adnan, id, d.id, await cleanPdf())).statusCode).toBe(409)
   })
@@ -354,7 +364,7 @@ describe('malware scanning condition', () => {
       expect(r.statusCode).toBe(503)
       expect(r.json().error.code).toBe('UPLOADS_DISABLED')
       expect(await storedDocuments()).toBe(before)
-      expect((await c.get(d.latestFile!.url)).statusCode).toBe(200)
+      expect((await openFile(c, d.latestFile!.url)).statusCode).toBe(200)
     } finally {
       await prod.close()
     }
@@ -399,6 +409,7 @@ describe('isolation', () => {
       adnan.get(`/api/vehicles/${nVehicle}/documents/${nDoc.id}`),
       adnan.get(file.url),
       adnan.get(file.downloadUrl),
+      adnan.post(`/api/document-files/${file.id}/access`, { mode: 'view' }),
       adnan.put(`/api/vehicles/${nVehicle}/documents/${nDoc.id}`, { documentNumber: 'X', version: nDoc.version }),
       adnan.post(`/api/vehicles/${nVehicle}/documents/${nDoc.id}/renew`, { validUntil: addDays(T, 600) }),
       adnan.post(`/api/vehicles/${nVehicle}/documents/${nDoc.id}/void`, { version: nDoc.version, reason: 'Deneme saldırısı' }),

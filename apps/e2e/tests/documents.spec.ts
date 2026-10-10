@@ -27,16 +27,25 @@ test('add a document with a file, view and download it, then renew without a gap
   await expect(drawer.getByText('Yaklaşıyor · 10 gün')).toBeVisible()
   await expect(drawer.getByText('test-muayene.pdf')).toBeVisible({ timeout: 15_000 })
 
-  // View: private, inline, sandboxed; download: attachment with a server-made name.
-  const viewUrl = await drawer.getByRole('link', { name: 'Aç' }).getAttribute('href')
-  const view = await page.request.get(viewUrl!)
-  expect(view.status()).toBe(200)
-  expect(view.headers()['content-type']).toBe('application/pdf')
-  expect(view.headers()['content-disposition']).toMatch(/^inline;/)
-  expect(view.headers()['content-security-policy']).toContain('sandbox')
-  expect(view.headers()['cache-control']).toContain('no-store')
-  const [download] = await Promise.all([page.waitForEvent('download'), drawer.getByRole('link', { name: 'İndir' }).click()])
+  // View: an explicit request opens the PDF in a new tab (private, inline, sandboxed); reloading it adds no audit entry.
+  const [tab] = await Promise.all([page.waitForEvent('popup'), drawer.getByRole('button', { name: 'Aç', exact: true }).click()])
+  const served = await tab.waitForResponse((r) => r.url().includes('/api/document-files/') && r.request().method() === 'GET')
+  expect(served.status()).toBe(200)
+  expect(served.headers()['content-type']).toBe('application/pdf')
+  expect(served.headers()['content-disposition']).toMatch(/^inline;/)
+  expect(served.headers()['content-security-policy']).toContain('sandbox')
+  expect(served.headers()['cache-control']).toContain('no-store')
+  expect(served.url()).not.toMatch(/token|grant|key=/i)
+  await tab.reload()
+  await tab.close()
+  // Download: attachment with a server-made name.
+  const [download] = await Promise.all([page.waitForEvent('download'), drawer.getByRole('button', { name: 'İndir' }).click()])
   expect(download.suggestedFilename()).toMatch(/^T09-A-781_muayene_\d{4}-\d{2}-\d{2}_v1\.pdf$/)
+  const vehicleId = page.url().split('?')[0]!.split('/').pop()!
+  const activity = (await (await page.request.get(`/api/vehicles/${vehicleId}/activity`)).json()).items as { action: string }[]
+  expect(activity.filter((a) => a.action === 'vehicle.document.view_request')).toHaveLength(1)
+  expect(activity.filter((a) => a.action === 'vehicle.document.download_request')).toHaveLength(1)
+  expect(activity.some((a) => a.action === 'vehicle.document.view' || a.action === 'vehicle.document.download')).toBe(false)
 
   // Renew: the new period starts the day after the old one ends.
   await drawer.getByRole('button', { name: 'Yenile' }).click()
@@ -56,4 +65,27 @@ test('add a document with a file, view and download it, then renew without a gap
 test('an unknown document file address gives no access', async ({ page }) => {
   const res = await page.request.get('/api/document-files/00000000-0000-4000-8000-000000000000')
   expect(res.status()).toBe(404)
+})
+
+test('a link to a document from another site neither opens it nor writes an audit entry', async ({ page, context }) => {
+  await openVehicle(page, 'T09-A-781', 'Belgeler ve riskler')
+  await page.locator('tr', { hasText: 'Muayene' }).click()
+  const drawer = page.getByRole('dialog', { name: 'Muayene' })
+  // The user really opens it once (grant for this session).
+  const [tab] = await Promise.all([page.waitForEvent('popup'), drawer.getByRole('button', { name: 'Aç', exact: true }).click()])
+  const served = await tab.waitForResponse((r) => r.url().includes('/api/document-files/'))
+  const fileUrl = served.url()
+  await tab.close()
+  const vehicleId = page.url().split('?')[0]!.split('/').pop()!
+  const count = async () => ((await (await page.request.get(`/api/vehicles/${vehicleId}/activity`)).json()).items as { action: string }[]).filter((a) => a.action.startsWith('vehicle.document.')).length
+  const before = await count()
+  // Another site links to the file while the user's session and grant are still active.
+  await context.route('https://kotu-site.example/**', (r) => r.fulfill({ contentType: 'text/html', body: `<a id="l" href="${fileUrl}">Belgeye bak</a>` }))
+  const evil = await context.newPage()
+  await evil.goto('https://kotu-site.example/')
+  const [resp] = await Promise.all([evil.waitForResponse((r) => r.url() === fileUrl), evil.locator('#l').click()])
+  expect(resp.status()).toBe(403)
+  expect(await resp.text()).toContain('CROSS_SITE_REQUEST')
+  await evil.close()
+  expect(await count()).toBe(before)
 })

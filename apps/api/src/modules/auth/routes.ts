@@ -95,7 +95,10 @@ export async function authRoutes(app: FastifyInstance) {
   })
 
   app.post('/logout', async (req, reply) => {
-    if (req.auth) await sessions.revoke(req.auth.session.id)
+    if (req.auth) {
+      await sessions.revoke(req.auth.session.id)
+      app.documentGrants.revokeSession(req.auth.session.id)
+    }
     clearSessionCookie(reply)
     return reply.code(204).send()
   })
@@ -104,6 +107,7 @@ export async function authRoutes(app: FastifyInstance) {
   app.post('/sessions/revoke-all', async (req, reply) => {
     const auth = requireUser(req)
     await sessions.revokeAllForUser(auth.user.id)
+    app.documentGrants.revokeUser(auth.user.id)
     clearSessionCookie(reply)
     return reply.code(204).send()
   })
@@ -118,6 +122,8 @@ export async function authRoutes(app: FastifyInstance) {
     })
     if (!allowed) throw new AppError(403, 'NO_COMPANY_ACCESS', 'Bu şirkete erişiminiz yok.')
     await sessions.setCompany(auth.session.id, companyId)
+    // Document access granted in the previous company must not carry over.
+    app.documentGrants.revokeSession(auth.session.id)
     return buildSessionInfo(app, auth.user, companyId)
   })
 }

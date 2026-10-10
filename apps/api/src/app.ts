@@ -10,6 +10,7 @@ import { branchRoutes } from './modules/branches/routes'
 import { documentFileRoutes, vehicleDocumentRoutes } from './modules/vehicles/documents'
 import { vehicleHistoryRoutes } from './modules/vehicles/history'
 import { fileRoutes, vehiclePhotoRoutes } from './modules/vehicles/photos'
+import { createDocumentAccessGrants } from './lib/document-access'
 import { createScanner, type MalwareScanner } from './lib/malware'
 import { vehicleClassRoutes, vehicleRoutes } from './modules/vehicles/routes'
 import { MAX_PHOTO_BYTES } from './lib/images'
@@ -17,7 +18,20 @@ import { createStorage } from './lib/storage'
 import { registerAuth } from './plugins/auth'
 import { registerSecurity } from './plugins/security'
 
-export async function buildApp({ env, database, logger = true, scanner }: { env: Env; database: Database; logger?: boolean; scanner?: MalwareScanner }) {
+export async function buildApp({
+  env,
+  database,
+  logger = true,
+  scanner,
+  documentAccessTtlMs,
+}: {
+  env: Env
+  database: Database
+  logger?: boolean
+  scanner?: MalwareScanner
+  /** Tests shorten the document access grant lifetime. */
+  documentAccessTtlMs?: number
+}) {
   // Without a trusted proxy every request behind the web proxy would share one address (rate limits, session IPs).
   const trustProxy = env.TRUST_PROXY ?? (env.NODE_ENV === 'production' ? false : 'loopback')
   const app = Fastify({ logger: logger && { level: env.NODE_ENV === 'production' ? 'info' : 'debug' }, bodyLimit: 1_000_000, trustProxy })
@@ -25,6 +39,7 @@ export async function buildApp({ env, database, logger = true, scanner }: { env:
   app.decorate('database', database)
   app.decorate('sessions', sessionStore(database))
   app.decorate('scanner', scanner ?? createScanner(env))
+  app.decorate('documentGrants', createDocumentAccessGrants(documentAccessTtlMs))
   app.decorate('storage', createStorage(env.STORAGE_DIR ?? fileURLToPath(new URL('../../../storage', import.meta.url))))
 
   await registerSecurity(app, env)

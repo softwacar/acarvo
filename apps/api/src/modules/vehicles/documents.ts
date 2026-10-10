@@ -22,6 +22,7 @@ import { cleanDisplayName, MAX_DOCUMENT_BYTES, validateDocumentFile } from '../.
 import { AppError, notFound } from '../../lib/errors'
 import { toIsoOrNull } from '../../lib/timestamps'
 import { documentUploadPolicy } from '../../lib/malware'
+import { DOCUMENT_ACCESS_MODES, type DocumentAccessMode } from '../../lib/document-access'
 import { withCompany } from '../../plugins/auth'
 import { UPLOAD_RATE_LIMIT } from '../../plugins/security'
 import type { CompanyAccess } from '../auth/context'
@@ -434,32 +435,81 @@ const TYPE_SLUG: Record<string, string> = {
  * company (RLS) and the branch scope of the owning vehicle. Never cached; viewing and downloading
  * are recorded in the audit log.
  */
+const ACCESS_AUDIT: Record<DocumentAccessMode, string> = {
+  view: 'vehicle.document.view_request',
+  download: 'vehicle.document.download_request',
+  preview: 'vehicle.document.preview_request',
+}
+const accessSchema = z.object({ mode: z.enum(DOCUMENT_ACCESS_MODES, { error: 'Geçersiz işlem' }) })
+/** File, its document and vehicle, if visible to the user (company by RLS, branch by scope); otherwise 404. */
+async function visibleFile(tx: Tx, access: CompanyAccess, fileId: string) {
+  const rows = await tx.execute(sql`
+    select f.storage_key, f.mime_type, vf.version_no, d.id as document_id, d.type_code, d.valid_until, d.created_at as doc_created_at,
+           v.id as vehicle_id, v.plate, v.home_branch_id
+    from document_files f
+    join vehicle_document_files vf on vf.company_id = f.company_id and vf.file_id = f.id
+    join vehicle_documents d on d.company_id = vf.company_id and d.id = vf.document_id
+    join vehicles v on v.company_id = d.company_id and v.id = d.vehicle_id
+    where f.id = ${fileId}`)
+  const r = rows.rows[0] as Row | undefined
+  if (!r || !inScope(access, r.home_branch_id as string)) throw notFound()
+  return r
+}
+const modeOf = (q: unknown): DocumentAccessMode => {
+  const query = (q ?? {}) as { indir?: string; onizleme?: string }
+  return query.indir === '1' ? 'download' : query.onizleme === '1' ? 'preview' : 'view'
+}
+const fileUrl = (id: string, mode: DocumentAccessMode) => `/api/document-files/${id}${mode === 'download' ? '?indir=1' : mode === 'preview' ? '?onizleme=1' : ''}`
+
 export async function documentFileRoutes(app: FastifyInstance) {
-  app.get('/:id', async (req: FastifyRequest, reply) => {
+  /**
+   * The user asked to view, download or preview a file inside ACARVO. CSRF, Origin, session, permission, company and
+   * branch are checked (POST); the request is audited as *requested* (the server cannot prove the file was read) and a
+   * short-lived grant bound to this session, company, file and purpose is created. No token goes into the URL.
+   */
+  app.post('/:id/access', { config: { rateLimit: { max: 120, timeWindow: '1 minute', keyGenerator: (req: FastifyRequest) => `doc-access|${req.auth?.user.id ?? req.ip}` } } }, async (req) => {
     const parsed = z.object({ id: z.uuid() }).safeParse(req.params)
     if (!parsed.success) throw notFound()
-    const download = (req.query as { indir?: string }).indir === '1'
-    const file = await withCompany(req, 'vehicles.documents.read', async (tx, access) => {
-      const rows = await tx.execute(sql`
-        select f.storage_key, f.mime_type, vf.version_no, d.id as document_id, d.type_code, d.valid_until, d.created_at as doc_created_at,
-               v.id as vehicle_id, v.plate, v.home_branch_id
-        from document_files f
-        join vehicle_document_files vf on vf.company_id = f.company_id and vf.file_id = f.id
-        join vehicle_documents d on d.company_id = vf.company_id and d.id = vf.document_id
-        join vehicles v on v.company_id = d.company_id and v.id = d.vehicle_id
-        where f.id = ${parsed.data.id}`)
-      const r = rows.rows[0] as Row | undefined
-      if (!r || !inScope(access, r.home_branch_id as string)) throw notFound()
+    const { mode } = accessSchema.parse(req.body)
+    return withCompany(req, 'vehicles.documents.read', async (tx, access) => {
+      const r = await visibleFile(tx, access, parsed.data.id)
+      // Inline previews are for images only (PDFs show a card; they are opened with Görüntüle).
+      if (mode === 'preview' && r.mime_type === 'application/pdf') throw new AppError(400, 'PREVIEW_NOT_AVAILABLE', 'PDF için önizleme yok; Görüntüle ile açın.')
+      const auth = req.auth!
       await audit(tx, {
         companyId: access.companyId,
-        actorUserId: req.auth!.user.id,
-        action: download ? 'vehicle.document.download' : 'vehicle.document.view',
+        actorUserId: auth.user.id,
+        action: ACCESS_AUDIT[mode],
         entity: 'vehicle',
         entityId: r.vehicle_id as string,
-        summary: { plate: r.plate, documentId: r.document_id, type: r.type_code, fileId: parsed.data.id, versionNo: Number(r.version_no) },
+        summary: { plate: r.plate, documentId: r.document_id, type: r.type_code, fileId: parsed.data.id, versionNo: Number(r.version_no), mode },
       })
+      const { expiresAt } = app.documentGrants.issue({ sessionId: auth.session.id, userId: auth.user.id, companyId: access.companyId, fileId: parsed.data.id, mode })
+      return { url: fileUrl(parsed.data.id, mode), expiresAt: new Date(expiresAt).toISOString() }
+    })
+  })
+
+  /**
+   * Streams the file. Requires: a browser request from ACARVO itself (Fetch Metadata), a valid session with the
+   * permission, the file in the user's company and branches, and a matching unexpired grant. Writes no audit entry:
+   * repeated requests (PDF viewer, reload) never create records.
+   */
+  app.get('/:id', async (req: FastifyRequest, reply) => {
+    const site = req.headers['sec-fetch-site']
+    if (site !== undefined && site !== 'same-origin' && site !== 'none') {
+      throw new AppError(403, 'CROSS_SITE_REQUEST', 'Belgeler yalnız ACARVO içinden açılabilir.')
+    }
+    const parsed = z.object({ id: z.uuid() }).safeParse(req.params)
+    if (!parsed.success) throw notFound()
+    const mode = modeOf(req.query)
+    const file = await withCompany(req, 'vehicles.documents.read', async (tx, access) => {
+      const r = await visibleFile(tx, access, parsed.data.id)
+      if (!app.documentGrants.allows({ sessionId: req.auth!.session.id, companyId: access.companyId, fileId: parsed.data.id, mode })) {
+        throw new AppError(403, 'ACCESS_GRANT_REQUIRED', 'Bu belgeyi açmak için ACARVO içindeki Görüntüle veya İndir düğmesini kullanın. Bağlantının süresi dolmuş olabilir.')
+      }
       return r
     })
+    const download = mode === 'download'
     const ext = file.mime_type === 'application/pdf' ? 'pdf' : file.mime_type === 'image/png' ? 'png' : 'jpg'
     const dated = day(file.valid_until) ?? String(iso(file.doc_created_at)).slice(0, 10)
     const name = `${String(file.plate).replace(/[^A-Za-z0-9-]/g, '')}_${TYPE_SLUG[file.type_code as string] ?? 'belge'}_${dated}_v${file.version_no}.${ext}`
