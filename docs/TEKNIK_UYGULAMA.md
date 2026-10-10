@@ -271,7 +271,7 @@ Araç × tür özeti (Belgeler tablosundaki satır):
 
 Kiralama, rezervasyon, müsaitlik, bakım ve finans verileri ilgili modüller geliştirilince bağlanır. O zamana kadar Araç 360° bu bölümlerde açık bir "modül henüz geliştirilmedi" durumu gösterir; kirada/müsait durumu uydurulmaz.
 
-### 8.5 Araç kilometre ve konum yönetimi — uygulama planı (onaylı 10.10.2026, kullanıcı kararlarıyla güncellendi)
+### 8.5 Araç kilometre ve konum yönetimi — uygulama planı (onaylı ve uygulandı 10.10.2026, kullanıcı kararlarıyla güncellendi)
 
 Kaynak: spec §59CY (tek km gerçeği), §59CG (konum geçmişi, canlı GPS değil), §13.3 Sekme 8 (Konum & Geçmiş), §13.2 (bilgi şeridi: km ve fiziksel konum ayrı; "Km doğrulanmadı"), §59R (transfer ana şubeyi değiştirmez), §2 (şube bağlılığı ≠ fiziksel konum), §13.1 madde 3 (güncel değer serbest düzenlenmez; kaynak olay veya yetkili düzeltme). Mevcut mimari korunur: güncel km ve konum, yalnız ekleme yapılan olay tablolarından (`odometer_readings`, `vehicle_location_events`) **türetilir**; araç tablosunda düzenlenebilir km veya konum alanı açılmaz.
 

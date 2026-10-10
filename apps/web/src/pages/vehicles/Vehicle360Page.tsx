@@ -43,6 +43,7 @@ import { can, useSession } from '@/session'
 import { listSearchToReturnTo } from './search'
 import { VehicleDocuments } from './VehicleDocuments'
 import { VehicleGallery } from './VehicleGallery'
+import { OdometerLocationSection, placeText } from './VehicleHistory'
 
 // ---------------------------------------------------------------------------
 // Tabs (spec §13.3: 8 fixed tabs inside the vehicle, never sidebar links)
@@ -411,8 +412,8 @@ function Hero({ v, canEdit, onTab }: { v: VehicleDetail; canEdit: boolean; onTab
 // ---------------------------------------------------------------------------
 // Tab contents
 
-const ODOMETER_EVENT_LABELS: Record<string, string> = { initial: 'Başlangıç kaydı', correction: 'Düzeltme' }
-const LOCATION_EVENT_LABELS: Record<string, string> = { initial: 'Başlangıç konumu' }
+const ODOMETER_EVENT_LABELS: Record<string, string> = { initial: 'Başlangıç kaydı', manual: 'Elle girildi', correction: 'Düzeltme' }
+const LOCATION_EVENT_LABELS: Record<string, string> = { initial: 'Başlangıç konumu', manual: 'Konum kaydı (elle)', correction: 'Düzeltme' }
 
 const FIELD_LABELS: Record<string, string> = {
   plate: 'Plaka',
@@ -482,6 +483,30 @@ const ACTION_TITLES: Record<string, string> = {
   'vehicle.document.file_add': 'Belge dosyası yüklendi',
   'vehicle.document.view': 'Belge dosyası görüntülendi',
   'vehicle.document.download': 'Belge dosyası indirildi',
+  'vehicle.odometer.record': 'Kilometre okuması girildi',
+  'vehicle.odometer.correct': 'Kilometre kaydı düzeltildi',
+  'vehicle.location.record': 'Konum kaydı girildi',
+  'vehicle.location.correct': 'Konum kaydı düzeltildi',
+}
+
+type PlaceSummary = { type: string; branchName: string | null; description: string | null } | null
+const placeOf = (p: PlaceSummary) => (p ? placeText({ type: p.type as 'branch', branchName: p.branchName, description: p.description }) : '—')
+
+/** One line under odometer / location audit entries. */
+function historySummary(a: VehicleActivityItem): string | null {
+  const s = (a.summary ?? {}) as Record<string, unknown>
+  switch (a.action) {
+    case 'vehicle.odometer.record':
+      return `${formatKm(Number(s.km))}${s.becameCurrent === false ? ' · geçmişe eklendi' : ''}${s.jumpReason ? ` · büyük artış: ${s.jumpReason}` : ''}`
+    case 'vehicle.odometer.correct':
+      return s.action === 'void' ? `${formatKm(Number(s.oldKm))} hatalı sayıldı · ${s.reason}` : `${formatKm(Number(s.oldKm))} → ${formatKm(Number(s.newKm))} · ${s.reason}`
+    case 'vehicle.location.record':
+      return `${placeOf(s.from as PlaceSummary)} → ${placeOf(s.to as PlaceSummary)} · ${s.reason}`
+    case 'vehicle.location.correct':
+      return s.action === 'void' ? `${placeOf(s.from as PlaceSummary)} hatalı sayıldı · ${s.reason}` : `${placeOf(s.from as PlaceSummary)} → ${placeOf(s.to as PlaceSummary)} · ${s.reason}`
+    default:
+      return null
+  }
 }
 
 function ActivityEntry({ a }: { a: VehicleActivityItem }) {
@@ -509,6 +534,7 @@ function ActivityEntry({ a }: { a: VehicleActivityItem }) {
             ))}
           </ul>
         )}
+        {historySummary(a) && <p className="mt-0.5 text-[13px] text-ink-2">{historySummary(a)}</p>}
         {a.action === 'vehicle.create' && (
           <p className="mt-0.5 text-[13px] text-ink-2">
             {typeof a.summary?.initialOdometerKm === 'number' ? `Başlangıç kilometresi ${formatKm(a.summary.initialOdometerKm)}` : 'Başlangıç kilometresi girilmedi'}
@@ -531,7 +557,7 @@ interface TimelineItem {
 function recentItems(history: VehicleHistory | undefined): TimelineItem[] {
   if (!history) return []
   return [
-    ...history.odometer.map((o) => ({
+    ...history.odometer.filter((o) => o.effective).map((o) => ({
       key: `o${o.id}`,
       at: o.occurredAt,
       icon: Gauge,
@@ -539,11 +565,11 @@ function recentItems(history: VehicleHistory | undefined): TimelineItem[] {
       detail: ODOMETER_EVENT_LABELS[o.eventType] ?? o.eventType,
       by: o.recordedByName,
     })),
-    ...history.locations.map((l) => ({
+    ...history.locations.filter((l) => l.effective).map((l) => ({
       key: `l${l.id}`,
       at: l.occurredAt,
       icon: MapPin,
-      title: `Konum: ${l.type === 'branch' ? l.branchName : LOCATION_LABELS[l.type]}`,
+      title: `Konum: ${placeText(l)}`,
       detail: LOCATION_EVENT_LABELS[l.eventType] ?? l.eventType,
       by: l.recordedByName,
     })),
@@ -705,93 +731,13 @@ function Pending({ tab }: { tab: VehicleTab }) {
   )
 }
 
-function HistoryTab({ history, isLoading, vehicleId }: { history?: VehicleHistory; isLoading: boolean; vehicleId: string }) {
+function HistoryTab({ v, history, isLoading }: { v: VehicleDetail; history?: VehicleHistory; isLoading: boolean }) {
   const session = useSession()
   const canAudit = can(session, 'audit.read')
-  const activity = useQuery({ queryKey: ['vehicle-activity', session.company?.id, vehicleId], queryFn: () => vehicle360Api.activity(vehicleId), enabled: canAudit })
-  const th = 'h-10 px-5 font-medium whitespace-nowrap'
-  const td = 'h-12 px-5 whitespace-nowrap'
+  const activity = useQuery({ queryKey: ['vehicle-activity', session.company?.id, v.id], queryFn: () => vehicle360Api.activity(v.id), enabled: canAudit })
   return (
     <div className="space-y-5">
-      <div className="grid gap-5 2xl:grid-cols-2">
-        <Panel title="Kilometre geçmişi" action={<span className="text-[12.5px] text-ink-2">Güncel değer en son kayıttır</span>}>
-          {isLoading ? (
-            <div className="h-24 animate-pulse rounded-lg bg-line-soft/60" />
-          ) : !history?.odometer.length ? (
-            <p className="text-ink-2">Kilometre kaydı yok. Kilometre doğrulanmadı.</p>
-          ) : (
-            <div className="-mx-5 overflow-x-auto">
-              <table className="w-full text-[13.5px]">
-                <thead>
-                  <tr className="border-y border-line bg-ground/50 text-left text-[12.5px] text-ink-2">
-                    <th className={th}>Zaman</th>
-                    <th className={th}>Olay</th>
-                    <th className={cn(th, 'text-right')}>Kilometre</th>
-                    <th className={th}>Giren</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {history.odometer.map((o) => (
-                    <tr key={o.id} className="border-b border-line-soft last:border-b-0">
-                      <td className={cn(td, 'tnum')}>{formatDateTime(o.occurredAt)}</td>
-                      <td className={td}>
-                        <span className="font-medium">{ODOMETER_EVENT_LABELS[o.eventType] ?? o.eventType}</span>
-                      </td>
-                      <td className={cn(td, 'tnum text-right font-medium')}>{formatKm(o.km)}</td>
-                      <td className={cn(td, 'text-ink-2')}>{o.recordedByName ?? '—'}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </Panel>
-        <Panel title="Konum geçmişi" action={<span className="text-[12.5px] text-ink-2">Canlı GPS değildir</span>}>
-          {isLoading ? (
-            <div className="h-24 animate-pulse rounded-lg bg-line-soft/60" />
-          ) : !history?.locations.length ? (
-            <p className="text-ink-2">Konum kaydı yok.</p>
-          ) : (
-            <div className="-mx-5 overflow-x-auto">
-              <table className="w-full text-[13.5px]">
-                <thead>
-                  <tr className="border-y border-line bg-ground/50 text-left text-[12.5px] text-ink-2">
-                    <th className={th}>Zaman</th>
-                    <th className={th}>Olay</th>
-                    <th className={th}>Yer</th>
-                    <th className={th}>Giren</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {history.locations.map((l) => (
-                    <tr key={l.id} className="border-b border-line-soft last:border-b-0">
-                      <td className={cn(td, 'tnum')}>{formatDateTime(l.occurredAt)}</td>
-                      <td className={td}>
-                        <span className="font-medium">{LOCATION_EVENT_LABELS[l.eventType] ?? l.eventType}</span>
-                      </td>
-                      <td className={td}>
-                        {l.type === 'branch' ? (
-                          <span className="inline-flex items-center gap-2">
-                            <span className="rounded-[4px] border border-line px-1 text-[11px] font-semibold tracking-[0.05em]">{l.branchCode}</span>
-                            {l.branchName}
-                          </span>
-                        ) : (
-                          LOCATION_LABELS[l.type]
-                        )}
-                      </td>
-                      <td className={cn(td, 'text-ink-2')}>{l.recordedByName ?? '—'}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </Panel>
-      </div>
-      <p className="flex items-start gap-1.5 text-[13px] text-ink-2">
-        <LockSimple size={14} className="mt-[3px] shrink-0 text-ink-3" />
-        Kayıtlar geriye dönük değiştirilmez; düzeltme ve transferler gerekçeli yeni kayıt olarak eklenecek.
-      </p>
+      <OdometerLocationSection v={v} history={history} isLoading={isLoading} />
 
       <Panel title="Kayıt geçmişi" action={<span className="text-[12.5px] text-ink-2">Kim, ne zaman, neyi değiştirdi</span>}>
         {!canAudit ? (
@@ -909,7 +855,7 @@ export function Vehicle360Page() {
   }
 
   const v = vehicle.data
-  const counts: Partial<Record<VehicleTab, number>> = history.data ? { gecmis: history.data.odometer.length + history.data.locations.length } : {}
+  const counts: Partial<Record<VehicleTab, number>> = history.data ? { gecmis: history.data.odometer.filter((o) => o.effective).length + history.data.locations.filter((l) => l.effective).length } : {}
   return (
     <>
       <Hero v={v} canEdit={canEdit} onTab={onTab} />
@@ -917,7 +863,7 @@ export function Vehicle360Page() {
       <div key={tab} id="vehicle-tabpanel" role="tabpanel" aria-labelledby={`tab-${tab}`} className="mx-auto max-w-[1400px] animate-fade px-4 py-6 lg:px-8">
         {tab === 'genel' && <Overview v={v} history={history.data} onTab={onTab} canEdit={canEdit} />}
         {tab === 'belgeler' && <VehicleDocuments vehicleId={v.id} plate={v.plate} />}
-        {tab === 'gecmis' && <HistoryTab history={history.data} isLoading={history.isPending} vehicleId={v.id} />}
+        {tab === 'gecmis' && <HistoryTab v={v} history={history.data} isLoading={history.isPending} />}
         {PENDING[tab] && <Pending tab={tab} />}
       </div>
     </>

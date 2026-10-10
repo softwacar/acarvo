@@ -1,4 +1,4 @@
-import type { ApiError, SessionInfo, VehicleActivityItem, VehicleDocumentDetail, VehicleDocumentsResponse, VehiclePhoto, VehiclePhotoList, VehicleClassSummary, VehicleDetail, VehicleHistory, VehicleListResponse } from '@acarvo/shared'
+import type { ApiError, HistoryWriteResult, SessionInfo, VehicleActivityItem, VehicleDocumentDetail, VehicleDocumentsResponse, VehiclePhoto, VehiclePhotoList, VehicleClassSummary, VehicleDetail, VehicleHistory, VehicleListResponse } from '@acarvo/shared'
 
 export class ApiRequestError extends Error {
   constructor(
@@ -103,6 +103,14 @@ export const vehiclesApi = {
 export const vehicle360Api = {
   history: (id: string) => api<VehicleHistory>(`/vehicles/${id}/history`),
   activity: (id: string) => api<{ items: VehicleActivityItem[] }>(`/vehicles/${id}/activity`),
+}
+
+/** Odometer and location records (docs §8.5). Each call carries expectedVersion and a clientRequestId. */
+export const historyApi = {
+  recordOdometer: (id: string, body: unknown) => api<HistoryWriteResult>(`/vehicles/${id}/odometer`, { method: 'POST', body }),
+  correctOdometer: (id: string, readingId: string, body: unknown) => api<HistoryWriteResult>(`/vehicles/${id}/odometer/${readingId}/correct`, { method: 'POST', body }),
+  recordLocation: (id: string, body: unknown) => api<HistoryWriteResult>(`/vehicles/${id}/location`, { method: 'POST', body }),
+  correctLocation: (id: string, eventId: string, body: unknown) => api<HistoryWriteResult>(`/vehicles/${id}/location/${eventId}/correct`, { method: 'POST', body }),
 }
 
 /** Multipart upload with progress (fetch has no upload progress). Same CSRF and error rules as api(). */
