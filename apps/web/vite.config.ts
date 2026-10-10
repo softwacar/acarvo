@@ -11,6 +11,8 @@ export default defineConfig({
     alias: { '@': path.resolve(import.meta.dirname, './src') },
   },
   server: {
-    proxy: { '/api': { target: 'http://127.0.0.1:3001' } },
+    // xfwd passes the browser's address to the API (trusted there as a loopback proxy). The target can be
+    // pointed at a separate API, e.g. the browser-test server on the test database.
+    proxy: { '/api': { target: process.env.ACARVO_API_PROXY ?? 'http://127.0.0.1:3001', xfwd: true } },
   },
 })

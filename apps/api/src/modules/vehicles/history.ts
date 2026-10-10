@@ -12,7 +12,6 @@ import {
   locationCorrectSchema,
   locationRecordSchema,
   odometerCorrectSchema,
-  odometerNeighbours,
   odometerOrderProblem,
   odometerRecordSchema,
 } from '@acarvo/shared'
@@ -96,7 +95,16 @@ function placeOf(r: Row, prefix = ''): LocationPlace {
   }
 }
 
-export async function loadHistory(tx: Tx, vehicle: Pick<VisibleVehicle, 'id' | 'createdAt'>): Promise<VehicleHistory> {
+/** Newest records shown in the history; rules and corrections never depend on this window. */
+const HISTORY_PAGE = 500
+
+/**
+ * History of one vehicle, newest first (at most HISTORY_PAGE records of each kind). With `only`, returns just that
+ * reading or event (any age), for corrections.
+ */
+export async function loadHistory(tx: Tx, vehicle: Pick<VisibleVehicle, 'id' | 'createdAt'>, only?: { readingId?: string; eventId?: string }): Promise<VehicleHistory> {
+  const oneReading = only?.readingId ? sql`and r.id = ${only.readingId}` : sql``
+  const oneEvent = only?.eventId ? sql`and e.id = ${only.eventId}` : sql``
   const odo = await tx.execute(sql`
     select r.id, r.km, r.event_type, r.source_type, r.occurred_at, r.created_at, r.note, r.jump_reason, u.name as recorded_by_name,
       c.id as c_id, c.action as c_action, c.reason as c_reason, c.created_at as c_at, cu.name as c_by,
@@ -108,8 +116,8 @@ export async function loadHistory(tx: Tx, vehicle: Pick<VisibleVehicle, 'id' | '
     left join users cu on cu.id = c.created_by
     left join odometer_corrections oc on r.source_type = 'correction' and oc.company_id = r.company_id and oc.id = r.source_id
     left join odometer_readings ocr on ocr.company_id = oc.company_id and ocr.id = oc.reading_id
-    where r.vehicle_id = ${vehicle.id}
-    order by r.occurred_at desc, r.created_at desc limit 500`)
+    where r.vehicle_id = ${vehicle.id} ${oneReading}
+    order by r.occurred_at desc, r.created_at desc limit ${HISTORY_PAGE}`)
   const loc = await tx.execute(sql`
     select e.id, e.location_type, e.branch_id, b.name as branch_name, b.code as branch_code, e.description, e.reason,
       e.event_type, e.source_type, e.occurred_at, e.created_at, u.name as recorded_by_name,
@@ -125,8 +133,8 @@ export async function loadHistory(tx: Tx, vehicle: Pick<VisibleVehicle, 'id' | '
     left join vehicle_location_corrections oc on e.source_type = 'correction' and oc.company_id = e.company_id and oc.id = e.source_id
     left join vehicle_location_events oe on oe.company_id = oc.company_id and oe.id = oc.event_id
     left join branches ob on ob.company_id = oe.company_id and ob.id = oe.branch_id
-    where e.vehicle_id = ${vehicle.id}
-    order by e.occurred_at desc, e.created_at desc limit 500`)
+    where e.vehicle_id = ${vehicle.id} ${oneEvent}
+    order by e.occurred_at desc, e.created_at desc limit ${HISTORY_PAGE}`)
   const versions = (
     await tx.execute(sql`select
       (select count(*) from odometer_readings where vehicle_id = ${vehicle.id}) || '-' || (select count(*) from odometer_corrections where vehicle_id = ${vehicle.id}) as odometer,
@@ -263,8 +271,35 @@ async function findRequest(tx: Tx, table: 'odometer_readings' | 'odometer_correc
   return r?.id ?? null
 }
 
-function odometerProblem(km: number, history: VehicleHistory, at: string, vehicle: VisibleVehicle, excludeId?: string) {
-  const n = odometerNeighbours(history.odometer, at, excludeId)
+interface Neighbour {
+  id: string
+  km: number
+  occurredAt: string
+  recordedByName: string | null
+}
+
+/**
+ * Effective readings around a moment, straight from the database (not from the displayed page of history):
+ * the highest reading at or before it and the lowest after it. Same rule as the database guard.
+ */
+async function neighboursAt(tx: Tx, vehicleId: string, at: string, excludeId?: string) {
+  const effective = sql`not exists (select 1 from odometer_corrections c where c.company_id = r.company_id and c.reading_id = r.id)`
+  const exclude = excludeId ? sql`and r.id <> ${excludeId}` : sql``
+  const pick = async (cond: ReturnType<typeof sql>, order: ReturnType<typeof sql>): Promise<Neighbour | null> => {
+    const r = (
+      await tx.execute(sql`select r.id, r.km, r.occurred_at, u.name as recorded_by_name from odometer_readings r left join users u on u.id = r.recorded_by
+        where r.vehicle_id = ${vehicleId} and ${cond} and ${effective} ${exclude} order by ${order} limit 1`)
+    ).rows[0] as Row | undefined
+    return r ? { id: r.id as string, km: Number(r.km), occurredAt: iso(r.occurred_at), recordedByName: str(r.recorded_by_name) } : null
+  }
+  return {
+    previous: await pick(sql`r.occurred_at <= ${at}`, sql`r.km desc, r.occurred_at desc`),
+    next: await pick(sql`r.occurred_at > ${at}`, sql`r.km asc, r.occurred_at asc`),
+  }
+}
+
+async function odometerProblem(tx: Tx, km: number, at: string, vehicle: VisibleVehicle, excludeId?: string) {
+  const n = await neighboursAt(tx, vehicle.id, at, excludeId)
   const problem = odometerOrderProblem(km, n)
   if (!problem) return n
   const other = problem === 'below_previous' ? n.previous! : n.next!
@@ -279,7 +314,7 @@ function odometerProblem(km: number, history: VehicleHistory, at: string, vehicl
   })
 }
 
-function assertJumpReason(n: { previous: OdometerEntry | null }, km: number, at: string, reasonGiven: string | undefined) {
+function assertJumpReason(n: { previous: Neighbour | null }, km: number, at: string, reasonGiven: string | undefined) {
   const jump = largeJump(n.previous, km, at)
   if (jump && !reasonGiven) {
     const msg = `Bu okuma bir öncekinden ${kmText(jump.deltaKm)} fazla (günlük ortalama ${kmText(jump.perDay)}). Doğruysa gerekçe girerek onaylayın.`
@@ -332,7 +367,7 @@ export async function vehicleHistoryRoutes(app: FastifyInstance) {
       if (isLateEntry(input.occurredAt) && !input.note) {
         throw new AppError(422, 'NOTE_REQUIRED', '48 saatten eski kilometre kayıtlarında açıklama zorunludur.', { note: '48 saatten eski kayıtlarda açıklama girin' })
       }
-      const n = odometerProblem(input.km, history, input.occurredAt, vehicle)
+      const n = await odometerProblem(tx, input.km, input.occurredAt, vehicle)
       const jump = assertJumpReason(n, input.km, input.occurredAt, input.largeJumpReason)
       const userId = req.auth!.user.id
       const row = await insertOrMap(async () =>
@@ -376,14 +411,14 @@ export async function vehicleHistoryRoutes(app: FastifyInstance) {
       let history = await loadHistory(tx, vehicle)
       if (repeated) return { id: repeated, becameCurrent: false, duplicate: true, history }
       assertVersion(input.expectedVersion, history.odometerVersion, history)
-      const reading = history.odometer.find((o) => o.id === readingId)
+      const reading = history.odometer.find((o) => o.id === readingId) ?? (await loadHistory(tx, vehicle, { readingId })).odometer[0]
       if (!reading) throw notFound(RECORD_NOT_FOUND)
       if (!reading.effective) throw new AppError(409, 'ALREADY_CORRECTED', 'Bu kayıt zaten düzeltilmiş. Gerekirse yerine geçen kaydı düzeltin.')
       if (!CORRECTABLE_SOURCES.has(reading.sourceType)) throw new AppError(409, 'SOURCE_OWNED', 'Bu kayıt kendi işleminden düzeltilmelidir.')
       let jump: ReturnType<typeof largeJump> = null
       if (input.action === 'replace') {
         if (input.km === reading.km) throw new AppError(422, 'VALIDATION_FAILED', 'Yeni değer eskisiyle aynı.', { km: 'Yeni değer eskisiyle aynı' })
-        const n = odometerProblem(input.km!, history, reading.occurredAt, vehicle, reading.id)
+        const n = await odometerProblem(tx, input.km!, reading.occurredAt, vehicle, reading.id)
         jump = assertJumpReason(n, input.km!, reading.occurredAt, input.largeJumpReason)
       }
       const userId = req.auth!.user.id
@@ -480,7 +515,7 @@ export async function vehicleHistoryRoutes(app: FastifyInstance) {
       let history = await loadHistory(tx, vehicle)
       if (repeated) return { id: repeated, becameCurrent: false, duplicate: true, history }
       assertVersion(input.expectedVersion, history.locationVersion, history)
-      const event = history.locations.find((l) => l.id === eventId)
+      const event = history.locations.find((l) => l.id === eventId) ?? (await loadHistory(tx, vehicle, { eventId })).locations[0]
       if (!event) throw notFound(RECORD_NOT_FOUND)
       if (!event.effective) throw new AppError(409, 'ALREADY_CORRECTED', 'Bu kayıt zaten düzeltilmiş. Gerekirse yerine geçen kaydı düzeltin.')
       if (!CORRECTABLE_SOURCES.has(event.sourceType)) throw new AppError(409, 'SOURCE_OWNED', 'Bu kayıt kendi işleminden düzeltilmelidir.')

@@ -11,6 +11,8 @@ import { sessionQuery } from './session'
 /** Any 401 means the server ended the session (expiry, revocation): return to sign-in. */
 function onApiError(error: unknown) {
   if (error instanceof ApiRequestError && error.status === 401 && router.state.location.pathname !== '/giris') {
+    // Another user may sign in on this tab next: drop every cached record, not only the session.
+    queryClient.removeQueries({ predicate: (q) => q.queryKey[0] !== 'session' })
     queryClient.setQueryData(sessionQuery.queryKey, null)
     void router.navigate({ to: '/giris', search: { next: router.state.location.href } })
   }

@@ -18,7 +18,9 @@ import { registerAuth } from './plugins/auth'
 import { registerSecurity } from './plugins/security'
 
 export async function buildApp({ env, database, logger = true, scanner }: { env: Env; database: Database; logger?: boolean; scanner?: MalwareScanner }) {
-  const app = Fastify({ logger: logger && { level: env.NODE_ENV === 'production' ? 'info' : 'debug' }, bodyLimit: 1_000_000 })
+  // Without a trusted proxy every request behind the web proxy would share one address (rate limits, session IPs).
+  const trustProxy = env.TRUST_PROXY ?? (env.NODE_ENV === 'production' ? false : 'loopback')
+  const app = Fastify({ logger: logger && { level: env.NODE_ENV === 'production' ? 'info' : 'debug' }, bodyLimit: 1_000_000, trustProxy })
   app.decorate('env', env)
   app.decorate('database', database)
   app.decorate('sessions', sessionStore(database))

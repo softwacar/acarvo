@@ -19,6 +19,28 @@ function clearSessionCookie(reply: FastifyReply) {
   reply.clearCookie(SESSION_COOKIE, cookieOptions)
 }
 
+/** Failed sign-ins per client address within a window, across all e-mail addresses (credential stuffing). */
+const FAILED_LOGIN_LIMIT = 30
+const FAILED_LOGIN_WINDOW_MS = 15 * 60 * 1000
+const failedLogins = new Map<string, { count: number; resetAt: number }>()
+function failedLoginGuard(ip: string) {
+  const now = Date.now()
+  const entry = failedLogins.get(ip)
+  if (entry && entry.resetAt <= now) failedLogins.delete(ip)
+  const current = failedLogins.get(ip)
+  if (current && current.count >= FAILED_LOGIN_LIMIT) {
+    const minutes = Math.max(1, Math.ceil((current.resetAt - now) / 60000))
+    throw new AppError(429, 'RATE_LIMITED', `Çok fazla deneme yapıldı. Yaklaşık ${minutes} dakika sonra tekrar deneyin.`)
+  }
+  return () => {
+    const e = failedLogins.get(ip) ?? { count: 0, resetAt: now + FAILED_LOGIN_WINDOW_MS }
+    e.count += 1
+    failedLogins.set(ip, e)
+    if (failedLogins.size > 10_000) for (const [k, v] of failedLogins) if (v.resetAt <= now) failedLogins.delete(k)
+  }
+}
+export const resetFailedLogins = () => failedLogins.clear()
+
 export async function authRoutes(app: FastifyInstance) {
   const { database, sessions } = app
 
@@ -41,13 +63,17 @@ export async function authRoutes(app: FastifyInstance) {
     },
     async (req, reply) => {
       const input = loginSchema.parse(req.body)
+      const recordFailure = failedLoginGuard(req.ip)
       const [user] = await database.db
         .select()
         .from(users)
         .where(sql`lower(${users.email}) = ${input.email}`)
         .limit(1)
       const ok = await verifyPassword(user?.status === 'active' ? user.passwordHash : null, input.password)
-      if (!user || !ok) throw new AppError(401, 'INVALID_CREDENTIALS', 'E-posta veya parola hatalı.')
+      if (!user || !ok) {
+        recordFailure()
+        throw new AppError(401, 'INVALID_CREDENTIALS', 'E-posta veya parola hatalı.')
+      }
 
       const memberships = (await listMemberships(database, user.id)).sort((a, b) => a.companyName.localeCompare(b.companyName))
       const companyId = memberships[0]?.companyId ?? null

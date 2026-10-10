@@ -26,6 +26,8 @@ export function LoginPage() {
   const login = useMutation({
     mutationFn: (v: LoginInput) => authApi.login(v.email, v.password),
     onSuccess: async (info) => {
+      // Nothing cached by a previous user of this tab may be shown to the new one.
+      qc.removeQueries({ predicate: (q) => q.queryKey[0] !== 'session' })
       qc.setQueryData(sessionQuery.queryKey, info)
       // Only same-app paths are accepted as a return target.
       const target = next && next.startsWith('/') && !next.startsWith('//') ? next : '/'

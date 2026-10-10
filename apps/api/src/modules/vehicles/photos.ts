@@ -7,6 +7,7 @@ import { audit } from '../../lib/audit'
 import { AppError, notFound } from '../../lib/errors'
 import { MAX_PHOTO_BYTES, processPromoPhoto } from '../../lib/images'
 import { withCompany } from '../../plugins/auth'
+import { UPLOAD_RATE_LIMIT } from '../../plugins/security'
 import type { CompanyAccess } from '../auth/context'
 import type { VehiclePhotoAttribution } from '@acarvo/shared'
 import { inScope } from './repository'
@@ -70,7 +71,7 @@ export async function vehiclePhotoRoutes(app: FastifyInstance) {
     })
   })
 
-  app.post('/:id/photos', async (req, reply) => {
+  app.post('/:id/photos', { config: UPLOAD_RATE_LIMIT }, async (req, reply) => {
     const { id } = parse(vehicleParams, req.params)
     // 1. Cheap checks before accepting the upload body.
     await withCompany(req, 'vehicles.photos.manage', async (tx, access) => {

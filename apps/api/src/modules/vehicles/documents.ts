@@ -23,6 +23,7 @@ import { cleanDisplayName, MAX_DOCUMENT_BYTES, validateDocumentFile } from '../.
 import { AppError, notFound } from '../../lib/errors'
 import { documentUploadPolicy } from '../../lib/malware'
 import { withCompany } from '../../plugins/auth'
+import { UPLOAD_RATE_LIMIT } from '../../plugins/security'
 import type { CompanyAccess } from '../auth/context'
 import { inScope } from './repository'
 
@@ -377,7 +378,7 @@ export async function vehicleDocumentRoutes(app: FastifyInstance) {
    * store → one transaction for the records. A failure at any step leaves the document, its earlier
    * versions and today's valid period exactly as they were; a stored file is removed again.
    */
-  app.post('/:id/documents/:docId/files', async (req, reply) => {
+  app.post('/:id/documents/:docId/files', { config: UPLOAD_RATE_LIMIT }, async (req, reply) => {
     const { id, docId } = params(docParams, req.params, DOC_NOT_FOUND)
     const p = policy()
     if (!p.enabled) throw new AppError(503, 'UPLOADS_DISABLED', p.reason!)

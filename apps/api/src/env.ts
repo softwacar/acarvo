@@ -17,6 +17,11 @@ const schema = z.object({
   MALWARE_SCANNER: z.enum(['none', 'clamav']).default('none'),
   CLAMAV_HOST: z.string().default('127.0.0.1'),
   CLAMAV_PORT: z.coerce.number().int().default(3310),
+  /**
+   * Proxies allowed to set X-Forwarded-For (proxy-addr syntax, e.g. "loopback" or "10.0.0.1,10.0.0.2").
+   * Defaults to the local dev proxy outside production; in production, set it to the real reverse proxy.
+   */
+  TRUST_PROXY: z.string().optional(),
   /** Signs the CSRF secret cookie. */
   COOKIE_SECRET: z.string().min(32),
 })

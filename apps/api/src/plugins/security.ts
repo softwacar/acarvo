@@ -2,12 +2,21 @@ import cookie from '@fastify/cookie'
 import csrf from '@fastify/csrf-protection'
 import helmet from '@fastify/helmet'
 import rateLimit from '@fastify/rate-limit'
-import type { FastifyError, FastifyInstance } from 'fastify'
+import type { FastifyError, FastifyInstance, FastifyRequest } from 'fastify'
 import { ZodError } from 'zod'
 import type { Env } from '../env'
 import { AppError } from '../lib/errors'
 
 const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS'])
+
+/** Photo and document uploads decode images and parse PDFs: capped per signed-in user (or address). */
+export const UPLOAD_RATE_LIMIT = {
+  rateLimit: {
+    max: 40,
+    timeWindow: '1 minute',
+    keyGenerator: (req: FastifyRequest) => `upload|${req.auth?.user.id ?? req.ip}`,
+  },
+}
 export const CSRF_COOKIE = '__Host-acarvo_csrf'
 
 /**

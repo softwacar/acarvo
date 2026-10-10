@@ -12,8 +12,11 @@ export interface CompanyAccess {
   branchIds: string[]
 }
 
-/** Loads the effective access of a user in one company. Returns null if they are not an active member. */
+/** Loads the effective access of a user in one company. Returns null unless the company is active and they are an active member. */
 export async function loadAccess(tx: Tx, companyId: string, userId: string): Promise<CompanyAccess | null> {
+  // A suspended company keeps its data but nobody can use it (every company route goes through here).
+  const [company] = await tx.select({ status: companies.status }).from(companies).where(eq(companies.id, companyId)).limit(1)
+  if (company?.status !== 'active') return null
   const [m] = await tx
     .select()
     .from(memberships)

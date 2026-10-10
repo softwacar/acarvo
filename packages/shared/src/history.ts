@@ -112,7 +112,7 @@ export function odometerNeighbours<T extends OdometerPoint>(readings: T[], at: s
 }
 
 export type OdometerOrderProblem = 'below_previous' | 'above_next' | null
-export function odometerOrderProblem(km: number, n: { previous: OdometerPoint | null; next: OdometerPoint | null }): OdometerOrderProblem {
+export function odometerOrderProblem(km: number, n: { previous: { km: number } | null; next: { km: number } | null }): OdometerOrderProblem {
   if (n.previous && km < n.previous.km) return 'below_previous'
   if (n.next && km > n.next.km) return 'above_next'
   return null
