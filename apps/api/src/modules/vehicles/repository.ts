@@ -9,6 +9,7 @@ import {
 } from '@acarvo/shared'
 import { and, eq, ne, type SQL, sql } from 'drizzle-orm'
 import type { Tx } from '../../db/client'
+import { documentOverviews } from './document-overview'
 import { branches, vehicleClasses, vehicles } from '../../db/schema'
 import { AppError } from '../../lib/errors'
 import type { CompanyAccess } from '../auth/context'
@@ -48,7 +49,7 @@ const FROM = sql`
     order by r.occurred_at desc, r.created_at desc limit 1
   ) o on true
   left join lateral (
-    select e.location_type, e.occurred_at, lb.name as branch_name from vehicle_location_events e
+    select e.location_type, e.branch_id, e.occurred_at, lb.name as branch_name from vehicle_location_events e
     left join branches lb on lb.company_id = e.company_id and lb.id = e.branch_id
     where e.company_id = v.company_id and e.vehicle_id = v.id
       and not exists (select 1 from vehicle_location_corrections lc where lc.company_id = e.company_id and lc.event_id = e.id)
@@ -84,6 +85,16 @@ export async function listVehicles(tx: Tx, access: CompanyAccess, q: VehicleList
   if (q.status) conds.push(sql`v.status = ${q.status}`)
   if (q.fuelType) conds.push(sql`v.fuel_type = ${q.fuelType}`)
   if (q.transmission) conds.push(sql`v.transmission = ${q.transmission}`)
+  if (q.location === 'away') conds.push(sql`(l.location_type is not null and (l.location_type <> 'branch' or l.branch_id <> v.home_branch_id))`)
+  if (q.location === 'service') conds.push(sql`l.location_type = 'service_provider'`)
+  const canReadDocuments = access.permissions.has('vehicles.documents.read')
+  if (q.documents && canReadDocuments) {
+    // Same rules as the Belgeler tab, evaluated for every vehicle in the user's scope.
+    const scoped = (await tx.execute(sql`select v.id from vehicles v ${scope ? (scope.length ? sql`where v.home_branch_id in ${scope}` : sql`where false`) : sql``}`)).rows as Row[]
+    const overviews = await documentOverviews(tx, access, scoped.map((r) => r.id as string))
+    const ids = [...overviews].filter(([, o]) => (q.documents === 'critical' ? o.critical > 0 : o.critical + o.warning > 0)).map(([id]) => id)
+    conds.push(ids.length ? sql`v.id in (select unnest(${`{${ids.join(',')}}`}::uuid[]))` : sql`false`)
+  }
   const where = conds.length ? sql`where ${sql.join(conds, sql` and `)}` : sql``
 
   const dir = q.dir === 'desc' ? 'desc' : 'asc'
@@ -98,6 +109,7 @@ export async function listVehicles(tx: Tx, access: CompanyAccess, q: VehicleList
     const c = await tx.execute(sql`select count(*) as n ${FROM} ${where}`)
     total = Number((c.rows[0] as Row).n)
   }
+  const docs = canReadDocuments ? await documentOverviews(tx, access, rows.map((r) => r.id as string)) : null
   const items: VehicleListItem[] = rows.map((r) => ({
     id: r.id as string,
     plate: r.plate as string,
@@ -114,6 +126,7 @@ export async function listVehicles(tx: Tx, access: CompanyAccess, q: VehicleList
     status: r.status as VehicleListItem['status'],
     odometer: odometerOf(r),
     location: locationOf(r),
+    documents: docs?.get(r.id as string) ?? null,
   }))
   return { items, total, page: q.page, pageSize: q.pageSize }
 }

@@ -1,4 +1,4 @@
-import { FUEL_TYPES, PAGE_SIZES, TRANSMISSIONS, VEHICLE_SORTS, VEHICLE_STATUSES, type VehicleSort } from '@acarvo/shared'
+import { FUEL_TYPES, PAGE_SIZES, TRANSMISSIONS, VEHICLE_DOCUMENT_FILTERS, VEHICLE_LOCATION_FILTERS, VEHICLE_SORTS, VEHICLE_STATUSES, type VehicleDocumentFilter, type VehicleLocationFilter, type VehicleSort } from '@acarvo/shared'
 
 /** Vehicle list state, kept in the URL so it survives reload, back/forward and sharing. */
 export interface VehicleSearch {
@@ -8,6 +8,8 @@ export interface VehicleSearch {
   status?: (typeof VEHICLE_STATUSES)[number]
   fuelType?: (typeof FUEL_TYPES)[number]
   transmission?: (typeof TRANSMISSIONS)[number]
+  documents?: VehicleDocumentFilter
+  location?: VehicleLocationFilter
   sort?: VehicleSort
   dir?: 'asc' | 'desc'
   page?: number
@@ -28,6 +30,8 @@ export function validateVehicleSearch(s: Record<string, unknown>): VehicleSearch
     status: oneOf(VEHICLE_STATUSES, s.status),
     fuelType: oneOf(FUEL_TYPES, s.fuelType),
     transmission: oneOf(TRANSMISSIONS, s.transmission),
+    documents: oneOf(VEHICLE_DOCUMENT_FILTERS, s.documents),
+    location: oneOf(VEHICLE_LOCATION_FILTERS, s.location),
     sort: oneOf(VEHICLE_SORTS, s.sort),
     dir: oneOf(['asc', 'desc'] as const, s.dir),
     page: Number.isInteger(page) && page > 1 ? page : undefined,

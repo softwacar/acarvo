@@ -10,7 +10,6 @@ import {
   documentTypeSummary,
   documentUpdateSchema,
   documentVoidSchema,
-  todayIn,
   vehicleDocumentsOverview,
 } from '@acarvo/shared'
 import { sql } from 'drizzle-orm'
@@ -25,6 +24,7 @@ import { documentUploadPolicy } from '../../lib/malware'
 import { withCompany } from '../../plugins/auth'
 import { UPLOAD_RATE_LIMIT } from '../../plugins/security'
 import type { CompanyAccess } from '../auth/context'
+import { companyToday, loadRules } from './document-overview'
 import { inScope } from './repository'
 
 const VEHICLE_NOT_FOUND = 'Araç bulunamadı veya bu araca erişim yetkiniz yok.'
@@ -46,26 +46,6 @@ async function visibleVehicle(tx: Tx, access: CompanyAccess, vehicleId: string, 
   const v = rows.rows[0] as { id: string; plate: string; home_branch_id: string } | undefined
   if (!v || !inScope(access, v.home_branch_id)) throw notFound(VEHICLE_NOT_FOUND)
   return v
-}
-
-/** System types with this company's decisions; RLS keeps the settings to the active company. */
-async function loadRules(tx: Tx): Promise<DocumentTypeRule[]> {
-  const rows = await tx.execute(sql`
-    select t.code, t.name, t.requires_expiry, coalesce(s.required, false) as required, coalesce(s.warn_days, 30) as warn_days
-    from document_types t left join company_document_type_settings s on s.type_code = t.code
-    order by t.sort_order`)
-  return (rows.rows as Row[]).map((r) => ({
-    code: r.code as DocumentTypeRule['code'],
-    name: r.name as string,
-    requiresExpiry: r.requires_expiry as boolean,
-    required: r.required as boolean,
-    warnDays: Number(r.warn_days),
-  }))
-}
-
-async function companyToday(tx: Tx, access: CompanyAccess) {
-  const r = await tx.execute(sql`select timezone from companies where id = ${access.companyId}`)
-  return todayIn((r.rows[0] as { timezone: string }).timezone)
 }
 
 function fileVersion(r: Row, prefix = ''): DocumentFileVersion {

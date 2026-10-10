@@ -1,3 +1,4 @@
+import type { VehicleDocumentsBrief } from './documents'
 import { z } from 'zod'
 
 // ---------------------------------------------------------------------------
@@ -109,6 +110,12 @@ export const VEHICLE_SORTS = ['plate', 'vehicle', 'class', 'branch', 'km', 'year
 export type VehicleSort = (typeof VEHICLE_SORTS)[number]
 export const PAGE_SIZES = [10, 25, 50, 100] as const
 
+export const VEHICLE_DOCUMENT_FILTERS = ['attention', 'critical'] as const
+/** Current physical location, derived from the location history: away from the home branch, or at a service provider. */
+export const VEHICLE_LOCATION_FILTERS = ['away', 'service'] as const
+export type VehicleLocationFilter = (typeof VEHICLE_LOCATION_FILTERS)[number]
+export type VehicleDocumentFilter = (typeof VEHICLE_DOCUMENT_FILTERS)[number]
+
 export const vehicleListQuerySchema = z.object({
   q: z.preprocess(blank, z.string().trim().max(60).optional()),
   classId: z.preprocess(blank, z.uuid().optional()),
@@ -116,6 +123,9 @@ export const vehicleListQuerySchema = z.object({
   status: z.preprocess(blank, z.enum(VEHICLE_STATUSES).optional()),
   fuelType: z.preprocess(blank, z.enum(FUEL_TYPES).optional()),
   transmission: z.preprocess(blank, z.enum(TRANSMISSIONS).optional()),
+  /** Document problems (needs vehicles.documents.read): 'attention' = critical or warning, 'critical' = critical only. */
+  documents: z.preprocess(blank, z.enum(VEHICLE_DOCUMENT_FILTERS).optional()).catch(undefined),
+  location: z.preprocess(blank, z.enum(VEHICLE_LOCATION_FILTERS).optional()).catch(undefined),
   sort: z.enum(VEHICLE_SORTS).catch('plate'),
   dir: z.enum(['asc', 'desc']).catch('asc'),
   page: z.coerce.number().int().min(1).max(100_000).catch(1),
@@ -152,6 +162,8 @@ export interface VehicleListItem {
   status: VehicleStatus
   odometer: OdometerSummary | null
   location: LocationSummary | null
+  /** Same overview as the Belgeler tab; null without the document read permission. */
+  documents: VehicleDocumentsBrief | null
 }
 
 export interface VehicleListResponse {

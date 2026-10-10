@@ -27,6 +27,7 @@ import { type ReactNode, useEffect, useRef, useState } from 'react'
 import { Plate } from '@/components/Plate'
 import { ErrorState, StatePanel } from '@/components/states'
 import { ApiRequestError, documentsApi, vehicle360Api, vehiclesApi } from '@/lib/api'
+import { documentHeadlineText } from '@/lib/document-labels'
 import { cn } from '@/lib/utils'
 import {
   ACQUISITION_LABELS,
@@ -223,16 +224,7 @@ function useDocumentsHeadline(vehicleId: string) {
   const counts = [overview.critical && `${overview.critical} kritik`, overview.warning && `${overview.warning} uyarı`, overview.ok && `${overview.ok} geçerli`].filter(Boolean).join(' · ')
   if (!h) return { value: overview.ok ? 'Tümü geçerli' : 'Kayıt yok', note: overview.ok ? counts : 'Zorunlu belge yok', tone: overview.ok ? ('ok' as const) : ('muted' as const) }
   const name = types.find((t) => t.code === h.code)?.name ?? ''
-  const text: Record<string, string> = {
-    expiring: `${name} · ${h.daysLeft === 0 ? 'bugün bitiyor' : `${h.daysLeft} gün`}`,
-    expired: `${name} süresi dolmuş`,
-    missing: `${name} eksik`,
-    not_started: `${name} başlamadı`,
-    draft: `${name} taslak`,
-    valid: 'Tümü geçerli',
-    renewed: 'Tümü geçerli',
-  }
-  return { value: text[h.state] ?? name, note: counts, tone: h.level === 'critical' ? ('alert' as const) : h.level === 'warning' ? ('hold' as const) : ('ok' as const) }
+  return { value: documentHeadlineText({ name, state: h.state, daysLeft: h.daysLeft }), note: counts, tone: h.level === 'critical' ? ('alert' as const) : h.level === 'warning' ? ('hold' as const) : ('ok' as const) }
 }
 
 function locationText(v: { location: VehicleDetail['location'] }) {

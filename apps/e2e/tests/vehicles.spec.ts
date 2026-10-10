@@ -60,3 +60,14 @@ test('edit, then a stale second tab gets the version conflict dialog', async ({ 
   await expect(dialog).toBeVisible()
   await expect(dialog.getByText('Koyu turuncu')).toBeVisible()
 })
+
+test('document warnings: rows show the most urgent problem and the filter finds them', async ({ page }) => {
+  await page.goto('/araclar')
+  // Drina requires registration, inspection and liability insurance: vehicles without documents show a critical line.
+  await expect(page.locator('tr', { hasText: 'E92-K-301' }).getByText('Ruhsat eksik +2')).toBeVisible()
+  await page.getByLabel('Belgeler').selectOption('critical')
+  await expect(page).toHaveURL(/documents=critical/)
+  await expect(page.getByText('Ruhsat eksik +2').first()).toBeVisible()
+  await page.reload()
+  await expect(page.getByLabel('Belgeler')).toHaveValue('critical')
+})

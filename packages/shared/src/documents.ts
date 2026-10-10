@@ -198,6 +198,13 @@ export interface VehicleDocumentsOverview {
   headline: DocumentTypeSummary | null
 }
 
+/** Compact per-vehicle document state for lists: counts and the most urgent type. */
+export interface VehicleDocumentsBrief {
+  critical: number
+  warning: number
+  headline: { code: DocumentTypeCode; name: string; state: TypeSummaryState; level: SummaryLevel; daysLeft: number | null } | null
+}
+
 export function vehicleDocumentsOverview(rows: DocumentTypeSummary[]): VehicleDocumentsOverview {
   const rank: Record<SummaryLevel, number> = { critical: 3, warning: 2, ok: 1, neutral: 0 }
   const sorted = [...rows].sort((a, b) => rank[b.level] - rank[a.level] || (a.daysLeft ?? 99999) - (b.daysLeft ?? 99999))

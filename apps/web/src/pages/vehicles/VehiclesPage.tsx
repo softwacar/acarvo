@@ -1,5 +1,5 @@
 import { FUEL_TYPES, PAGE_SIZES, TRANSMISSIONS, VEHICLE_STATUSES, type VehicleListItem, type VehicleSort } from '@acarvo/shared'
-import { CaretDown, CaretLeft, CaretRight, CaretUp, CaretUpDown, CarProfile, Info, MagnifyingGlass, PencilSimple, Plus, Wrench, X } from '@phosphor-icons/react'
+import { FileText, CaretDown, CaretLeft, CaretRight, CaretUp, CaretUpDown, CarProfile, Info, MagnifyingGlass, PencilSimple, Plus, Wrench, X } from '@phosphor-icons/react'
 import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import { Link, useNavigate, useSearch } from '@tanstack/react-router'
 import { type ReactNode, useEffect, useState } from 'react'
@@ -7,12 +7,13 @@ import { Select } from '@/components/fields'
 import { Plate } from '@/components/Plate'
 import { ErrorState, ForbiddenState, PageHeader, StatePanel } from '@/components/states'
 import { ApiRequestError, vehiclesApi } from '@/lib/api'
+import { documentHeadlineText } from '@/lib/document-labels'
 import { cn } from '@/lib/utils'
 import { FUEL_LABELS, formatDate, formatKm, LOCATION_LABELS, STATUS_LABELS, TRANSMISSION_LABELS } from '@/lib/vehicle-labels'
 import { can, useSession } from '@/session'
 import { rememberListSearch, type VehicleSearch } from './search'
 
-const FILTER_KEYS = ['q', 'classId', 'branchId', 'status', 'fuelType', 'transmission'] as const
+const FILTER_KEYS = ['q', 'classId', 'branchId', 'status', 'fuelType', 'transmission', 'documents', 'location'] as const
 
 function SortHeader({
   label,
@@ -88,6 +89,21 @@ function FilterSelect({ label, value, onChange, children }: { label: string; val
   )
 }
 
+/** Most urgent document problem of the row (same rules as the vehicle's Belgeler tab); nothing when all is fine. */
+function DocumentsLine({ d }: { d: VehicleListItem['documents'] }) {
+  if (!d?.headline || d.critical + d.warning === 0) return null
+  const more = d.critical + d.warning - 1
+  return (
+    <span className={cn('mt-0.5 flex items-center gap-1 truncate text-[12px] font-medium', d.critical ? 'text-alert' : 'text-hold')} title={`${d.critical} kritik, ${d.warning} uyarı`}>
+      <FileText size={13} className="shrink-0" aria-hidden />
+      <span className="truncate">
+        {documentHeadlineText(d.headline)}
+        {more > 0 && ` +${more}`}
+      </span>
+    </span>
+  )
+}
+
 function StatusText({ status }: { status: VehicleListItem['status'] }) {
   if (status === 'active') return <span className="text-ink-2">{STATUS_LABELS.active}</span>
   return (
@@ -152,6 +168,7 @@ export function VehiclesPage() {
   const navigate = useNavigate({ from: '/araclar' })
   const canCreate = can(session, 'vehicles.create')
   const canEdit = can(session, 'vehicles.update')
+  const canDocs = can(session, 'vehicles.documents.read')
   const pageSize = search.pageSize ?? 25
   const page = search.page ?? 1
   useEffect(() => rememberListSearch(search), [search])
@@ -234,6 +251,18 @@ export function VehiclesPage() {
                 </option>
               ))}
             </FilterSelect>
+            <FilterSelect label="Güncel konum" value={search.location} onChange={(location) => set({ location: location as VehicleSearch['location'] })}>
+              <option value="">Tüm konumlar</option>
+              <option value="away">Ana şube dışında</option>
+              <option value="service">Serviste</option>
+            </FilterSelect>
+            {canDocs && (
+              <FilterSelect label="Belgeler" value={search.documents} onChange={(documents) => set({ documents: documents as VehicleSearch['documents'] })}>
+                <option value="">Tüm belgeler</option>
+                <option value="attention">Belge uyarısı olanlar</option>
+                <option value="critical">Kritik belge sorunu</option>
+              </FilterSelect>
+            )}
             {filtersActive && (
               <button
                 type="button"
@@ -352,6 +381,7 @@ export function VehiclesPage() {
                           </td>
                           <td className="px-3 whitespace-nowrap">
                             <StatusText status={v.status} />
+                            <DocumentsLine d={v.documents} />
                           </td>
                           {canEdit && (
                             <td className="pr-4 text-right">
