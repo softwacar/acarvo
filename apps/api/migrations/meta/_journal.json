@@ -78,6 +78,13 @@
       "when": 1791597967541,
       "tag": "0010_vehicle_history_rls",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1791604130046,
+      "tag": "0011_audit_entity_index",
+      "breakpoints": true
     }
   ]
 }

@@ -38,10 +38,11 @@ const SORT_SQL: Record<VehicleSort, string> = {
 const escapeLike = (s: string) => s.replace(/[\\%_]/g, (m) => `\\${m}`)
 
 /** Current odometer and physical location are the latest effective (not corrected) events, never columns on the vehicle. */
-const FROM = sql`
+const BASE_FROM = sql`
   from vehicles v
   join vehicle_classes c on c.company_id = v.company_id and c.id = v.class_id
-  join branches b on b.company_id = v.company_id and b.id = v.home_branch_id
+  join branches b on b.company_id = v.company_id and b.id = v.home_branch_id`
+const FROM = sql`${BASE_FROM}
   left join lateral (
     select r.km, r.occurred_at from odometer_readings r
     where r.company_id = v.company_id and r.vehicle_id = v.id
@@ -101,12 +102,25 @@ export async function listVehicles(tx: Tx, access: CompanyAccess, q: VehicleList
   const order = sql.raw(`${SORT_SQL[q.sort].replaceAll('%DIR%', dir)} ${dir} nulls last, v.plate_normalized asc, v.id asc`)
   const offset = (q.page - 1) * q.pageSize
 
-  const result = await tx.execute(sql`select ${SELECT_LIST}, count(*) over () as total_count ${FROM} ${where} order by ${order} limit ${q.pageSize} offset ${offset}`)
-  const rows = result.rows as Row[]
-  let total = rows.length ? Number(rows[0]!.total_count) : 0
+  // Current km and location are derived per vehicle (lateral subqueries). Only a km sort or a location filter needs
+  // them for every vehicle; otherwise pick the page on vehicle columns first and derive them for that page only
+  // (measured: 10,000 vehicles, ~180 ms → a few ms; docs/GECE_CALISMA_RAPORU.md, Aşama 6).
+  const needsEvents = q.sort === 'km' || q.location !== undefined
+  let rows: Row[]
+  let total: number
+  if (needsEvents) {
+    rows = (await tx.execute(sql`select ${SELECT_LIST}, count(*) over () as total_count ${FROM} ${where} order by ${order} limit ${q.pageSize} offset ${offset}`)).rows as Row[]
+    total = rows.length ? Number(rows[0]!.total_count) : 0
+  } else {
+    const page = (await tx.execute(sql`select v.id, count(*) over () as total_count ${BASE_FROM} ${where} order by ${order} limit ${q.pageSize} offset ${offset}`)).rows as Row[]
+    total = page.length ? Number(page[0]!.total_count) : 0
+    rows = page.length
+      ? ((await tx.execute(sql`select ${SELECT_LIST} ${FROM} where v.id in (select unnest(${`{${page.map((r) => r.id).join(',')}}`}::uuid[])) order by ${order}`)).rows as Row[])
+      : []
+  }
   if (!rows.length && q.page > 1) {
     // Past the last page: still report the real total.
-    const c = await tx.execute(sql`select count(*) as n ${FROM} ${where}`)
+    const c = await tx.execute(sql`select count(*) as n ${needsEvents ? FROM : BASE_FROM} ${where}`)
     total = Number((c.rows[0] as Row).n)
   }
   const docs = canReadDocuments ? await documentOverviews(tx, access, rows.map((r) => r.id as string)) : null

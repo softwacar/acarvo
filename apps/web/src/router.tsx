@@ -1,6 +1,6 @@
 import { VEHICLE_TABS, type VehicleTab } from '@acarvo/shared'
 import type { QueryClient } from '@tanstack/react-query'
-import { createRootRouteWithContext, createRoute, createRouter, Outlet, redirect, useParams } from '@tanstack/react-router'
+import { createRootRouteWithContext, createRoute, createRouter, lazyRouteComponent, Outlet, redirect, useParams } from '@tanstack/react-router'
 import { AppLayout } from './components/AppLayout'
 import { ErrorState } from './components/states'
 import { ApiRequestError } from './lib/api'
@@ -9,8 +9,6 @@ import { LoginPage } from './pages/LoginPage'
 import { ModulePage } from './pages/ModulePage'
 import { NotFoundPage } from './pages/NotFoundPage'
 import { ProfilePage } from './pages/ProfilePage'
-import { Vehicle360Page } from './pages/vehicles/Vehicle360Page'
-import { VehicleFormPage } from './pages/vehicles/VehicleFormPage'
 import { VehiclesPage } from './pages/vehicles/VehiclesPage'
 import { validateVehicleSearch } from './pages/vehicles/search'
 import { sessionQuery } from './session'
@@ -55,22 +53,20 @@ const appRoute = createRoute({
 const indexRoute = createRoute({ getParentRoute: () => appRoute, path: '/', component: () => <ModulePage slug="" /> })
 const branchesRoute = createRoute({ getParentRoute: () => appRoute, path: '/subeler', component: BranchesPage })
 const vehiclesRoute = createRoute({ getParentRoute: () => appRoute, path: '/araclar', validateSearch: validateVehicleSearch, component: VehiclesPage })
-const vehicleNewRoute = createRoute({ getParentRoute: () => appRoute, path: '/araclar/yeni', component: () => <VehicleFormPage mode="create" /> })
+// Vehicle 360° (gallery, documents, history) and the vehicle form load on demand: smaller first load for sign-in and lists.
+const vehicleNewRoute = createRoute({ getParentRoute: () => appRoute, path: '/araclar/yeni', component: lazyRouteComponent(() => import('./pages/vehicles/VehicleFormPage'), 'NewVehiclePage') })
 const vehicle360Route = createRoute({
   getParentRoute: () => appRoute,
   path: '/araclar/$vehicleId',
   validateSearch: (s: Record<string, unknown>): { sekme?: VehicleTab } =>
     (VEHICLE_TABS as readonly string[]).includes(s.sekme as string) && s.sekme !== 'genel' ? { sekme: s.sekme as VehicleTab } : {},
-  component: Vehicle360Page,
+  component: lazyRouteComponent(() => import('./pages/vehicles/Vehicle360Page'), 'Vehicle360Page'),
 })
 const vehicleEditRoute = createRoute({
   getParentRoute: () => appRoute,
   path: '/araclar/$vehicleId/duzenle',
   validateSearch: (s: Record<string, unknown>): { geri?: 'arac' } => (s.geri === 'arac' ? { geri: 'arac' } : {}),
-  component: function EditVehicle() {
-    const { vehicleId } = useParams({ from: '/app/araclar/$vehicleId/duzenle' })
-    return <VehicleFormPage key={vehicleId} mode="edit" />
-  },
+  component: lazyRouteComponent(() => import('./pages/vehicles/VehicleFormPage'), 'EditVehiclePage'),
 })
 const profileRoute = createRoute({ getParentRoute: () => appRoute, path: '/profil', component: ProfilePage })
 const moduleRoute = createRoute({

@@ -150,7 +150,11 @@ export const auditLog = pgTable(
     summary: jsonb('summary'),
     createdAt: createdAt(),
   },
-  (t) => [index('audit_company_created_idx').on(t.companyId, t.createdAt)],
+  (t) => [
+    index('audit_company_created_idx').on(t.companyId, t.createdAt),
+    // Per-record history (e.g. a vehicle's Kayıt geçmişi): without it, a record with few entries scans the whole company log.
+    index('audit_entity_created_idx').on(t.companyId, t.entity, t.entityId, t.createdAt),
+  ],
 )
 
 // ---------------------------------------------------------------------------

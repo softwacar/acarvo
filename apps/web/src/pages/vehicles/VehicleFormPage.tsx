@@ -834,3 +834,12 @@ function ConflictDialog({
     </Dialog.Root>
   )
 }
+
+/** Route entries (loaded on demand by the router). */
+export function NewVehiclePage() {
+  return <VehicleFormPage mode="create" />
+}
+export function EditVehiclePage() {
+  const { vehicleId } = useParams({ from: '/app/araclar/$vehicleId/duzenle' })
+  return <VehicleFormPage key={vehicleId} mode="edit" />
+}
