@@ -13,8 +13,8 @@ _Sprint ilerledikçe güncellenir._
 | 2 Güvenlik ve yetki denetimi | Tamamlandı | `da529b4` |
 | 3 Tarayıcı testleri | Tamamlandı | `eeebc0c` |
 | 4 Kullanılabilirlik ve erişilebilirlik | Tamamlandı | `652146a` |
-| 5 Araç modülünde küçük eksikler | Sürüyor | |
-| 6 Performans | Bekliyor | |
+| 5 Araç modülünde küçük eksikler | Tamamlandı | `ba9675e` |
+| 6 Performans | Sürüyor | |
 | 7 Kod kalitesi ve dağıtım güvenliği | Bekliyor | |
 | 8 Gelecek modüllerin planı | Bekliyor | |
 
@@ -84,6 +84,20 @@ Notlar: axe, ilk denemede birkaç "renk kontrastı" bulgusu verdi; inceleyince b
 Belge modülündeki yan panel kopyası kaldırılıp ortak `Sheet` bileşenine bağlandı (davranış aynı; odak ve kaydedilmemiş değişiklik desteği eklendi).
 
 Testler: tarayıcı **33/33** (bir çalıştırmada web test sunucusu bir an bağlantıyı reddetti — `ERR_CONNECTION_REFUSED`; yeniden çalıştırmada temiz geçti, uygulama hatası değil), API **156/156**, tip kontrolü ve derleme hatasız.
+
+## Aşama 5 — Araç modülünde küçük eksikler (`ba9675e`)
+
+Spec karşılaştırması (§13.1 liste, §13.2 form, §13.3 360°): liste için "önemli belgesel blocker sayısı" ve "süresi yaklaşan belge" filtresi ile "current location" filtresi isteniyor; ikisi de mevcut verilerden, yeni iş kuralı olmadan yapılabiliyordu.
+
+Geliştirilenler:
+1. **Araç listesinde belge uyarısı.** Her satırın Durum hücresinde, varsa en acil belge sorunu kısa bir satırla gösteriliyor (ör. "Ruhsat eksik +2", "Muayene · 12 gün"); kritikler kırmızı, uyarılar turuncu. Hesap, belge sekmesindekiyle **aynı ortak fonksiyonlardan** geliyor (kural tekrar yazılmadı; testte satır ile sekmenin sayıları karşılaştırılıyor).
+2. **"Belgeler" filtresi:** "Belge uyarısı olanlar" (kritik + uyarı) ve "Kritik belge sorunu". Adres çubuğunda kalır (`documents=attention|critical`).
+3. **"Güncel konum" filtresi:** "Ana şube dışında" ve "Serviste" (km/konum geçmişinden türetilen güncel konuma göre).
+4. Yetki ve kapsam: belge bilgisi ve filtresi yalnız belge görüntüleme yetkisi olana; yetkisi olmayana belge verisi gönderilmez ve filtre yok sayılır. Şube sınırlı kullanıcı filtrede de yalnız kendi şubesini görür.
+
+Testler: API 7 yeni (toplam **163/163**), tarayıcı 1 yeni (toplam **34/34**). Migration gerekmedi.
+
+Spec'e göre araç modülünde kalan ama **başka modül gerektiren** eksikler (bilinçli olarak yapılmadı): müsaitlik/hazırlık/aktif kiralama sütunları ve as-of görünümü (Rezervasyon/Kiralama), bakım ve hasar blocker sayıları (Bakım, Hasar), transfer geçmişi (Transfer), tedarikçi dönemleri ve dış araçlar (Tedarik), filodan çıkış/satış akışı (ayrı gerekçeli işlem), A4 araç durum raporu çıktısı.
 
 ## Onay bekleyen kararlar
 
