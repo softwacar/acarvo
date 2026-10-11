@@ -439,6 +439,76 @@ Plan ve kararlar: `docs/MUSTERILER_KURUMSAL_HESAPLAR_PLANI.md` (§14 kararlar, �
   - Arşivleme gerekçe seçilen bir diyalogla yapılır.
 - **Testler:** API `tests/customers.test.ts` (32); tarayıcı `customers.spec.ts` (13), `a11y` ve `mobile` eklemeleri; ekran görüntüleri isteğe bağlı `customer-screens.spec.ts` (`SCREENSHOTS=1`).
 
+### 8.7 Müşteri belgeleri — M2 (dal `musteriler-m2`; ana veritabanına henüz uygulanmadı)
+
+Plan ve kararlar: `docs/M2_MUSTERI_BELGELERI_PLANI.md` (§0). Sprint raporu: `docs/M2_GELISTIRME_RAPORU.md`.
+
+#### 8.7.1 Şifreleme
+- `apps/api/src/lib/customer-crypto.ts`:
+  - AES-256-GCM, her değer için 96 bit rastgele nonce ve 128 bit doğrulama etiketi.
+  - Biçim: `0x01 | nonce | etiket | şifreli metin`; anahtar kimliği ayrı sütunda (`number_key_id`, `enc_key_id`).
+  - Anahtar şirket başına HKDF-SHA256 ile türetilir (salt = şirket kimliği).
+  - AAD = `acarvo|v1|<number|file>|<şirket>|<kayıt>`. Başka kayda, türe veya şirkete taşınan değer çözülmez.
+- **Arama özeti:** ayrı anahtar halkasıyla, şirket başına türetilmiş HMAC-SHA256 (`tür | ülke | normalize numara`). Yalnız şirket içinde tam eşleşme yapılır.
+- **Ortam değişkenleri:** `CUSTOMER_DATA_KEYS`, `CUSTOMER_DATA_KEY_ACTIVE`, `CUSTOMER_LOOKUP_KEYS`, `CUSTOMER_LOOKUP_KEY_ACTIVE`. Biçim: `k1:<base64 32 bayt>,k2:…`.
+  - Anahtar yoksa veya hatalıysa numara ve dosya yazma `503 CUSTOMER_KEYS_MISSING` döner; şifresiz kayda geri dönüş yoktur.
+  - Başlangıçta yalnız anahtar kimlikleri ve parmak izleri günlüğe yazılır.
+- **Testler** her çalıştırmada sentetik anahtar üretir. Tarayıcı testlerinde API sunucusu ve test sıfırlaması aynı anahtarı kullanır (`E2E_CUSTOMER_KEYS`).
+
+#### 8.7.2 Anahtar kurulumu, yedekleme, geri yükleme provası, yenileme
+1. **Oluşturma:** `node scripts/customer-keys.mjs generate --out "<proje dışı klasör>\customer-keys.env"`.
+   - Dosya proje içine yazılmaz ve var olan dosyanın üzerine yazılmaz.
+   - Windows'ta dosya yalnız sizin kullanıcınıza açılır.
+   - Ekrana yalnız kimlik ve parmak izi yazılır.
+2. **Kurulum:** dosyadaki dört `CUSTOMER_*` satırını `.env`'e **siz** eklersiniz ve API'yi yeniden başlatırsınız.
+3. **Doğrulama:** `npm run keys:check --workspace @acarvo/api`. Ardından veriler varken `-- --db`: salt okunur olarak her değerin çözülebildiğini sayar.
+4. **Ayrı yedek:** anahtar dosyası veritabanı yedeğinden **ayrı**, iki yerde saklanır (ör. parola yöneticisi ve şifreli USB). `backup-db.mjs` anahtarları yedeğe katmaz; rapora parmak izlerini yazar. Anahtar kaybolursa numaralar ve dosyalar açılamaz.
+5. **Geri yükleme provası:**
+   - yedeği boş bir veritabanına geri yükleyin (`backup-db.mjs` başlığındaki adımlar);
+   - aynı anahtarlarla `keys:check -- --db --test`, ya da geri yüklenen veritabanının bağlantısıyla `keys:check -- --db` çalıştırın;
+   - hata sayısı 0 olmalıdır.
+6. **Yenileme:**
+   - `node scripts/customer-keys.mjs rotate --from <eski dosya> --out <yeni dosya> [--lookup]` yeni anahtarı ekler ve etkin yapar; eski anahtar halkada kalır;
+   - `.env` güncellenir ve API yeniden başlatılır;
+   - `npm run keys:reencrypt --workspace @acarvo/api -- --dry-run`, ardından deneme seçeneği olmadan çalıştırılır. Önce doğrulanmış yedek alınır; kayıtlar küçük partiler halinde işlenir; yarıda kalırsa kaldığı yerden devam eder ve yarım kalmış dosyayı kurtarır;
+   - `keys:check -- --db` yalnız yeni anahtarı göstermelidir;
+   - eski anahtar halkadan çıkarılır ama eski yedekler için ayrı saklanır.
+   - Geçersiz sayılmış ve kilitli belgeler de yenilenir (migration `0017` yalnız şifreleme sütunlarının değişmesine izin verir).
+
+#### 8.7.3 Veri modeli (migration'lar `0014`–`0019`, yalnız ekleme)
+- **`0014`:**
+  - `customers.residence_country` (boş);
+  - `branches.country` (boş, sahip girer; otomatik atama yok);
+  - `customers.residency` artık zorunlu değil. Veri değişmez; güncelleme alanı göndermezse kayıtlı değer korunur.
+- **`0015`/`0016` tabloları:**
+  - `customer_documents`: şifreli numara, ipucu, özet, tarihler, doğrulama, yenileme bağı, geçersiz sayma;
+  - `customer_files`: şifreli dosya kaydı; yalnız şifreli içeriğin özeti;
+  - `customer_document_files`: ön, arka ve ek sayfa sürümleri; değiştirilemez;
+  - `user_sensitive_actions`: kullanıcı başına numara açma sayacı; şirket verisi yok.
+- **`0016` kuralları:**
+  - zorunlu RLS ve bileşik şirket anahtarları;
+  - tetikleyiciler: kimlik sütunları değişmez; geçersiz sayma kesindir; kilitli dönem düzeltilemez; bir numara şirket içinde tek müşteride etkindir; yenileme aynı müşteri ve türde yapılır;
+  - DELETE yetkisi yoktur.
+- **`0018`/`0019`:**
+  - `customer_document_settings`: uyarı günü, varsayılan 30;
+  - `document_requirement_policies`: ülke × ikamet sınıfı, sürüm; durum yalnız taslak → etkin → eski yönünde ilerler;
+  - `document_requirement_items`: alternatif türler, "aslı görülmeli" ve "kopyası saklanmalı" ayrı ayarlar. Maddeler yalnız taslakta değişebilir (tetikleyici).
+
+#### 8.7.4 API
+- **Belgeler:** `GET/POST /api/customers/:id/documents`, `PUT …/:docId`, `POST …/:docId/verify|renew|void`, `GET …/:docId/history`, `POST /api/customers/document-lookup`, `GET /api/customers/:id/document-status`.
+- **Dosyalar:**
+  - `POST /api/customers/:id/documents/:docId/files?side=`;
+  - `POST /api/customer-files/:id/access` (`view` / `download`), ardından `GET /api/customer-files/:id`. İzin oturum, şirket, tür, dosya ve amaca bağlıdır; Fetch Metadata denetlenir; GET işlem geçmişi yazmaz.
+- **Numara açma:** `POST …/:docId/reveal-number`. Gerekçe zorunludur; kullanıcı başına saatte 30, veritabanında sayılır; işlem geçmişine numara yazılmaz.
+- **Şubeler:** `PUT /api/branches/:id/country`, `POST /api/branches/country/preview|apply` (açık onay).
+- **Ayarlar:** `GET/PUT /api/settings/customer-documents`, `POST /api/settings/document-requirements/drafts`, `PUT …/:pid/items`, `POST …/:pid/activate` (onay zorunlu), `POST …/:pid/retire`.
+- **Yetkiler:** `customers.documents.read|manage|view|download`, `customers.identity.reveal`, `branches.manage`, `settings.documents.manage`. Hazır rollere `ROLE_PRESET_HISTORY` v4 ile eklenir; özel roller değişmez.
+
+#### 8.7.5 Kiralama hazırlığı
+- `suggestRentalResidency(ikametÜlkesi, şubeÜlkesi)` (paylaşılan) yalnız öneri döner; uyruk girdisi yoktur. Bilgi eksikse öneri yoktur.
+- Kiralama modülünde personel Yerli/Yabancı (ikamet) kararını onaylar. Karar, şube ülkesi, politika sürümü ve belge sürümleriyle birlikte değiştirilemez kayda (`RentalResidencySnapshot`) yazılır.
+- Müşteri 360° hiçbir sınıflandırma üretmez; etkin politikaları her iki sınıf için yan yana gösterir.
+
 ## 9. API kuralları
 
 - REST, JSON; tüm uçlar `/api` altında. Liste uçları sunucu tarafında arama, filtre, sıralama ve sayfalama yapar.

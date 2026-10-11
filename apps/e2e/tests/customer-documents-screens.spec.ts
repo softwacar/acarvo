@@ -32,7 +32,7 @@ test('documents tab, detail, upload, reveal at 1440', async ({ page }) => {
   const chooser = page.waitForEvent('filechooser')
   await sheet.getByRole('button', { name: 'Ön yüz yükle' }).click()
   await (await chooser).setFiles(fixture('foto-mavi.jpg'))
-  await expect(sheet.getByText('sürüm 1')).toBeVisible()
+  await expect(sheet.getByRole('button', { name: 'Ön yüz sürüm 1 görüntüle' })).toBeVisible()
   await settle(page)
   await page.screenshot({ path: out('02-belge-ayrinti-1440') })
 

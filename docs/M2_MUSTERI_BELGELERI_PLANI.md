@@ -1,6 +1,6 @@
 # ACARVO — M2: Kimlik, pasaport, ehliyet ve müşteri belgeleri — Nihai uygulama planı
 
-Durum: **kararlar kesinleşti; otonom geliştirme sprinti başladı (10.10.2026, dal `musteriler-m2`).** Ana veritabanına M2 migration'ı uygulanmaz; `.env` değiştirilmez; gerçek anahtar üretilmez. İlerleme: `docs/M2_GELISTIRME_RAPORU.md`.
+Durum: **M2a–M2f test ortamında tamamlandı (11.10.2026, dal `musteriler-m2`); inceleme ve ana veritabanı geçişi onay bekliyor.** Ana veritabanına M2 migration'ı uygulanmaz; `.env` değiştirilmez; gerçek anahtar üretilmez. İlerleme: `docs/M2_GELISTIRME_RAPORU.md`.
 
 ## 0. Kesinleşen kararlar (kullanıcı sprint talimatı, 10.10.2026)
 

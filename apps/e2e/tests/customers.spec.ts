@@ -202,7 +202,6 @@ test.describe('as the owner', () => {
     await openCustomer(page, 'Kenan Örnek')
     await expect(page).toHaveURL(/\/musteriler\/[0-9a-f-]{36}$/)
     for (const [tab, module] of [
-      ['Belgeler', 'Müşteri belgeleri (M2)'],
       ['Rezervasyonlar', 'Rezervasyonlar'],
       ['Kiralamalar', 'Kiralamalar'],
       ['Cari ve tahsilatlar', 'Finans'],
@@ -214,6 +213,10 @@ test.describe('as the owner', () => {
       await expect(panel.getByText(module, { exact: true })).toBeVisible()
       await expect(panel.locator('table')).toHaveCount(0)
     }
+    // M2: the Belgeler tab now holds the customer's real document records.
+    await page.getByRole('tab', { name: /^Belgeler/ }).click()
+    await expect(page.getByRole('region', { name: 'Belge kayıtları' })).toBeVisible()
+    await page.getByRole('tab', { name: /^Görevler ve olaylar/ }).click()
     await expect(page).toHaveURL(/sekme=gorevler/)
     await page.reload()
     await expect(page.getByRole('tab', { name: /Görevler ve olaylar/ })).toHaveAttribute('aria-selected', 'true')
