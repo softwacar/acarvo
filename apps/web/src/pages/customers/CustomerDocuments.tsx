@@ -201,6 +201,8 @@ function RevealDialog({ customerId, doc, onClose }: { customerId: string; doc: C
   const [shown, setShown] = useState<{ number: string; until: number; remaining: number } | null>(null)
   const [now, setNow] = useState(Date.now())
   const reveal = useMutation({
+    // The number is copied into local state only; nothing is kept in the query/mutation cache.
+    gcTime: 0,
     mutationFn: () => customerDocumentsApi.reveal(customerId, doc.id, reason),
     onSuccess: (r) => {
       const start = Date.now()
@@ -208,6 +210,7 @@ function RevealDialog({ customerId, doc, onClose }: { customerId: string; doc: C
       // The reveal is recorded in the document history (without the number).
       void qc.invalidateQueries({ queryKey: keys.history })
       setShown({ number: r.number, until: start + r.visibleSeconds * 1000, remaining: r.remainingThisHour })
+      reveal.reset()
     },
     onError: (e) => setError(e instanceof ApiRequestError ? (e.fields?.reason ?? e.message) : 'Numara açılamadı.'),
   })

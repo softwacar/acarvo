@@ -64,7 +64,7 @@ function ActivateDialog({ policy, onClose }: { policy: RequirementPolicy; onClos
           </ul>
           <label className="mt-4 flex cursor-pointer items-start gap-2 text-[13.5px] font-medium text-ink">
             <input type="checkbox" checked={checked} onChange={(e) => setChecked(e.target.checked)} className="mt-0.5 size-4 accent-[var(--ac-blue)]" />
-            Bu kuralların {countryName(policy.country)} mevzuatına uygunluğunu kontrol ettim; uygulama bunu doğrulamaz.
+            Bu kuralları şirketimizin kendi değerlendirmesiyle kontrol ettim. Bu işaret hukuki uygunluk onayı veya garantisi değildir; ACARVO mevzuata uygunluğu doğrulamaz.
           </label>
           <div className="mt-5 flex flex-wrap justify-end gap-2">
             <Dialog.Close className="h-9 rounded-lg px-3.5 font-medium text-ink-2 hover:bg-ground hover:text-ink">Vazgeç</Dialog.Close>

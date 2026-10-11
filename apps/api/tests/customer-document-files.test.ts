@@ -297,3 +297,43 @@ describe('full number reveal', () => {
     expect((await adnan.post(`/api/customers/${ajla}/documents/${doc.id}/reveal-number`, { reason: 'document_check' })).statusCode).toBe(200)
   })
 })
+
+describe('defence in depth (final security review)', () => {
+  it('file access and number reveal also require the document read permission; a custom role without it gets nothing', async () => {
+    // A custom role with the view and reveal permissions but WITHOUT customers.documents.read.
+    const role = (
+      await asOwner(data.companies.drina, `insert into roles (company_id, name, permissions) values ($1, 'Eksik okuma', array['customers.read','customers.documents.view','customers.documents.download','customers.identity.reveal']) returning id`, [
+        data.companies.drina,
+      ])
+    ).rows[0].id
+    const user = (await asOwner(null, `insert into users (email, name, password_hash) select 'eksik@drina-demo.ba', 'Eksik Okuma', password_hash from users where email = $1 returning id`, [EMAILS.adnan])).rows[0].id
+    const m = (await asOwner(data.companies.drina, `insert into memberships (company_id, user_id, all_branches) values ($1, $2, 'yes') returning id`, [data.companies.drina, user])).rows[0].id
+    await asOwner(data.companies.drina, `insert into membership_roles (company_id, membership_id, role_id) values ($1, $2, $3)`, [data.companies.drina, m, role])
+    const c = new Client(app)
+    expect((await c.login('eksik@drina-demo.ba')).statusCode).toBe(200)
+    const fileId = (await asOwner(data.companies.drina, `select id from customer_files limit 1`)).rows[0].id
+    expect((await c.post(`/api/customer-files/${fileId}/access`, { mode: 'view' })).statusCode).toBe(403)
+    expect((await c.post(`/api/customer-files/${fileId}/access`, { mode: 'download' })).statusCode).toBe(403)
+    expect((await c.post(`/api/customers/${ajla}/documents/${doc.id}/reveal-number`, { reason: 'document_check' })).statusCode).toBe(403)
+  })
+
+  it('the "number already used" answer names the other customer only to users who may see customers', async () => {
+    const role = (
+      await asOwner(data.companies.drina, `insert into roles (company_id, name, permissions) values ($1, 'Yalnız belge', array['customers.documents.read','customers.documents.manage']) returning id`, [data.companies.drina])
+    ).rows[0].id
+    const user = (await asOwner(null, `insert into users (email, name, password_hash) select 'yalnizbelge@drina-demo.ba', 'Yalnız Belge', password_hash from users where email = $1 returning id`, [EMAILS.adnan])).rows[0].id
+    const m = (await asOwner(data.companies.drina, `insert into memberships (company_id, user_id, all_branches) values ($1, $2, 'yes') returning id`, [data.companies.drina, user])).rows[0].id
+    await asOwner(data.companies.drina, `insert into membership_roles (company_id, membership_id, role_id) values ($1, $2, $3)`, [data.companies.drina, m, role])
+    const c = new Client(app)
+    expect((await c.login('yalnizbelge@drina-demo.ba')).statusCode).toBe(200)
+    const emir = (await asOwner(data.companies.drina, `select id from customers where display_name = 'Emir Primjerović'`)).rows[0].id
+    const res = await c.post(`/api/customers/${emir}/documents`, { type: 'national_id', issuingCountry: 'BA', number: 'TEST-BA-1001' })
+    expect(res.statusCode).toBe(409)
+    expect(res.json().error.code).toBe('DOCUMENT_NUMBER_IN_USE')
+    expect(res.json().error.details).toBeNull()
+    expect(res.body).not.toContain('Ajla')
+    // An owner (who can see customers) gets the name.
+    const owner = await adnan.post(`/api/customers/${emir}/documents`, { type: 'national_id', issuingCountry: 'BA', number: 'TEST-BA-1001' })
+    expect(owner.json().error.details.otherCustomer.displayName).toBe('Ajla Testović')
+  })
+})

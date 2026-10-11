@@ -121,6 +121,7 @@ export async function customerDocumentFileRoutes(app: FastifyInstance) {
     const { id, docId } = p.data
     const crypto = requireCrypto(app.customerCrypto)
     return withCompany(req, 'customers.identity.reveal', async (tx, access) => {
+      if (!access.permissions.has('customers.documents.read')) throw forbidden()
       const { reason } = numberRevealSchema.parse(req.body)
       const customer = await getCustomer(tx, id)
       if (!customer) throw notFound(CUSTOMER_NOT_FOUND)
@@ -191,7 +192,8 @@ export async function customerFileRoutes(app: FastifyInstance) {
       if (!parsed.success) throw notFound(FILE_NOT_FOUND)
       const { mode } = accessSchema.parse(req.body)
       return withCompany(req, null, async (tx, access) => {
-        if (!access.permissions.has(MODE_PERMISSION[mode])) throw forbidden(mode === 'view' ? 'Belge görüntüsünü açma yetkiniz yok.' : 'Belge dosyasını indirme yetkiniz yok.')
+        if (!access.permissions.has(MODE_PERMISSION[mode]) || !access.permissions.has('customers.documents.read'))
+          throw forbidden(mode === 'view' ? 'Belge görüntüsünü açma yetkiniz yok.' : 'Belge dosyasını indirme yetkiniz yok.')
         const r = await visibleCustomerFile(tx, parsed.data.id)
         const auth = req.auth!
         await audit(tx, {
@@ -217,7 +219,7 @@ export async function customerFileRoutes(app: FastifyInstance) {
     const crypto = requireCrypto(app.customerCrypto)
     const file = await withCompany(req, null, async (tx, access) => {
       // Permissions are checked again on every request: a revoked permission closes access at once.
-      if (!access.permissions.has(MODE_PERMISSION[mode])) throw forbidden()
+      if (!access.permissions.has(MODE_PERMISSION[mode]) || !access.permissions.has('customers.documents.read')) throw forbidden()
       const r = await visibleCustomerFile(tx, parsed.data.id)
       if (!app.documentGrants.allows({ kind: 'customer_document', sessionId: req.auth!.session.id, companyId: access.companyId, fileId: parsed.data.id, mode })) {
         throw new AppError(403, 'ACCESS_GRANT_REQUIRED', 'Bu belgeyi açmak için ACARVO içindeki Görüntüle veya İndir düğmesini kullanın. Bağlantının süresi dolmuş olabilir.')

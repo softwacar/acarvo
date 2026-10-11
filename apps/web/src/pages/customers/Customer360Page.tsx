@@ -420,7 +420,7 @@ function Overview({ c, canManage, onEdit, onTab }: { c: CustomerDetail; canManag
               ['Uyruk', countryName(c.nationality)],
               // Shown only when recorded; its reference country was never defined (M1), so it is not a rental decision.
               ...(c.residency
-                ? ([['Eski sınıflandırma (M1)', <span title="M1'de kaydedildi; referans ülke belirtilmemiş. Kiralamadaki kararı personel verir.">{RESIDENCY_LABELS[c.residency]}</span>]] as [string, ReactNode][])
+                ? ([['Eski M1 sınıflandırması', <span title="M1'de kaydedildi; referans ülke belirtilmemiş. Güncel ikamet sınıflandırması değildir; kiralamadaki kararı personel verir.">{RESIDENCY_LABELS[c.residency]}</span>]] as [string, ReactNode][])
                 : []),
               ['Doğum tarihi', c.dateOfBirth && <span className="tnum">{formatDate(c.dateOfBirth)}</span>],
               ['Müşteri no', <span className="tnum">{c.customerNo}</span>],

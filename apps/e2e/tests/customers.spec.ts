@@ -115,7 +115,7 @@ test.describe('as the owner', () => {
     await expect(page.getByRole('link', { name: 'Lena Beispiel' })).toBeVisible()
     await expect(page.getByText('1 müşteri').first()).toBeVisible()
     expect(page.url()).not.toMatch(/062|primjer|M-000003/i)
-    await page.getByLabel('Eski sınıflandırma (M1)').selectOption('foreign')
+    await page.getByLabel('Eski M1 sınıflandırması').selectOption('foreign')
     await expect(page).toHaveURL(/residency=foreign/)
     await box.fill('')
     await expect(page.getByRole('link', { name: 'John Sample' })).toBeVisible()

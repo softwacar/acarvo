@@ -98,3 +98,20 @@ test('operations user: may add, may not open files or numbers', async ({ browser
   await page.screenshot({ path: out('09-operasyon-ayrinti-1440') })
   await ctx.close()
 })
+
+test('missing encryption keys: the documents tab says so and offers no number or file writes (simulated answer)', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 })
+  await page.route('**/api/customers/*/documents', async (route) => {
+    if (route.request().method() !== 'GET') return route.continue()
+    const res = await route.fetch()
+    const body = await res.json()
+    await route.fulfill({ response: res, json: { ...body, keysConfigured: false, uploadsEnabled: false } })
+  })
+  await openDocuments(page, 'Lena Beispiel')
+  await expect(page.getByText('Şifreleme anahtarı yapılandırılmadığı için', { exact: false })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Numarayı göster' })).toHaveCount(0)
+  await page.getByRole('button', { name: 'Pasaport ayrıntıları' }).click()
+  await expect(page.getByText('Dosya yükleme kapalı: şifreleme anahtarı yapılandırılmadı.')).toBeVisible()
+  await settle(page)
+  await page.screenshot({ path: out('11-anahtar-yok-1440') })
+})

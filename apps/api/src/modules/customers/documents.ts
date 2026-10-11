@@ -78,8 +78,8 @@ const NO_NUMBER = { numberCiphertext: null, numberKeyId: null, numberHint: null,
  * so it also holds during a lookup-key rotation. The answer names the other customer only by number and name, which the
  * user can see anyway; never the document number.
  */
-async function assertNumberFree(tx: Tx, crypto: CustomerCrypto, companyId: string, customerId: string, type: string, issuingCountry: string | null, normalized: string, exceptDocumentId?: string) {
-  const hashes = crypto.lookupCandidates(companyId, lookupParts(type, issuingCountry, normalized)).map((c) => c.hash)
+async function assertNumberFree(tx: Tx, crypto: CustomerCrypto, access: CompanyAccess, customerId: string, type: string, issuingCountry: string | null, normalized: string, exceptDocumentId?: string) {
+  const hashes = crypto.lookupCandidates(access.companyId, lookupParts(type, issuingCountry, normalized)).map((c) => c.hash)
   const r = (
     await tx.execute(sql`
       select c.customer_no, c.display_name from customer_documents d join customers c on c.company_id = d.company_id and c.id = d.customer_id
@@ -87,7 +87,8 @@ async function assertNumberFree(tx: Tx, crypto: CustomerCrypto, companyId: strin
         ${exceptDocumentId ? sql`and d.id <> ${exceptDocumentId}` : sql``}
       limit 1`)
   ).rows[0] as Row | undefined
-  if (r) throw numberInUse({ customerNo: r.customer_no as string, displayName: r.display_name as string })
+  // The other customer is named only to users who may see customers anyway.
+  if (r) throw numberInUse(access.permissions.has('customers.read') ? { customerNo: r.customer_no as string, displayName: r.display_name as string } : null)
 }
 const numberInUse = (other: { customerNo: string; displayName: string } | null) =>
   new AppError(409, 'DOCUMENT_NUMBER_IN_USE', 'Bu belge numarası şirketinizde başka bir müşteride kayıtlı.', { number: 'Bu numara başka bir müşteride kayıtlı' }, other ? { otherCustomer: other } : null)
@@ -248,7 +249,7 @@ export async function customerDocumentRoutes(app: FastifyInstance) {
       let number: ReturnType<typeof numberColumns> | typeof NO_NUMBER = NO_NUMBER
       if (input.number) {
         const crypto = requireCrypto(app.customerCrypto)
-        await assertNumberFree(tx, crypto, access.companyId, id, input.type, input.issuingCountry ?? null, input.number)
+        await assertNumberFree(tx, crypto, access, id, input.type, input.issuingCountry ?? null, input.number)
         number = numberColumns(crypto, access.companyId, docId, input.type, input.issuingCountry ?? null, input.number)
       }
       const userId = req.auth!.user.id
@@ -309,7 +310,7 @@ export async function customerDocumentRoutes(app: FastifyInstance) {
         const crypto = requireCrypto(app.customerCrypto)
         // A new country changes the exact-match key; the stored number is re-keyed (decrypted and re-encrypted in memory).
         const plain = input.number ?? crypto.decrypt(access.companyId, 'number', docId, current.number_ciphertext as Buffer, current.number_key_id as string).toString('utf8')
-        await assertNumberFree(tx, crypto, access.companyId, id, type, issuingCountry, plain, docId)
+        await assertNumberFree(tx, crypto, access, id, type, issuingCountry, plain, docId)
         number = numberColumns(crypto, access.companyId, docId, type, issuingCountry, plain)
         if (input.number) fields.push('number')
       }
@@ -363,7 +364,7 @@ export async function customerDocumentRoutes(app: FastifyInstance) {
       if (input.number || keep) {
         const crypto = requireCrypto(app.customerCrypto)
         const plain = input.number ?? crypto.decrypt(access.companyId, 'number', docId, old.number_ciphertext as Buffer, old.number_key_id as string).toString('utf8')
-        await assertNumberFree(tx, crypto, access.companyId, id, type, issuingCountry, plain)
+        await assertNumberFree(tx, crypto, access, id, type, issuingCountry, plain)
         number = numberColumns(crypto, access.companyId, newId, type, issuingCountry, plain)
       }
       const userId = req.auth!.user.id

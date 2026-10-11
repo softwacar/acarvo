@@ -223,10 +223,10 @@ export function CustomersPage() {
                 </option>
               ))}
             </FilterSelect>
-            <FilterSelect label="Eski sınıflandırma (M1)" value={search.residency} onChange={(residency) => set({ residency: residency as CustomerListSearch['residency'] })}>
-              <option value="">M1 sınıflandırması: tümü</option>
-              <option value="local">M1: {RESIDENCY_LABELS.local}</option>
-              <option value="foreign">M1: {RESIDENCY_LABELS.foreign}</option>
+            <FilterSelect label="Eski M1 sınıflandırması" value={search.residency} onChange={(residency) => set({ residency: residency as CustomerListSearch['residency'] })}>
+              <option value="">Eski M1 sınıflandırması: tümü</option>
+              <option value="local">Eski M1: {RESIDENCY_LABELS.local}</option>
+              <option value="foreign">Eski M1: {RESIDENCY_LABELS.foreign}</option>
             </FilterSelect>
             {session.branches.length > 1 && (
               <FilterSelect label="Kayıt şubesi" value={search.branchId} onChange={(branchId) => set({ branchId })}>

@@ -33,7 +33,7 @@ export const CUSTOMER_FIELD_LABELS: Record<string, string> = {
   familyName: 'Soyad',
   phone: 'Telefon',
   email: 'E-posta',
-  residency: 'Eski ikamet sınıflandırması (M1)',
+  residency: 'Eski M1 sınıflandırması',
   nationality: 'Uyruk',
   residenceCountry: 'İkamet ettiği ülke',
   dateOfBirth: 'Doğum tarihi',

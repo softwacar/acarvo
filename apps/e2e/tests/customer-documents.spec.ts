@@ -1,5 +1,6 @@
+import path from 'node:path'
 import { expect, type Page, test } from '@playwright/test'
-import { authFile, expectNoHorizontalOverflow, fixture } from './fixtures'
+import { authFile, expectNoHorizontalOverflow, fixture, login } from './fixtures'
 
 // M2 user flows on the test database: synthetic documents ("TEST-…"), per-run synthetic keys, synthetic policies.
 
@@ -113,7 +114,8 @@ test.describe('as the owner', () => {
     await fromTemplate.getByRole('button', { name: 'Etkinleştir' }).click()
     const confirm = page.getByRole('dialog', { name: 'Gereksinimi etkinleştir' })
     await expect(confirm.getByRole('button', { name: 'Etkinleştir' })).toBeDisabled()
-    await confirm.getByLabel(/mevzuatına uygunluğunu kontrol ettim/).check()
+    await expect(confirm.getByText('hukuki uygunluk onayı veya garantisi değildir', { exact: false })).toBeVisible()
+    await confirm.getByLabel(/kendi değerlendirmesiyle kontrol ettim/).check()
     await confirm.getByRole('button', { name: 'Etkinleştir' }).click()
     await expect(page.getByText('Yabancı (ikamet) sürüm 2 etkinleştirildi.', { exact: false })).toBeVisible()
 
@@ -170,4 +172,38 @@ test('1440 and 768: documents tab and settings without sideways scrolling', asyn
     await expectNoHorizontalOverflow(page)
     await ctx.close()
   }
+})
+
+test('as a manager (Yönetici): may view a document image, but not download it or open the full number', async ({ browser }) => {
+  // Neretva's owner uploads a front side for the synthetic customer Dino.
+  const ownerCtx = await browser.newContext({ storageState: authFile('lejla'), viewport: { width: 1440, height: 900 }, locale: 'tr-TR' })
+  const owner = await ownerCtx.newPage()
+  await openDocuments(owner, 'Dino Neretvić')
+  await owner.getByRole('button', { name: 'Kimlik kartı ayrıntıları' }).click()
+  const ownerDetail = owner.getByRole('dialog', { name: 'Kimlik kartı' })
+  const chooser = owner.waitForEvent('filechooser')
+  await ownerDetail.getByRole('button', { name: 'Ön yüz yükle' }).click()
+  await (await chooser).setFiles(fixture('foto-mavi.jpg'))
+  await expect(ownerDetail.getByRole('button', { name: 'Ön yüz sürüm 1 indir' })).toBeVisible()
+  await ownerCtx.close()
+
+  // Adnan is a Yönetici in Neretva: a separate, fresh session (the stored Drina session is not touched).
+  const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, locale: 'tr-TR' })
+  const page = await ctx.newPage()
+  await login(page, 'adnan')
+  const switched = await page.evaluate(async (companyName) => {
+    const csrf = ((await (await fetch('/api/auth/csrf')).json()) as { token: string }).token
+    const session = (await (await fetch('/api/auth/session')).json()) as { memberships: { companyId: string; companyName: string }[] }
+    const target = session.memberships.find((m) => m.companyName === companyName)!
+    return (await fetch('/api/auth/switch-company', { method: 'POST', headers: { 'content-type': 'application/json', 'x-csrf-token': csrf }, body: JSON.stringify({ companyId: target.companyId }) })).status
+  }, 'Neretva Rent')
+  expect(switched).toBe(200)
+  await openDocuments(page, 'Dino Neretvić')
+  await page.getByRole('button', { name: 'Kimlik kartı ayrıntıları' }).click()
+  const detail = page.getByRole('dialog', { name: 'Kimlik kartı' })
+  await expect(detail.getByRole('button', { name: 'Ön yüz sürüm 1 görüntüle' })).toBeVisible()
+  await expect(detail.getByRole('button', { name: /indir/i })).toHaveCount(0)
+  await expect(detail.getByRole('button', { name: 'Numarayı göster' })).toHaveCount(0)
+  if (process.env.SCREENSHOTS) await page.screenshot({ path: path.join(import.meta.dirname, '..', 'screenshots', 'm2', '10-yonetici-ayrinti-1440.png') })
+  await ctx.close()
 })

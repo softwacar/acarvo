@@ -410,7 +410,7 @@ function CustomerForm({
               {customer?.residency && (
                 <>
                   {' '}
-                  Bu kayıtta eski sınıflandırma (M1) korunuyor: <span className="font-medium text-ink">{RESIDENCY_LABELS[customer.residency]}</span>, referans ülke belirtilmemiş.
+                  Bu kayıtta eski M1 sınıflandırması korunuyor: <span className="font-medium text-ink">{RESIDENCY_LABELS[customer.residency]}</span> (referans ülke belirtilmemiş; güncel ikamet sınıflandırması değildir).
                 </>
               )}
             </span>

@@ -73,7 +73,7 @@ test.describe('residence country', () => {
     await form.getByRole('button', { name: 'Müşteriyi kaydet' }).click()
     await expect(page.getByRole('heading', { name: 'Ayrı Ülkeler' })).toBeVisible()
     await expect(page.getByText('İkamet ettiği ülke: Almanya · Uyruk: Bosna-Hersek')).toBeVisible()
-    await expect(page.getByText('Eski sınıflandırma (M1)')).toHaveCount(0)
+    await expect(page.getByText('Eski M1 sınıflandırması')).toHaveCount(0)
 
     // A record from M1 keeps its classification next to — not instead of — residence country and nationality.
     await page.goto('/musteriler')
@@ -81,12 +81,12 @@ test.describe('residence country', () => {
     await page.getByRole('link', { name: 'Selin Deneme' }).click()
     await expect(page.getByText('İkamet ettiği ülke: Bosna-Hersek · Uyruk: Türkiye')).toBeVisible()
     const facts = page.locator('section').filter({ hasText: 'Kişi bilgileri' }).first()
-    await expect(facts.getByText('Eski sınıflandırma (M1)')).toBeVisible()
+    await expect(facts.getByText('Eski M1 sınıflandırması')).toBeVisible()
     await expect(facts.getByText('Yabancı (ikamet)')).toBeVisible()
     // Editing keeps it: the form shows it read-only and does not send a change.
     await page.getByRole('button', { name: 'Düzenle' }).first().click()
     const edit = page.getByRole('dialog', { name: 'Müşteriyi düzenle' })
-    await expect(edit.getByText('Bu kayıtta eski sınıflandırma (M1) korunuyor', { exact: false })).toBeVisible()
+    await expect(edit.getByText('Bu kayıtta eski M1 sınıflandırması korunuyor', { exact: false })).toBeVisible()
     await edit.locator('#city').fill('Sarajevo')
     await edit.getByRole('button', { name: 'Değişiklikleri kaydet' }).click()
     await expect(edit).toHaveCount(0)
