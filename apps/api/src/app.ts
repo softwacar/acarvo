@@ -10,6 +10,7 @@ import { sessionStore } from './modules/auth/sessions'
 import { branchRoutes } from './modules/branches/routes'
 import { customerRoutes } from './modules/customers/routes'
 import { customerDocumentRoutes } from './modules/customers/documents'
+import { customerDocumentFileRoutes, customerFileRoutes } from './modules/customers/document-files'
 import { documentFileRoutes, vehicleDocumentRoutes } from './modules/vehicles/documents'
 import { vehicleHistoryRoutes } from './modules/vehicles/history'
 import { fileRoutes, vehiclePhotoRoutes } from './modules/vehicles/photos'
@@ -81,5 +82,7 @@ export async function buildApp({
   await app.register(documentFileRoutes, { prefix: '/api/document-files' })
   await app.register(customerRoutes, { prefix: '/api/customers' })
   await app.register(customerDocumentRoutes, { prefix: '/api/customers' })
+  await app.register(customerDocumentFileRoutes, { prefix: '/api/customers' })
+  await app.register(customerFileRoutes, { prefix: '/api/customer-files' })
   return app
 }

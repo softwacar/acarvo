@@ -22,6 +22,7 @@ import { z } from 'zod'
 import type { Tx } from '../../db/client'
 import { customerDocuments } from '../../db/schema'
 import { audit } from '../../lib/audit'
+import { documentUploadPolicy } from '../../lib/malware'
 import type { CustomerCrypto } from '../../lib/customer-crypto'
 import { AppError, notFound } from '../../lib/errors'
 import { toIso } from '../../lib/timestamps'
@@ -230,7 +231,8 @@ export async function customerDocumentRoutes(app: FastifyInstance) {
     return withCompany(req, 'customers.documents.read', async (tx, access) => {
       if (!(await getCustomer(tx, id))) throw notFound(CUSTOMER_NOT_FOUND)
       const { today, warningDays } = await context(tx, access)
-      return { items: await loadCustomerDocuments(tx, id, today, warningDays), today, warningDays, keysConfigured: !!app.customerCrypto, uploadsEnabled: false }
+      const uploads = documentUploadPolicy(app.env, app.scanner)
+      return { items: await loadCustomerDocuments(tx, id, today, warningDays), today, warningDays, keysConfigured: !!app.customerCrypto, uploadsEnabled: uploads.enabled && !!app.customerCrypto }
     })
   })
 

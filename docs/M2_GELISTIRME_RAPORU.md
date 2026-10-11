@@ -83,3 +83,40 @@ Sınırlar: ana `acarvo` veritabanına M2 migration'ı uygulanmaz (yalnız dry-r
   - günlüklerde numara bulunmaması;
   - mükerrer numaranın başka şirketi hiç sorgulamaması.
 
+## Aşama M2d — Şifreli dosyalar, yetkiler, numara açma ve anahtar yenileme
+- **Yükleme** (`POST /api/customers/:id/documents/:docId/files?side=front|back|page`):
+  - içerik ilk baytlardan tanınır; uzantıya ve tarayıcının bildirdiği türe güvenilmez;
+  - PDF'te etkin içerik reddedilir; görseller yeniden kodlanır ve EXIF/GPS silinir;
+  - dosya başına en fazla 10 MB, PDF en fazla 20 sayfa;
+  - zararlı dosya taraması: üretimde tarayıcı yoksa yükleme kapalıdır;
+  - dosya bellekte AES-256-GCM ile şifrelenip `customers/<şirket>/<yıl>/<uuid>.bin` olarak yazılır. Diskte düz kopya bulunmaz; kayıt yalnız şifreli içeriğin özetini tutar;
+  - özgün dosya adı saklanmaz;
+  - ön/arka yüz ve ek sayfa ayrı sürümlenir; eski sürümler korunur.
+- **Görüntüleme ve indirme ayrı yetkilerdir:**
+  - erişim izni modeli kullanılır (POST ile izin, ardından GET); izin oturum, şirket, dosya türü, dosya ve amaca bağlıdır; adreste anahtar veya belirteç yoktur;
+  - Fetch Metadata denetimi, `no-store`, `nosniff` ve sandbox CSP;
+  - her GET'te yetki yeniden denetlenir ve bütünlük (şifreli içeriğin özeti) kontrol edilir;
+  - şirket değiştirme, çıkış ve yetki kaldırma erişimi hemen keser;
+  - görüntüleme ve indirme istekleri işlem geçmişine yazılır (dosya adı ve içerik yazılmaz).
+- **Rol matrisi** (testle doğrulandı):
+
+  | Rol | Belge ekler | Görüntüler | İndirir | Tam numarayı görür |
+  |---|---|---|---|---|
+  | Operasyon | ✓ | — | — | — |
+  | Yönetici | ✓ | ✓ | — | — |
+  | Sahip | ✓ | ✓ | ✓ | ✓ (gerekçeyle) |
+
+- **Tam numara açma** (`POST …/reveal-number`):
+  - sabit listeden gerekçe zorunlu;
+  - kullanıcı başına saatte en fazla 30; sayaç veritabanında tutulur (`user_sensitive_actions`), yeni oturum veya sunucu yeniden başlatma sınırı sıfırlamaz;
+  - işlem geçmişine gerekçe yazılır, numara yazılmaz; yanıt önbelleğe alınmaz.
+- **Anahtar yenileme:**
+  - `lib/customer-key-rotation.ts` ve `npm run keys:reencrypt` (ana veritabanında önce doğrulanmış yedek, ardından küçük partiler; `--dry-run` yalnız sayar).
+  - Geçersiz sayılmış ve kilitli belgeler de yenilenir. Migration `0017` buna yalnız şifreleme sütunları için izin verir; başka her değişiklik yine reddedilir.
+  - Yarıda kesilen dosya yenilemesi bir sonraki çalıştırmada kurtarılır.
+  - `npm run keys:check [-- --db]`: anahtarları ve (veritabanıyla) her değerin çözülebildiğini salt okunur doğrular; yalnız sayı ve parmak izi yazar.
+- **Testler:**
+  - `customer-document-files.test.ts` (12): diskte şifreli dosya; EXIF silme; sürümler; içerik reddi; zararlı dosya ve tarayıcı yok; rol matrisi; izin, oturum ve amaç bağı; çapraz site; şirket değiştirme, çıkış ve yetki kaldırma; başka şirket; taşınan şifreli dosya; numara açma ve sınırın yeniden başlatmaya dayanıklılığı;
+  - `customer-key-rotation.test.ts` (5): deneme çalıştırması; partili yenileme; eski anahtar kaldırıldıktan sonra numara açma, dosya, arama ve tek numara kuralı; eski anahtarın artık açamaması; yarıda kesilen yenilemenin kurtarılması.
+- **API toplamı:** 272/272.
+

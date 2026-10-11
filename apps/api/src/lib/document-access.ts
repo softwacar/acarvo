@@ -13,7 +13,11 @@ export type DocumentAccessMode = (typeof DOCUMENT_ACCESS_MODES)[number]
 export const DOCUMENT_ACCESS_TTL_MS = 2 * 60 * 1000
 const MAX_GRANTS = 20_000
 
+/** Which file table a grant opens. Vehicle and customer document files are separate record types (M2). */
+export type DocumentAccessKind = 'vehicle_document' | 'customer_document'
+
 interface Grant {
+  kind: DocumentAccessKind
   sessionId: string
   userId: string
   companyId: string
@@ -23,9 +27,9 @@ interface Grant {
 }
 
 export interface DocumentAccessGrants {
-  issue(g: Omit<Grant, 'expiresAt'>): { expiresAt: number }
-  /** True only for an unexpired grant of this session, company, file and purpose. Not consumed: the PDF viewer may ask again. */
-  allows(q: { sessionId: string; companyId: string; fileId: string; mode: DocumentAccessMode }): boolean
+  issue(g: Omit<Grant, 'expiresAt' | 'kind'> & { kind?: DocumentAccessKind }): { expiresAt: number }
+  /** True only for an unexpired grant of this session, company, file kind, file and purpose. Not consumed: the PDF viewer may ask again. */
+  allows(q: { sessionId: string; companyId: string; fileId: string; mode: DocumentAccessMode; kind?: DocumentAccessKind }): boolean
   revokeSession(sessionId: string): void
   revokeUser(userId: string): void
   size(): number
@@ -33,7 +37,7 @@ export interface DocumentAccessGrants {
 
 export function createDocumentAccessGrants(ttlMs = DOCUMENT_ACCESS_TTL_MS, now: () => number = Date.now): DocumentAccessGrants {
   const grants = new Map<string, Grant>()
-  const key = (sessionId: string, fileId: string, mode: DocumentAccessMode) => `${sessionId}|${fileId}|${mode}`
+  const key = (sessionId: string, fileId: string, mode: DocumentAccessMode, kind: DocumentAccessKind = 'vehicle_document') => `${kind}|${sessionId}|${fileId}|${mode}`
   const sweep = () => {
     const t = now()
     for (const [k, g] of grants) if (g.expiresAt <= t) grants.delete(k)
@@ -43,14 +47,16 @@ export function createDocumentAccessGrants(ttlMs = DOCUMENT_ACCESS_TTL_MS, now: 
       if (grants.size >= MAX_GRANTS) sweep()
       if (grants.size >= MAX_GRANTS) grants.delete(grants.keys().next().value!)
       const expiresAt = now() + ttlMs
-      grants.set(key(g.sessionId, g.fileId, g.mode), { ...g, expiresAt })
+      const kind = g.kind ?? 'vehicle_document'
+      grants.set(key(g.sessionId, g.fileId, g.mode, kind), { ...g, kind, expiresAt })
       return { expiresAt }
     },
     allows(q) {
-      const g = grants.get(key(q.sessionId, q.fileId, q.mode))
+      const k = key(q.sessionId, q.fileId, q.mode, q.kind)
+      const g = grants.get(k)
       if (!g) return false
       if (g.expiresAt <= now()) {
-        grants.delete(key(q.sessionId, q.fileId, q.mode))
+        grants.delete(k)
         return false
       }
       // A company switch keeps the session but changes the active company: the old grant no longer applies.

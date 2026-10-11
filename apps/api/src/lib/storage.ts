@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { createReadStream } from 'node:fs'
-import { mkdir, rm, stat, writeFile } from 'node:fs/promises'
+import { mkdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 
 /**
@@ -9,7 +9,8 @@ import path from 'node:path'
  * server only, so user input never becomes part of a path. Swapping this module is the
  * route to S3-compatible storage later.
  */
-const KEY_PATTERN = /^(?:[0-9a-f-]{36}\/\d{4}\/[0-9a-f-]{36}(-thumb)?\.webp|documents\/[0-9a-f-]{36}\/\d{4}\/[0-9a-f-]{36}\.(?:pdf|jpg|png))$/
+const KEY_PATTERN =
+  /^(?:[0-9a-f-]{36}\/\d{4}\/[0-9a-f-]{36}(-thumb)?\.webp|documents\/[0-9a-f-]{36}\/\d{4}\/[0-9a-f-]{36}\.(?:pdf|jpg|png)|customers\/[0-9a-f-]{36}\/\d{4}\/[0-9a-f-]{36}\.bin)$/
 
 export function createStorage(root: string) {
   const resolve = (key: string) => {
@@ -29,6 +30,13 @@ export function createStorage(root: string) {
     newDocumentKey(companyId: string, ext: 'pdf' | 'jpg' | 'png') {
       return `documents/${companyId}/${new Date().getUTCFullYear()}/${randomUUID()}.${ext}`
     },
+    /** Customer document files (M2): encrypted bytes only; no extension or personal data in the name. */
+    newCustomerFileKey(companyId: string, fileId: string) {
+      return `customers/${companyId}/${new Date().getUTCFullYear()}/${fileId}.bin`
+    },
+    async readAll(key: string) {
+      return readFile(resolve(key))
+    },
     async put(key: string, data: Buffer) {
       const file = resolve(key)
       await mkdir(path.dirname(file), { recursive: true })
@@ -38,6 +46,13 @@ export function createStorage(root: string) {
       const file = resolve(key)
       const info = await stat(file)
       return { stream: createReadStream(file), size: info.size }
+    },
+    /** Replaces a stored file atomically (written next to it, then renamed over it): never a half-written file. */
+    async replace(key: string, data: Buffer) {
+      const file = resolve(key)
+      const tmp = `${file}.${randomUUID()}.tmp`
+      await writeFile(tmp, data, { flag: 'wx' })
+      await rename(tmp, file)
     },
     async remove(...keys: string[]) {
       await Promise.all(keys.map((k) => rm(resolve(k), { force: true })))

@@ -120,6 +120,13 @@
       "when": 1791750862685,
       "tag": "0016_customer_documents_rls",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1791751587896,
+      "tag": "0017_customer_documents_key_rotation",
+      "breakpoints": true
     }
   ]
 }
