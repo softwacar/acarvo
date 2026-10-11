@@ -232,3 +232,114 @@ export interface CustomerDocumentsResponse {
   keysConfigured: boolean
   uploadsEnabled: boolean
 }
+
+// ---------------------------------------------------------------------------
+// Country requirements (M2e). A policy applies to one country (of the branch where a rental starts) and one residency
+// class. Nothing is active by default; templates only seed a draft and are NOT legally verified.
+
+export const RESIDENCY_CLASSES = ['local', 'foreign'] as const
+export type ResidencyClass = (typeof RESIDENCY_CLASSES)[number]
+
+export interface RequirementItem {
+  acceptedTypes: CustomerDocumentType[]
+  originalSeenRequired: boolean
+  copyRequired: boolean
+}
+
+/** Passive examples from the product spec (§9.2). Never applied anywhere until an owner activates a draft made from them. */
+export const DOCUMENT_POLICY_TEMPLATES: { code: string; residencyClass: ResidencyClass; title: string; items: RequirementItem[] }[] = [
+  {
+    code: 'spec_example_local',
+    residencyClass: 'local',
+    title: 'Spec örneği — Yerli (ikamet): kimlik ve sürücü belgesi',
+    items: [
+      { acceptedTypes: ['national_id'], originalSeenRequired: true, copyRequired: false },
+      { acceptedTypes: ['driving_license'], originalSeenRequired: true, copyRequired: false },
+    ],
+  },
+  {
+    code: 'spec_example_foreign',
+    residencyClass: 'foreign',
+    title: 'Spec örneği — Yabancı (ikamet): pasaport, giriş damgası ve sürücü belgesi',
+    items: [
+      { acceptedTypes: ['passport'], originalSeenRequired: true, copyRequired: false },
+      { acceptedTypes: ['entry_record'], originalSeenRequired: false, copyRequired: false },
+      { acceptedTypes: ['driving_license', 'international_driving_permit'], originalSeenRequired: true, copyRequired: false },
+    ],
+  },
+]
+
+export const requirementItemSchema = z.object({
+  acceptedTypes: z.array(z.enum(CUSTOMER_DOCUMENT_TYPES)).min(1, 'En az bir belge türü seçin').max(8),
+  originalSeenRequired: z.boolean().default(false),
+  copyRequired: z.boolean().default(false),
+})
+export const policyDraftSchema = z.object({
+  country: z.preprocess((v) => (typeof v === 'string' ? v.trim().toUpperCase() : v), z.string().refine((c) => COUNTRY_CODES.includes(c), 'Listeden bir ülke seçin')),
+  residencyClass: z.enum(RESIDENCY_CLASSES, { error: 'Yerli veya Yabancı (ikamet) seçin' }),
+  templateCode: z.string().optional(),
+  copyFromPolicyId: z.uuid().optional(),
+})
+export const policyItemsSchema = z.object({ items: z.array(requirementItemSchema).min(1, 'En az bir madde ekleyin').max(20) })
+export const policyActivateSchema = z.object({ confirm: z.literal(true, { error: 'Etkinleştirmeyi onaylayın' }) })
+export const documentSettingsSchema = z.object({ warningDays: z.coerce.number().int('Tam sayı girin').min(1, 'En az 1 gün').max(365, 'En fazla 365 gün') })
+
+export interface RequirementPolicy {
+  id: string
+  country: string
+  residencyClass: ResidencyClass
+  version: number
+  status: 'draft' | 'active' | 'retired'
+  templateCode: string | null
+  items: RequirementItem[]
+  createdAt: string
+  createdByName: string | null
+  activatedAt: string | null
+  activatedByName: string | null
+  retiredAt: string | null
+}
+
+export type RequirementItemState = 'ok' | 'expiring' | 'expired' | 'not_started' | 'missing' | 'unverified' | 'copy_missing'
+
+export interface RequirementItemResult extends RequirementItem {
+  state: RequirementItemState
+  documentId: string | null
+  daysLeft: number | null
+}
+
+const STATE_RANK: Record<CustomerDocumentState, number> = { valid: 0, no_expiry: 0, expiring: 1, not_started: 2, expired: 3, superseded: 9, voided: 9 }
+
+/**
+ * How a customer's documents meet one policy, on a given date. Information only: it never blocks anything (the Rentals
+ * module decides at rental time). An item is met by the best current document of an accepted type; then the evidence
+ * settings apply (original seen / copy kept).
+ */
+export function evaluateRequirements(items: RequirementItem[], documents: Pick<CustomerDocument, 'id' | 'type' | 'validity' | 'verification' | 'files'>[]): RequirementItemResult[] {
+  return items.map((item) => {
+    const candidates = documents
+      .filter((d) => item.acceptedTypes.includes(d.type) && d.validity.state !== 'voided' && d.validity.state !== 'superseded')
+      .sort((a, b) => STATE_RANK[a.validity.state] - STATE_RANK[b.validity.state])
+    const best = candidates[0]
+    if (!best) return { ...item, state: 'missing', documentId: null, daysLeft: null }
+    const base = { ...item, documentId: best.id, daysLeft: best.validity.daysLeft }
+    if (best.validity.state === 'expired') return { ...base, state: 'expired' }
+    if (best.validity.state === 'not_started') return { ...base, state: 'not_started' }
+    if (item.originalSeenRequired && best.verification !== 'original_seen') return { ...base, state: 'unverified' }
+    if (item.copyRequired && !best.files.some((f) => f.current)) return { ...base, state: 'copy_missing' }
+    return { ...base, state: best.validity.state === 'expiring' ? 'expiring' : 'ok' }
+  })
+}
+
+export interface CustomerDocumentStatus {
+  today: string
+  warningDays: number
+  residenceCountry: string | null
+  /** Active branches without a country: requirements cannot be evaluated for them. */
+  branchesWithoutCountry: number
+  countries: {
+    country: string
+    branchCount: number
+    /** Evaluation for each residency class that has an active policy; the class itself is decided by staff at rental time. */
+    classes: { residencyClass: ResidencyClass; policyId: string; version: number; items: RequirementItemResult[] }[]
+  }[]
+}

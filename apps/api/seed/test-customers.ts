@@ -153,3 +153,32 @@ export async function ensureTestCustomerDocuments(db: OwnerDb, crypto: import('.
     })
   }
 }
+
+/**
+ * Synthetic requirement policies for the TEST database only (M2e): Drina / BA has an active "local" policy and a
+ * "foreign" draft; Neretva has none, so "nothing applies by default" stays testable. Not a legal statement.
+ */
+export async function ensureTestDocumentPolicies(db: OwnerDb) {
+  const name = ((await db.execute(sql`select current_database() as name`)).rows[0] as { name: string }).name
+  if (name !== TEST_CUSTOMERS_DATABASE) throw new Error(`Synthetic policies are only loaded into ${TEST_CUSTOMERS_DATABASE}; nothing was added.`)
+  const drina = (await db.execute(sql`select id from companies where name like 'Drina%'`)).rows[0] as { id: string } | undefined
+  if (!drina) return
+  await db.transaction(async (tx) => {
+    await tx.execute(sql`select set_config('app.company_id', ${drina.id}, true)`)
+    if (((await tx.execute(sql`select count(*)::int n from document_requirement_policies`)).rows[0] as { n: number }).n > 0) return
+    const local = (
+      await tx.execute(sql`insert into document_requirement_policies (company_id, country, residency_class, version, status)
+        values (${drina.id}, 'BA', 'local', 1, 'draft') returning id`)
+    ).rows[0] as { id: string }
+    await tx.execute(sql`insert into document_requirement_items (company_id, policy_id, position, accepted_types, original_seen_required, copy_required) values
+      (${drina.id}, ${local.id}, 1, '{national_id,residence_permit}', true, false),
+      (${drina.id}, ${local.id}, 2, '{driving_license,international_driving_permit}', false, false)`)
+    await tx.execute(sql`update document_requirement_policies set status = 'active', activated_at = now() where id = ${local.id}`)
+    const foreign = (
+      await tx.execute(sql`insert into document_requirement_policies (company_id, country, residency_class, version, status)
+        values (${drina.id}, 'BA', 'foreign', 1, 'draft') returning id`)
+    ).rows[0] as { id: string }
+    await tx.execute(sql`insert into document_requirement_items (company_id, policy_id, position, accepted_types, original_seen_required, copy_required) values
+      (${drina.id}, ${foreign.id}, 1, '{passport}', true, false)`)
+  })
+}

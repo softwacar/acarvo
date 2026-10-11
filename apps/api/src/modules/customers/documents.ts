@@ -15,6 +15,8 @@ import {
   documentNumberHint,
   maskedNumber,
   validateDocumentUpdate,
+  type CustomerDocumentStatus,
+  evaluateRequirements,
 } from '@acarvo/shared'
 import { sql } from 'drizzle-orm'
 import type { FastifyInstance, FastifyRequest } from 'fastify'
@@ -30,6 +32,7 @@ import { withCompany } from '../../plugins/auth'
 import type { CompanyAccess } from '../auth/context'
 import { companyToday } from '../vehicles/document-overview'
 import { CUSTOMER_NOT_FOUND, getCustomer } from './repository'
+import { branchCountries, loadPolicies } from '../settings/document-requirements'
 
 type Row = Record<string, unknown>
 
@@ -403,6 +406,39 @@ export async function customerDocumentRoutes(app: FastifyInstance) {
         .where(sql`${customerDocuments.id} = ${docId}`)
       await docAudit(tx, access, req, 'customer.document.void', docId, customer, { type: current.type, reason: input.reason })
       return one(tx, access, id, docId)
+    })
+  })
+
+  /**
+   * How the customer's documents meet the company's active country policies. For every country of the company's
+   * branches, each residency class with an active policy is evaluated side by side: the class itself is decided by staff
+   * at rental time, never derived here. Information only; nothing is blocked.
+   */
+  app.get('/:id/document-status', async (req) => {
+    const { id } = parse(custParams, req.params, CUSTOMER_NOT_FOUND)
+    return withCompany(req, 'customers.documents.read', async (tx, access) => {
+      const customer = await getCustomer(tx, id)
+      if (!customer) throw notFound(CUSTOMER_NOT_FOUND)
+      const { today, warningDays } = await context(tx, access)
+      const documents = await loadCustomerDocuments(tx, id, today, warningDays)
+      const policies = await loadPolicies(tx, true)
+      const branches = await branchCountries(tx)
+      const countries = [...new Set([...branches.countries.map((c) => c.country), ...policies.map((p) => p.country)])].sort()
+      const status: CustomerDocumentStatus = {
+        today,
+        warningDays,
+        residenceCountry: customer.residenceCountry,
+        branchesWithoutCountry: branches.withoutCountry,
+        countries: countries.map((country) => ({
+          country,
+          branchCount: branches.countries.find((c) => c.country === country)?.branchCount ?? 0,
+          classes: policies
+            .filter((p) => p.country === country)
+            .sort((a, b) => a.residencyClass.localeCompare(b.residencyClass) * -1)
+            .map((p) => ({ residencyClass: p.residencyClass, policyId: p.id, version: p.version, items: evaluateRequirements(p.items, documents) })),
+        })),
+      }
+      return status
     })
   })
 

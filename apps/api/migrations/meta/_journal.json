@@ -127,6 +127,20 @@
       "when": 1791751587896,
       "tag": "0017_customer_documents_key_rotation",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1791751895176,
+      "tag": "0018_document_requirements",
+      "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1791751898423,
+      "tag": "0019_document_requirements_rls",
+      "breakpoints": true
     }
   ]
 }

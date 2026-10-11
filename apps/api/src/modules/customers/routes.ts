@@ -6,6 +6,7 @@ import {
   customerRestoreSchema,
   customerSearchSchema,
   customerUpdateSchema,
+  addDays,
   normalizeName,
   normalizePhone,
 } from '@acarvo/shared'
@@ -19,6 +20,8 @@ import { AppError, notFound } from '../../lib/errors'
 import { withCompany } from '../../plugins/auth'
 import type { CompanyAccess } from '../auth/context'
 import { inScope } from '../vehicles/repository'
+import { companyToday } from '../vehicles/document-overview'
+import { documentWarningDays } from './documents'
 import {
   companyCountry,
   CUSTOMER_NOT_FOUND,
@@ -83,7 +86,14 @@ function changedFields(before: Record<string, unknown>, after: Record<string, un
 
 export async function customerRoutes(app: FastifyInstance) {
   /** List and search. POST so that names, phone numbers and e-mail addresses never travel in a URL or reach access logs. */
-  app.post('/search', async (req) => withCompany(req, 'customers.read', (tx) => listCustomers(tx, customerSearchSchema.parse(req.body ?? {}))))
+  app.post('/search', async (req) =>
+    withCompany(req, 'customers.read', async (tx, access) => {
+      const q = customerSearchSchema.parse(req.body ?? {})
+      if (!access.permissions.has('customers.documents.read')) return listCustomers(tx, q)
+      const today = await companyToday(tx, access)
+      return listCustomers(tx, q, { today, warningUntil: addDays(today, await documentWarningDays(tx)) })
+    }),
+  )
 
   app.post('/duplicate-check', { config: DUPLICATE_CHECK_RATE_LIMIT }, async (req) =>
     withCompany(req, 'customers.manage', async (tx, access) => {

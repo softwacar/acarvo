@@ -748,3 +748,72 @@ export const userSensitiveActions = pgTable(
     check('user_sensitive_actions_action_check', sql`${t.action} in ('document_number_reveal')`),
   ],
 )
+
+// ---------------------------------------------------------------------------
+// Customer document requirements per country (M2e). Nothing is active by default: the company owner creates a draft
+// (empty, from a passive template or as a copy), edits it and activates it explicitly. Activated versions never change;
+// a change is a new version. Legal correctness is the company's responsibility (templates are not legally verified).
+
+export const customerDocumentSettings = pgTable(
+  'customer_document_settings',
+  {
+    companyId: uuid('company_id').primaryKey().references(() => companies.id),
+    /** "Expiring" window in days for customer documents. */
+    warningDays: integer('warning_days').notNull().default(30),
+    updatedBy: uuid('updated_by').references(() => users.id),
+    updatedAt: updatedAt(),
+  },
+  (t) => [check('customer_document_settings_warning_check', sql`${t.warningDays} between 1 and 365`)],
+)
+
+export const documentRequirementPolicies = pgTable(
+  'document_requirement_policies',
+  {
+    id: id(),
+    companyId: uuid('company_id').notNull().references(() => companies.id),
+    /** Country of the branch where a rental starts (ISO 3166-1). */
+    country: text('country').notNull(),
+    residencyClass: text('residency_class', { enum: ['local', 'foreign'] }).notNull(),
+    version: integer('version').notNull(),
+    status: text('status', { enum: ['draft', 'active', 'retired'] }).notNull().default('draft'),
+    /** Passive template the draft started from, if any (informational). */
+    templateCode: text('template_code'),
+    createdBy: uuid('created_by').references(() => users.id),
+    createdAt: createdAt(),
+    activatedBy: uuid('activated_by').references(() => users.id),
+    activatedAt: timestamp('activated_at', { withTimezone: true }),
+    retiredAt: timestamp('retired_at', { withTimezone: true }),
+  },
+  (t) => [
+    unique('document_requirement_policies_company_id_key').on(t.companyId, t.id),
+    unique('document_requirement_policies_version_key').on(t.companyId, t.country, t.residencyClass, t.version),
+    uniqueIndex('document_requirement_policies_active_key').on(t.companyId, t.country, t.residencyClass).where(sql`${t.status} = 'active'`),
+    check('document_requirement_policies_country_check', sql`${t.country} ~ '^[A-Z]{2}$'`),
+    check('document_requirement_policies_class_check', sql`${t.residencyClass} in ('local', 'foreign')`),
+    check('document_requirement_policies_status_check', sql`${t.status} in ('draft', 'active', 'retired')`),
+    check('document_requirement_policies_version_check', sql`${t.version} >= 1`),
+    check('document_requirement_policies_active_check', sql`${t.status} = 'draft' or ${t.activatedAt} is not null or ${t.retiredAt} is not null`),
+  ],
+)
+
+export const documentRequirementItems = pgTable(
+  'document_requirement_items',
+  {
+    id: id(),
+    companyId: uuid('company_id').notNull().references(() => companies.id),
+    policyId: uuid('policy_id').notNull(),
+    position: integer('position').notNull(),
+    /** Any one of these document types satisfies the item ("kimlik kartı VEYA oturma izni"). */
+    acceptedTypes: text('accepted_types').array().notNull(),
+    /** Staff must record that they saw the original (verification "original_seen"). */
+    originalSeenRequired: boolean('original_seen_required').notNull().default(false),
+    /** A copy (file) must be kept. Separate from seeing the original. */
+    copyRequired: boolean('copy_required').notNull().default(false),
+  },
+  (t) => [
+    unique('document_requirement_items_position_key').on(t.policyId, t.position),
+    foreignKey({ columns: [t.companyId, t.policyId], foreignColumns: [documentRequirementPolicies.companyId, documentRequirementPolicies.id] }).onDelete('cascade'),
+    check('document_requirement_items_types_check', sql`cardinality(${t.acceptedTypes}) between 1 and 8`),
+    check('document_requirement_items_position_check', sql`${t.position} between 1 and 20`),
+  ],
+)

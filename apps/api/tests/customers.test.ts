@@ -279,7 +279,8 @@ describe('creating customers', () => {
     expect(log[0]!.action).toBe('customer.create')
     expect(log[0]!.summary).toEqual({ customerNo: c.customerNo, residency: 'foreign', createdBranchId: data.drina.branches.MST })
     const text = JSON.stringify(log)
-    for (const personal of ['Lara', 'Yenikay', '555', 'example.test', '1994', 'Zagreb']) expect(text).not.toContain(personal)
+    // Whole values only: random ids in the entry may contain any digit sequence.
+    for (const personal of ['Lara', 'Yenikay', '61555010', '555 010', 'example.test', '1994-06-01', 'Zagreb']) expect(text).not.toContain(personal)
   })
 
   it('supports people with a single name', async () => {

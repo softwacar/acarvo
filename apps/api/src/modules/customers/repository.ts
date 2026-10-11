@@ -94,8 +94,21 @@ const SORT_SQL: Record<CustomerSearch['sort'], string> = {
  * Company customers, filtered, sorted and paged. Every authorised user of the company sees every branch's customers
  * (a customer may rent at one branch and return at another); RLS keeps other companies out.
  */
-export async function listCustomers(tx: Tx, q: CustomerSearch) {
+export async function listCustomers(tx: Tx, q: CustomerSearch, docs: { today: string; warningUntil: string } | null = null) {
   const conds: SQL[] = [sql`c.status in ('active', 'archived')`]
+  // Document summary (M2): only for users who may read customer documents; current periods only (renewed and voided ones do not count).
+  const docJoin = docs
+    ? sql`left join lateral (
+        select count(*)::int as total,
+               count(*) filter (where d.valid_until < ${docs.today})::int as expired,
+               count(*) filter (where d.valid_until >= ${docs.today} and d.valid_until <= ${docs.warningUntil})::int as expiring
+        from customer_documents d
+        where d.company_id = c.company_id and d.customer_id = c.id and d.record_state = 'active'
+          and not exists (select 1 from customer_documents n where n.company_id = d.company_id and n.renews_id = d.id and n.record_state <> 'voided')
+      ) docs on true`
+    : sql``
+  if (docs && q.documents === 'expired') conds.push(sql`docs.expired > 0`)
+  if (docs && q.documents === 'attention') conds.push(sql`(docs.expired + docs.expiring) > 0`)
   if (q.status !== 'all') conds.push(sql`c.status = ${q.status}`)
   if (q.residency) conds.push(sql`c.residency = ${q.residency}`)
   if (q.residenceCountry) conds.push(sql`c.residence_country = ${q.residenceCountry}`)
@@ -121,15 +134,17 @@ export async function listCustomers(tx: Tx, q: CustomerSearch) {
     await tx.execute(sql`
       select c.id, c.customer_no, c.display_name, c.phone_e164, c.email, c.residency, c.nationality, c.residence_country, c.status, c.created_at,
              b.id as branch_id, b.name as branch_name, b.code as branch_code, count(*) over () as total_count
+             ${docs ? sql`, docs.total as docs_total, docs.expired as docs_expired, docs.expiring as docs_expiring` : sql``}
       from customers c
       left join branches b on b.company_id = c.company_id and b.id = c.created_branch_id
+      ${docJoin}
       where ${sql.join(conds, sql` and `)}
       order by ${order}
       limit ${q.pageSize} offset ${offset}`)
   ).rows as Row[]
   let total = rows.length ? Number(rows[0]!.total_count) : 0
   if (!rows.length && q.page > 1) {
-    total = Number(((await tx.execute(sql`select count(*) as n from customers c where ${sql.join(conds, sql` and `)}`)).rows[0] as Row).n)
+    total = Number(((await tx.execute(sql`select count(*) as n from customers c ${docJoin} where ${sql.join(conds, sql` and `)}`)).rows[0] as Row).n)
   }
   const items: CustomerListItem[] = rows.map((r) => ({
     id: r.id as string,
@@ -143,6 +158,7 @@ export async function listCustomers(tx: Tx, q: CustomerSearch) {
     status: r.status as CustomerListItem['status'],
     createdBranch: r.branch_id ? { id: r.branch_id as string, name: r.branch_name as string, code: r.branch_code as string } : null,
     createdAt: toIso(r.created_at),
+    documents: docs ? { total: Number(r.docs_total), expired: Number(r.docs_expired), expiring: Number(r.docs_expiring) } : null,
   }))
   return { items, total, page: q.page, pageSize: q.pageSize }
 }

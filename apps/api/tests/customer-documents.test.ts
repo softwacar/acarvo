@@ -100,6 +100,18 @@ describe('listing and validity', () => {
   })
 })
 
+describe('customer list document summary', () => {
+  it('counts current periods that are expired or expiring and filters on them', async () => {
+    const all = (await adnan.post('/api/customers/search', { pageSize: 100 })).json().items as { displayName: string; documents: { total: number; expired: number; expiring: number } }[]
+    expect(all.find((i) => i.displayName === 'Ajla Testović')!.documents).toEqual({ total: 2, expired: 0, expiring: 1 })
+    expect(all.find((i) => i.displayName === 'John Sample')!.documents).toEqual({ total: 1, expired: 1, expiring: 0 })
+    expect(all.find((i) => i.displayName === 'Mirza Uzorak')!.documents).toEqual({ total: 0, expired: 0, expiring: 0 })
+    const attention = (await adnan.post('/api/customers/search', { documents: 'attention' })).json().items.map((i: { displayName: string }) => i.displayName)
+    expect(attention.sort()).toEqual(['Ajla Testović', 'John Sample'])
+    expect((await adnan.post('/api/customers/search', { documents: 'expired' })).json().items.map((i: { displayName: string }) => i.displayName)).toEqual(['John Sample'])
+  })
+})
+
 describe('adding and correcting documents', () => {
   it('adds a document with an encrypted number; an Operasyon user may add', async () => {
     const res = await selma.post(`/api/customers/${emir}/documents`, { type: 'passport', issuingCountry: 'ba', number: ' test-pp 77 01 ', issuedOn: '2024-01-10', validUntil: '2034-01-09', verification: 'original_seen' })

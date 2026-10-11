@@ -211,6 +211,8 @@ export const customerSearchSchema = z.object({
   residency: optEnum(CUSTOMER_RESIDENCIES, 'Geçersiz filtre'),
   residenceCountry: country('Geçersiz filtre'),
   status: z.preprocess(blank, z.enum(CUSTOMER_STATUS_FILTERS).default('active')),
+  /** M2: customers with an expired (or expiring) current document; needs the document permission. */
+  documents: optEnum(['attention', 'expired'] as const, 'Geçersiz filtre'),
   branchId: z.preprocess(blank, z.uuid().optional()),
   sort: z.preprocess(blank, z.enum(CUSTOMER_SORTS).default('name')),
   dir: z.preprocess(blank, z.enum(['asc', 'desc']).default('asc')),
@@ -252,6 +254,8 @@ export interface CustomerListItem {
   status: CustomerStatus
   createdBranch: CustomerBranchRef | null
   createdAt: string
+  /** Current document periods (M2); null without the document permission. */
+  documents: { total: number; expired: number; expiring: number } | null
 }
 
 export interface CustomerListResponse {

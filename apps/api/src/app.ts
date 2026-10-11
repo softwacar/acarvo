@@ -11,6 +11,7 @@ import { branchRoutes } from './modules/branches/routes'
 import { customerRoutes } from './modules/customers/routes'
 import { customerDocumentRoutes } from './modules/customers/documents'
 import { customerDocumentFileRoutes, customerFileRoutes } from './modules/customers/document-files'
+import { documentRequirementRoutes } from './modules/settings/document-requirements'
 import { documentFileRoutes, vehicleDocumentRoutes } from './modules/vehicles/documents'
 import { vehicleHistoryRoutes } from './modules/vehicles/history'
 import { fileRoutes, vehiclePhotoRoutes } from './modules/vehicles/photos'
@@ -84,5 +85,6 @@ export async function buildApp({
   await app.register(customerDocumentRoutes, { prefix: '/api/customers' })
   await app.register(customerDocumentFileRoutes, { prefix: '/api/customers' })
   await app.register(customerFileRoutes, { prefix: '/api/customer-files' })
+  await app.register(documentRequirementRoutes, { prefix: '/api/settings' })
   return app
 }
