@@ -13,7 +13,7 @@ import { can, useSession } from '@/session'
 import { CustomerFormSheet } from './CustomerForm'
 import { type CustomerListSearch, rememberedText, rememberListSearch, rememberText } from './search'
 
-const FILTER_KEYS = ['residency', 'residenceCountry', 'status', 'branchId'] as const
+const FILTER_KEYS = ['residency', 'residenceCountry', 'status', 'branchId', 'documents'] as const
 
 function SortHeader({ label, sort, search, className }: { label: string; sort: CustomerSort; search: CustomerListSearch; className?: string }) {
   const navigate = useNavigate({ from: '/musteriler' })
@@ -131,6 +131,9 @@ function CustomerRow({ c, onOpen }: { c: CustomerListItem; onOpen: () => void })
         ) : (
           <span className="text-ink-2">Etkin</span>
         )}
+        {/* Current document periods (M2): only a problem is shown, never a positive badge. */}
+        {c.documents && c.documents.expired > 0 && <span className="mt-0.5 block text-[12px] font-medium text-alert">{c.documents.expired} belge süresi dolmuş</span>}
+        {c.documents && !c.documents.expired && c.documents.expiring > 0 && <span className="mt-0.5 block text-[12px] font-medium text-hold">{c.documents.expiring} belge yaklaşıyor</span>}
       </td>
     </tr>
   )
@@ -160,7 +163,7 @@ export function CustomersPage() {
     return () => clearTimeout(t)
   }, [text, q, companyId, search.page, navigate])
 
-  const body = { q: q || undefined, residency: search.residency, residenceCountry: search.residenceCountry, status: search.status ?? 'active', branchId: search.branchId, sort: search.sort ?? 'name', dir: search.dir ?? 'asc', page, pageSize }
+  const body = { q: q || undefined, residency: search.residency, residenceCountry: search.residenceCountry, documents: search.documents, status: search.status ?? 'active', branchId: search.branchId, sort: search.sort ?? 'name', dir: search.dir ?? 'asc', page, pageSize }
   const list = useQuery({
     // The query key holds the search text in memory only; it is sent in the request body.
     queryKey: ['customers', companyId, body],
@@ -233,6 +236,13 @@ export function CustomersPage() {
                     {b.name}
                   </option>
                 ))}
+              </FilterSelect>
+            )}
+            {can(session, 'customers.documents.read') && (
+              <FilterSelect label="Belge durumu" value={search.documents} onChange={(documents) => set({ documents: documents as CustomerListSearch['documents'] })}>
+                <option value="">Belgeler: tümü</option>
+                <option value="attention">Süresi dolan veya yaklaşan</option>
+                <option value="expired">Süresi dolmuş</option>
               </FilterSelect>
             )}
             <FilterSelect label="Durum" value={search.status} onChange={(status) => set({ status: status as CustomerListSearch['status'] })}>

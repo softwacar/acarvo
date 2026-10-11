@@ -123,7 +123,7 @@ export const NAV: NavGroup[] = [
       { slug: 'subeler', label: 'Şubeler', icon: MapPin, permission: 'branches.read', built: true },
       { slug: 'kullanicilar', label: 'Kullanıcılar', icon: UserList, permission: 'users.read' },
       { slug: 'roller-ve-yetkiler', label: 'Roller ve Yetkiler', icon: ShieldCheck, permission: 'roles.read' },
-      { slug: 'ayarlar', label: 'Ayarlar', icon: GearSix },
+      { slug: 'ayarlar', label: 'Ayarlar', icon: GearSix, built: true },
     ],
   },
 ]

@@ -8,6 +8,7 @@ export interface CustomerListSearch {
   residency?: CustomerResidency
   residenceCountry?: string
   status?: 'archived' | 'all'
+  documents?: 'attention' | 'expired'
   branchId?: string
   sort?: CustomerSort
   dir?: 'asc' | 'desc'
@@ -25,6 +26,7 @@ export function validateCustomerSearch(s: Record<string, unknown>): CustomerList
     residency: oneOf(CUSTOMER_RESIDENCIES, s.residency),
     residenceCountry: typeof s.residenceCountry === 'string' && COUNTRY_CODES.includes(s.residenceCountry) ? s.residenceCountry : undefined,
     status: oneOf(['archived', 'all'] as const, s.status),
+    documents: oneOf(['attention', 'expired'] as const, s.documents),
     branchId: uuid(s.branchId),
     sort: oneOf(CUSTOMER_SORTS, s.sort),
     dir: oneOf(['asc', 'desc'] as const, s.dir),

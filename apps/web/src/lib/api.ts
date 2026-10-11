@@ -1,4 +1,4 @@
-import type { ApiError, CustomerActivityItem, CustomerDetail, CustomerDuplicateResponse, CustomerListResponse, HistoryWriteResult, SessionInfo, VehicleActivityItem, VehicleDocumentDetail, VehicleDocumentsResponse, VehiclePhoto, VehiclePhotoList, VehicleClassSummary, VehicleDetail, VehicleHistory, VehicleListResponse } from '@acarvo/shared'
+import type { ApiError, CustomerActivityItem, CustomerDocument, CustomerDocumentsResponse, CustomerDocumentStatus, RequirementItem, RequirementPolicy, CustomerDetail, CustomerDuplicateResponse, CustomerListResponse, HistoryWriteResult, SessionInfo, VehicleActivityItem, VehicleDocumentDetail, VehicleDocumentsResponse, VehiclePhoto, VehiclePhotoList, VehicleClassSummary, VehicleDetail, VehicleHistory, VehicleListResponse } from '@acarvo/shared'
 
 export class ApiRequestError extends Error {
   constructor(
@@ -189,4 +189,40 @@ export const customersApi = {
   archive: (id: string, version: number, reason: string) => api<CustomerDetail>(`/customers/${id}/archive`, { method: 'POST', body: { version, reason } }),
   restore: (id: string, version: number) => api<CustomerDetail>(`/customers/${id}/restore`, { method: 'POST', body: { version } }),
   duplicates: (body: Record<string, unknown>) => api<CustomerDuplicateResponse>('/customers/duplicate-check', { method: 'POST', body }),
+}
+
+/** Customer documents (M2). Numbers are sent in bodies only and come back masked; the full number only from reveal. */
+export const customerDocumentsApi = {
+  list: (customerId: string) => api<CustomerDocumentsResponse>(`/customers/${customerId}/documents`),
+  status: (customerId: string) => api<CustomerDocumentStatus>(`/customers/${customerId}/document-status`),
+  create: (customerId: string, body: unknown) => api<CustomerDocument>(`/customers/${customerId}/documents`, { method: 'POST', body }),
+  update: (customerId: string, docId: string, body: unknown) => api<CustomerDocument>(`/customers/${customerId}/documents/${docId}`, { method: 'PUT', body }),
+  renew: (customerId: string, docId: string, body: unknown) => api<CustomerDocument>(`/customers/${customerId}/documents/${docId}/renew`, { method: 'POST', body }),
+  verify: (customerId: string, docId: string, version: number, verification: 'original_seen' | 'copy_only') =>
+    api<CustomerDocument>(`/customers/${customerId}/documents/${docId}/verify`, { method: 'POST', body: { version, verification } }),
+  void: (customerId: string, docId: string, body: { version: number; reason: string; note?: string }) =>
+    api<CustomerDocument>(`/customers/${customerId}/documents/${docId}/void`, { method: 'POST', body }),
+  history: (customerId: string, docId: string) => api<{ items: CustomerActivityItem[] }>(`/customers/${customerId}/documents/${docId}/history`),
+  upload: (customerId: string, docId: string, side: string, file: File, onProgress?: (f: number) => void) =>
+    uploadFile<CustomerDocument>(`/customers/${customerId}/documents/${docId}/files?side=${side}`, file, onProgress),
+  reveal: (customerId: string, docId: string, reason: string) =>
+    api<{ number: string; visibleSeconds: number; remainingThisHour: number }>(`/customers/${customerId}/documents/${docId}/reveal-number`, { method: 'POST', body: { reason } }),
+  access: (fileId: string, mode: 'view' | 'download') => api<{ url: string; expiresAt: string }>(`/customer-files/${fileId}/access`, { method: 'POST', body: { mode } }),
+}
+
+export interface DocumentSettingsOverview {
+  warningDays: number
+  policies: RequirementPolicy[]
+  branchCountries: { country: string; branchCount: number }[]
+  branchesWithoutCountry: number
+  templates: { code: string; residencyClass: 'local' | 'foreign'; title: string; items: RequirementItem[] }[]
+}
+export const settingsApi = {
+  customerDocuments: () => api<DocumentSettingsOverview>('/settings/customer-documents'),
+  setWarningDays: (warningDays: number) => api<DocumentSettingsOverview>('/settings/customer-documents', { method: 'PUT', body: { warningDays } }),
+  createDraft: (body: { country: string; residencyClass: 'local' | 'foreign'; templateCode?: string; copyFromPolicyId?: string }) =>
+    api<DocumentSettingsOverview>('/settings/document-requirements/drafts', { method: 'POST', body }),
+  saveItems: (policyId: string, items: RequirementItem[]) => api<DocumentSettingsOverview>(`/settings/document-requirements/${policyId}/items`, { method: 'PUT', body: { items } }),
+  activate: (policyId: string) => api<DocumentSettingsOverview>(`/settings/document-requirements/${policyId}/activate`, { method: 'POST', body: { confirm: true } }),
+  retire: (policyId: string) => api<DocumentSettingsOverview>(`/settings/document-requirements/${policyId}/retire`, { method: 'POST' }),
 }

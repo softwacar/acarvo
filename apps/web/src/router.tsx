@@ -82,6 +82,11 @@ const customer360Route = createRoute({
     (CUSTOMER_TABS as readonly string[]).includes(s.sekme as string) && s.sekme !== 'genel' ? { sekme: s.sekme as CustomerTab } : {},
   component: lazyRouteComponent(() => import('./pages/customers/Customer360Page'), 'Customer360Page'),
 })
+const settingsRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/ayarlar',
+  component: lazyRouteComponent(() => import('./pages/settings/SettingsPage'), 'SettingsPage'),
+})
 const profileRoute = createRoute({ getParentRoute: () => appRoute, path: '/profil', component: ProfilePage })
 const moduleRoute = createRoute({
   getParentRoute: () => appRoute,
@@ -92,7 +97,7 @@ const moduleRoute = createRoute({
   },
 })
 
-const routeTree = rootRoute.addChildren([loginRoute, appRoute.addChildren([indexRoute, branchesRoute, vehiclesRoute, vehicleNewRoute, vehicle360Route, vehicleEditRoute, customersRoute, customer360Route, profileRoute, moduleRoute])])
+const routeTree = rootRoute.addChildren([loginRoute, appRoute.addChildren([indexRoute, branchesRoute, vehiclesRoute, vehicleNewRoute, vehicle360Route, vehicleEditRoute, customersRoute, customer360Route, settingsRoute, profileRoute, moduleRoute])])
 
 export function createAppRouter(queryClient: QueryClient) {
   return createRouter({ routeTree, context: { queryClient }, defaultPreload: 'intent', scrollRestoration: true })

@@ -73,6 +73,27 @@ test.describe('signed in', () => {
     await audit(page, 'yeni musteri hatalar ve benzer kayit')
   })
 
+  test('customer documents tab, detail panel and requirement settings', async ({ page }) => {
+    await page.goto('/musteriler')
+    await page.getByRole('searchbox', { name: 'Müşterilerde ara' }).fill('Ajla Testović')
+    await page.getByRole('link', { name: 'Ajla Testović' }).click()
+    await page.getByRole('tab', { name: /^Belgeler/ }).click()
+    await expect(page.getByRole('region', { name: 'Belge kayıtları' })).toBeVisible()
+    await audit(page, 'musteri belgeler')
+    await page.getByRole('button', { name: 'Kimlik kartı ayrıntıları' }).click()
+    await expect(page.getByRole('dialog', { name: 'Kimlik kartı' })).toBeVisible()
+    await audit(page, 'belge ayrinti')
+    await page.keyboard.press('Escape')
+    await page.getByRole('button', { name: 'Belge ekle' }).first().click()
+    await page.getByRole('dialog', { name: 'Belge ekle' }).getByLabel('Belge türü').selectOption('passport')
+    await audit(page, 'belge ekle')
+    await page.goto('/ayarlar')
+    await expect(page.getByRole('heading', { name: 'Müşteri belge gereksinimleri' })).toBeVisible()
+    await audit(page, 'ayarlar')
+    await page.goto('/subeler')
+    await audit(page, 'subeler')
+  })
+
   test('side panels trap focus, close with Escape and give focus back', async ({ page }) => {
     await openVehicle(page, 'A12-K-345', 'Konum ve geçmiş')
     const opener = page.getByRole('button', { name: 'Konumu güncelle' })

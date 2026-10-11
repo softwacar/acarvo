@@ -32,7 +32,7 @@ import { Field, Select } from '@/components/fields'
 import { ErrorState, StatePanel } from '@/components/states'
 import { toast } from '@/components/Toaster'
 import { useReturnFocus } from '@/components/useReturnFocus'
-import { ApiRequestError, customersApi } from '@/lib/api'
+import { ApiRequestError, customerDocumentsApi as customersDocsApi, customersApi } from '@/lib/api'
 import {
   ARCHIVE_REASON_LABELS,
   CONTACT_PREFERENCE_LABELS,
@@ -45,6 +45,7 @@ import {
 import { cn } from '@/lib/utils'
 import { formatDate, formatDateTime } from '@/lib/vehicle-labels'
 import { can, useSession } from '@/session'
+import { CustomerDocuments } from './CustomerDocuments'
 import { CustomerFormSheet } from './CustomerForm'
 import { listSearchToReturnTo } from './search'
 
@@ -62,15 +63,6 @@ const TAB_LABELS: Record<CustomerTab, string> = {
 }
 
 const PENDING: Partial<Record<CustomerTab, { icon: Icon; module: string; will: string[] }>> = {
-  belgeler: {
-    icon: IdentificationCard,
-    module: 'Müşteri belgeleri (M2)',
-    will: [
-      'Kimlik, pasaport, giriş damgası ve ehliyet kayıtları; geçerlilik tarihleri',
-      'Belge numaraları şifreli saklanır, ekranda maskeli görünür',
-      'Tam numara ve belge görüntüsü yalnız yetkiyle ve kayıt altında açılır',
-    ],
-  },
   rezervasyonlar: {
     icon: CalendarCheck,
     module: 'Rezervasyonlar',
@@ -125,7 +117,7 @@ function Facts({ rows, columns = 2 }: { rows: [string, ReactNode][]; columns?: 1
 const btnPrimary = 'inline-flex h-10 items-center gap-2 rounded-lg bg-blue px-4 font-medium text-white transition-colors hover:bg-blue-ink'
 const btnSecondary = 'inline-flex h-10 items-center gap-2 rounded-lg border border-line bg-surface px-4 font-medium text-ink transition-colors hover:bg-line-soft'
 
-const LATER_ACTIONS = ['Rezervasyon oluştur', 'Kiralama aç', 'Belge ekle', 'Kurumsal hesaba bağla', 'İletişim kaydı ekle']
+const LATER_ACTIONS = ['Rezervasyon oluştur', 'Kiralama aç', 'Kurumsal hesaba bağla', 'İletişim kaydı ekle']
 
 function MoreMenu({ c, canManage, onArchive, onRestore }: { c: CustomerDetail; canManage: boolean; onArchive: () => void; onRestore: () => void }) {
   return (
@@ -350,10 +342,26 @@ function addressLines(c: CustomerDetail) {
   return [c.addressLine1, c.addressLine2, cityLine, c.region, countryName(c.addressCountry)].filter(Boolean) as string[]
 }
 
+/** Real document summary (M2): current periods, and how many are expired or expiring. */
+function DocumentsState({ c }: { c: CustomerDetail }) {
+  const session = useSession()
+  const allowed = can(session, 'customers.documents.read')
+  const q = useQuery({ queryKey: ['customer-documents', session.company?.id, c.id], queryFn: () => customersDocsApi.list(c.id), enabled: allowed })
+  if (!allowed) return <span className="text-ink-3">Yetki gerekli</span>
+  if (!q.data) return <span className="text-ink-3">…</span>
+  const current = q.data.items.filter((d) => d.validity.state !== 'superseded' && d.validity.state !== 'voided')
+  const expired = current.filter((d) => d.validity.state === 'expired').length
+  const expiring = current.filter((d) => d.validity.state === 'expiring').length
+  if (!current.length) return <span className="text-ink-3">Kayıt yok</span>
+  if (expired) return <span className="font-medium text-alert">{expired} süresi dolmuş</span>
+  if (expiring) return <span className="font-medium text-hold">{expiring} süresi yaklaşıyor</span>
+  return <span className="inline-flex items-center gap-1 text-ok"><CheckCircle size={14} weight="fill" />{current.length} belge</span>
+}
+
 function FileStatus({ c, onTab }: { c: CustomerDetail; onTab: (t: CustomerTab) => void }) {
   const rows: [Icon, string, ReactNode, CustomerTab | null][] = [
     [UserCircle, 'Kişi ve iletişim bilgileri', <span className="inline-flex items-center gap-1 text-ok"><CheckCircle size={14} weight="fill" />Kayıtlı</span>, null],
-    [IdentificationCard, 'Kimlik ve ehliyet belgeleri', <span className="text-ink-3">Sonraki aşamada</span>, 'belgeler'],
+    [IdentificationCard, 'Kimlik ve ehliyet belgeleri', <DocumentsState c={c} />, 'belgeler'],
     [Buildings, 'Kurumsal hesap bağlantıları', <span className="text-ink-3">Henüz bağlı değil</span>, null],
     [CalendarCheck, 'Rezervasyonlar', <span className="text-ink-3">Henüz bağlı değil</span>, 'rezervasyonlar'],
     [Key, 'Kiralamalar', <span className="text-ink-3">Henüz bağlı değil</span>, 'kiralamalar'],
@@ -680,6 +688,7 @@ export function Customer360Page() {
         <Tabs tab={tab} onTab={onTab} />
         <div key={tab} id="customer-tabpanel" role="tabpanel" aria-labelledby={`ctab-${tab}`} className="animate-fade pt-5">
           {tab === 'genel' && <Overview c={c} canManage={canManage} onEdit={() => setEditing(true)} onTab={onTab} />}
+          {tab === 'belgeler' && <CustomerDocuments customer={c} />}
           {tab === 'gecmis' && <HistoryTab c={c} />}
           {PENDING[tab] && <Pending tab={tab} />}
         </div>
