@@ -1,4 +1,4 @@
-import { customerDisplayName, normalizeName } from '@acarvo/shared'
+import { customerDisplayName, normalizeName, todayIn } from '@acarvo/shared'
 import { sql } from 'drizzle-orm'
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres'
 import * as s from '../src/db/schema'
@@ -109,8 +109,9 @@ export async function ensureTestCustomerDocuments(db: OwnerDb, crypto: import('.
   if (name !== TEST_CUSTOMERS_DATABASE) throw new Error(`Synthetic documents are only loaded into ${TEST_CUSTOMERS_DATABASE}; nothing was added.`)
   const { numberColumns } = await import('../src/modules/customers/documents')
   const { randomUUID } = await import('node:crypto')
-  const today = new Date()
-  const plus = (days: number) => new Date(today.getTime() + days * 86_400_000).toISOString().slice(0, 10)
+  // Calendar days in the test companies' time zone, as the API counts them (not UTC, which differs around midnight).
+  const today = Date.parse(`${todayIn('Europe/Sarajevo')}T00:00:00Z`)
+  const plus = (days: number) => new Date(today + days * 86_400_000).toISOString().slice(0, 10)
   const plan: Record<string, { customer: string; type: string; country: string; number?: string; validUntil?: string; issuedOn?: string; entryDate?: string; categories?: string[]; verification?: string }[]> = {
     Drina: [
       { customer: 'Ajla Testović', type: 'national_id', country: 'BA', number: 'TEST-BA-1001', issuedOn: plus(-700), validUntil: plus(1100), verification: 'original_seen' },
