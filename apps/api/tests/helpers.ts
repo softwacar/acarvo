@@ -10,14 +10,14 @@ import pg from 'pg'
 import { loadDevData } from '../seed/dev-data'
 import { ensureDevDocumentSettings } from '../seed/dev-documents'
 import { ensureDevFleet } from '../seed/dev-fleet'
-import { ensureTestCustomers } from '../seed/test-customers'
+import { ensureTestCustomerDocuments, ensureTestCustomers } from '../seed/test-customers'
 import { buildApp } from '../src/app'
 import type { MalwareScanner } from '../src/lib/malware'
 import { createDatabase } from '../src/db/client'
 import * as schema from '../src/db/schema'
 import { loadEnv } from '../src/env'
 import { ARGON2_OPTIONS } from '../src/modules/auth/password'
-import { generateTestKeyEnv } from '../src/lib/customer-crypto'
+import { customerCryptoFromEnv, generateTestKeyEnv } from '../src/lib/customer-crypto'
 import { assertConnectedToTestDatabase, assertSeparateDatabases } from './db-guard'
 
 const base = loadEnv()
@@ -36,8 +36,9 @@ export const env = {
   DATABASE_URL: base.TEST_DATABASE_URL,
   DATABASE_OWNER_URL: base.TEST_DATABASE_OWNER_URL,
   STORAGE_DIR: TEST_STORAGE,
-  // Synthetic keys for this run only (M2): never the keys of the local .env, never written anywhere.
-  ...generateTestKeyEnv(),
+  // Synthetic keys for this run only (M2): never the keys of the local .env, never written anywhere. Browser test runs
+  // hand their run keys over in E2E_CUSTOMER_KEYS so the seeded documents and the test API server use the same keys.
+  ...(process.env.E2E_CUSTOMER_KEYS ? (JSON.parse(process.env.E2E_CUSTOMER_KEYS) as ReturnType<typeof generateTestKeyEnv>) : generateTestKeyEnv()),
 }
 
 /** Random per run; never stored anywhere. Browser tests pass their own run password in E2E_PASSWORD. */
@@ -70,12 +71,13 @@ export async function resetDatabase(): Promise<DevData> {
   await ensureTestDatabase()
   passwordHash ??= await hash(PASSWORD, ARGON2_OPTIONS)
   await ownerDb.execute(
-    sql`truncate customers, company_sequences, vehicle_document_files, document_files, vehicle_documents, company_document_type_settings, vehicle_promo_photos, files, vehicle_location_corrections, odometer_corrections, vehicle_location_events, odometer_readings, vehicles, vehicle_classes, audit_log, membership_branches, membership_roles, memberships, roles, branches, sessions, users, companies restart identity cascade`,
+    sql`truncate customer_document_files, customer_files, customer_documents, user_sensitive_actions, customers, company_sequences, vehicle_document_files, document_files, vehicle_documents, company_document_type_settings, vehicle_promo_photos, files, vehicle_location_corrections, odometer_corrections, vehicle_location_events, odometer_readings, vehicles, vehicle_classes, audit_log, membership_branches, membership_roles, memberships, roles, branches, sessions, users, companies restart identity cascade`,
   )
   const data = await loadDevData(ownerDb, passwordHash)
   await ensureDevFleet(ownerDb)
   await ensureDevDocumentSettings(ownerDb, 'test')
   await ensureTestCustomers(ownerDb)
+  await ensureTestCustomerDocuments(ownerDb, customerCryptoFromEnv(env).crypto!)
   return data
 }
 
@@ -111,11 +113,11 @@ export async function asApp<T>(companyId: string | null, fn: (c: pg.PoolClient) 
   }
 }
 
-export async function makeApp(opts: { scanner?: MalwareScanner; nodeEnv?: 'production' | 'test'; documentAccessTtlMs?: number; logStream?: Writable } = {}) {
+export async function makeApp(opts: { scanner?: MalwareScanner; nodeEnv?: 'production' | 'test'; documentAccessTtlMs?: number; logStream?: Writable; envOverride?: Partial<typeof env> } = {}) {
   // The app connects with env.DATABASE_URL, the same connection string as appPool.
   await ensureTestDatabase()
   const database = createDatabase(env.DATABASE_URL)
-  const app = await buildApp({ env: { ...env, NODE_ENV: opts.nodeEnv ?? env.NODE_ENV }, database, logger: false, scanner: opts.scanner, documentAccessTtlMs: opts.documentAccessTtlMs, logStream: opts.logStream })
+  const app = await buildApp({ env: { ...env, ...opts.envOverride, NODE_ENV: opts.nodeEnv ?? env.NODE_ENV }, database, logger: false, scanner: opts.scanner, documentAccessTtlMs: opts.documentAccessTtlMs, logStream: opts.logStream })
   app.addHook('onClose', () => database.close())
   return app
 }

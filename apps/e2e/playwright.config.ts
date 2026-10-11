@@ -1,3 +1,4 @@
+import { randomBytes } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
@@ -19,6 +20,12 @@ const dbName = (url?: string) => (url ? decodeURIComponent(new URL(url).pathname
 if (dbName(testUrl) !== 'acarvo_test' || dbName(testOwnerUrl) !== 'acarvo_test' || testUrl === env.DATABASE_URL) {
   throw new Error('Browser tests stopped: TEST_DATABASE_URL / TEST_DATABASE_OWNER_URL must point to acarvo_test.')
 }
+
+// Synthetic customer data keys for this run only (M2), shared by the test API server and the guarded test reset.
+// Never the keys of the local .env; workers inherit the same value from the main process.
+const runKey = () => `k1:${randomBytes(32).toString('base64')}`
+process.env.E2E_CUSTOMER_KEYS ??= JSON.stringify({ CUSTOMER_DATA_KEYS: runKey(), CUSTOMER_DATA_KEY_ACTIVE: 'k1', CUSTOMER_LOOKUP_KEYS: runKey(), CUSTOMER_LOOKUP_KEY_ACTIVE: 'k1' })
+const customerKeys = JSON.parse(process.env.E2E_CUSTOMER_KEYS) as Record<string, string>
 
 export const API_PORT = 3101
 export const WEB_PORT = 5181
@@ -67,6 +74,7 @@ export default defineConfig({
         COOKIE_SECRET: env.COOKIE_SECRET!,
         STORAGE_DIR: E2E_STORAGE,
         MALWARE_SCANNER: 'none',
+        ...customerKeys,
       },
     },
     {

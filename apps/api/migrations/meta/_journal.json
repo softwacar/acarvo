@@ -106,6 +106,20 @@
       "when": 1791630094006,
       "tag": "0014_residence_and_branch_country",
       "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "7",
+      "when": 1791750835764,
+      "tag": "0015_customer_documents",
+      "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1791750862685,
+      "tag": "0016_customer_documents_rls",
+      "breakpoints": true
     }
   ]
 }

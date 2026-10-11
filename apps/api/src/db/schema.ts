@@ -3,6 +3,7 @@ import {
   bigint,
   boolean,
   check,
+  customType,
   date,
   foreignKey,
   index,
@@ -605,5 +606,145 @@ export const customers = pgTable(
     ),
     check('customers_merged_check', sql`(${t.status} = 'merged') = (${t.mergedIntoId} is not null) and ${t.mergedIntoId} is distinct from ${t.id}`),
     check('customers_version_check', sql`${t.version} >= 1`),
+  ],
+)
+
+// ---------------------------------------------------------------------------
+// Customer documents (M2) — a record type separate from vehicle documents.
+// Document numbers and files are encrypted by the API (lib/customer-crypto.ts); the database never sees plaintext.
+
+const bytea = customType<{ data: Buffer; driverData: Buffer }>({ dataType: () => 'bytea' })
+
+export const customerDocuments = pgTable(
+  'customer_documents',
+  {
+    id: uuid('id').primaryKey(),
+    companyId: uuid('company_id').notNull().references(() => companies.id),
+    customerId: uuid('customer_id').notNull(),
+    type: text('type').notNull(),
+    issuingCountry: text('issuing_country'),
+    issuingAuthority: text('issuing_authority'),
+    title: text('title'),
+    /** AES-256-GCM ciphertext bound to company and document id; never plaintext. */
+    numberCiphertext: bytea('number_ciphertext'),
+    numberKeyId: text('number_key_id'),
+    /** Up to four trailing characters for masked display; at least four characters always stay hidden. */
+    numberHint: text('number_hint'),
+    /** Per-company HMAC of type + issuing country + normalised number, for exact matching only. */
+    numberLookup: text('number_lookup'),
+    numberLookupKeyId: text('number_lookup_key_id'),
+    issuedOn: date('issued_on'),
+    validFrom: date('valid_from'),
+    validUntil: date('valid_until'),
+    licenseCategories: text('license_categories').array().notNull().default(sql`'{}'::text[]`),
+    licenseFirstIssuedOn: date('license_first_issued_on'),
+    entryDate: date('entry_date'),
+    note: text('note'),
+    recordState: text('record_state', { enum: ['active', 'voided'] }).notNull().default('active'),
+    voidedAt: timestamp('voided_at', { withTimezone: true }),
+    voidedBy: uuid('voided_by').references(() => users.id),
+    voidedReason: text('voided_reason'),
+    voidedNote: text('voided_note'),
+    verification: text('verification', { enum: ['not_verified', 'original_seen', 'copy_only'] }).notNull().default('not_verified'),
+    verifiedBy: uuid('verified_by').references(() => users.id),
+    verifiedAt: timestamp('verified_at', { withTimezone: true }),
+    /** The period this record renews; the older period is kept unchanged. */
+    renewsId: uuid('renews_id'),
+    /** Set when a rental pins this period (Rentals module); a locked period is renewed instead of corrected. */
+    lockedAt: timestamp('locked_at', { withTimezone: true }),
+    version: integer('version').notNull().default(1),
+    createdAt: createdAt(),
+    createdBy: uuid('created_by').references(() => users.id),
+    updatedAt: updatedAt(),
+    updatedBy: uuid('updated_by').references(() => users.id),
+  },
+  (t) => [
+    unique('customer_documents_company_id_key').on(t.companyId, t.id),
+    index('customer_documents_customer_idx').on(t.companyId, t.customerId),
+    index('customer_documents_lookup_idx').on(t.companyId, t.numberLookup),
+    uniqueIndex('customer_documents_renews_once_key').on(t.renewsId).where(sql`${t.renewsId} is not null and ${t.recordState} <> 'voided'`),
+    foreignKey({ columns: [t.companyId, t.customerId], foreignColumns: [customers.companyId, customers.id] }),
+    foreignKey({ columns: [t.companyId, t.renewsId], foreignColumns: [t.companyId, t.id] }),
+    check(
+      'customer_documents_type_check',
+      sql`${t.type} in ('national_id', 'passport', 'driving_license', 'international_driving_permit', 'residence_permit', 'visa', 'entry_record', 'other')`,
+    ),
+    check('customer_documents_country_check', sql`${t.issuingCountry} is null or ${t.issuingCountry} ~ '^[A-Z]{2}$'`),
+    check(
+      'customer_documents_number_check',
+      sql`(${t.numberCiphertext} is null) = (${t.numberKeyId} is null) and (${t.numberCiphertext} is null) = (${t.numberLookup} is null) and (${t.numberCiphertext} is null) = (${t.numberLookupKeyId} is null) and (${t.numberCiphertext} is null) = (${t.numberHint} is null)`,
+    ),
+    check('customer_documents_dates_check', sql`${t.validFrom} is null or ${t.validUntil} is null or ${t.validFrom} <= ${t.validUntil}`),
+    check('customer_documents_state_check', sql`${t.recordState} in ('active', 'voided')`),
+    check('customer_documents_void_check', sql`(${t.recordState} = 'voided') = (${t.voidedAt} is not null and ${t.voidedReason} is not null)`),
+    check('customer_documents_void_reason_check', sql`${t.voidedReason} is null or ${t.voidedReason} in ('entry_error', 'duplicate', 'wrong_customer', 'other')`),
+    check('customer_documents_verification_check', sql`${t.verification} in ('not_verified', 'original_seen', 'copy_only')`),
+    check('customer_documents_entry_check', sql`${t.type} <> 'entry_record' or (${t.entryDate} is not null and ${t.numberCiphertext} is null)`),
+    check('customer_documents_title_check', sql`${t.type} <> 'other' or coalesce(btrim(${t.title}), '') <> ''`),
+    check('customer_documents_renews_check', sql`${t.renewsId} is distinct from ${t.id}`),
+    check('customer_documents_version_check', sql`${t.version} >= 1`),
+  ],
+)
+
+/** Encrypted customer document files in private storage. Only the ciphertext's digest is kept (no plaintext digest). */
+export const customerFiles = pgTable(
+  'customer_files',
+  {
+    id: uuid('id').primaryKey(),
+    companyId: uuid('company_id').notNull().references(() => companies.id),
+    storageKey: text('storage_key').notNull().unique(),
+    kind: text('kind', { enum: ['pdf', 'jpeg', 'png'] }).notNull(),
+    sizeBytes: integer('size_bytes').notNull(),
+    pages: integer('pages'),
+    encKeyId: text('enc_key_id').notNull(),
+    ciphertextSha256: text('ciphertext_sha256').notNull(),
+    createdBy: uuid('created_by').references(() => users.id),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    unique('customer_files_company_id_key').on(t.companyId, t.id),
+    check('customer_files_kind_check', sql`${t.kind} in ('pdf', 'jpeg', 'png')`),
+    check('customer_files_size_check', sql`${t.sizeBytes} > 0`),
+  ],
+)
+
+/** Immutable file versions of a document, per side (front, back, extra page). Nothing is replaced in place. */
+export const customerDocumentFiles = pgTable(
+  'customer_document_files',
+  {
+    id: id(),
+    companyId: uuid('company_id').notNull().references(() => companies.id),
+    documentId: uuid('document_id').notNull(),
+    fileId: uuid('file_id').notNull(),
+    side: text('side', { enum: ['front', 'back', 'page'] }).notNull(),
+    versionNo: integer('version_no').notNull(),
+    uploadedBy: uuid('uploaded_by').references(() => users.id),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    unique('customer_document_files_file_key').on(t.fileId),
+    unique('customer_document_files_version_key').on(t.documentId, t.versionNo),
+    foreignKey({ columns: [t.companyId, t.documentId], foreignColumns: [customerDocuments.companyId, customerDocuments.id] }),
+    foreignKey({ columns: [t.companyId, t.fileId], foreignColumns: [customerFiles.companyId, customerFiles.id] }),
+    check('customer_document_files_side_check', sql`${t.side} in ('front', 'back', 'page')`),
+    check('customer_document_files_version_check', sql`${t.versionNo} >= 1`),
+  ],
+)
+
+/**
+ * Per-user log of sensitive actions used for server-side limits (full-number reveals: 30 per hour per user,
+ * across sessions, restarts and companies). Holds no company data and no values.
+ */
+export const userSensitiveActions = pgTable(
+  'user_sensitive_actions',
+  {
+    id: id(),
+    userId: uuid('user_id').notNull().references(() => users.id),
+    action: text('action').notNull(),
+    at: timestamp('at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index('user_sensitive_actions_user_at_idx').on(t.userId, t.action, t.at),
+    check('user_sensitive_actions_action_check', sql`${t.action} in ('document_number_reveal')`),
   ],
 )

@@ -243,7 +243,8 @@ export async function customerActivity(tx: Tx, customerId: string): Promise<Cust
   const result = await tx.execute(sql`
     select a.id, a.action, a.summary, a.created_at, u.name as actor_name
     from audit_log a left join users u on u.id = a.actor_user_id
-    where a.entity = 'customer' and a.entity_id = ${customerId}
+    where (a.entity = 'customer' and a.entity_id = ${customerId})
+       or (a.entity = 'customer_document' and a.summary->>'customerId' = ${customerId})
     order by a.created_at desc limit 200`)
   return (result.rows as Row[]).map((r) => ({
     id: r.id as string,

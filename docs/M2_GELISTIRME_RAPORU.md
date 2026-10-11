@@ -50,3 +50,36 @@ Sınırlar: ana `acarvo` veritabanına M2 migration'ı uygulanmaz (yalnız dry-r
 - **Testler:** API `customer-residence.test.ts` (8); tarayıcı `branches-residence.spec.ts` (5); güncellenen `customers.spec.ts`.
 - **Not:** worktree'de `safe-migrate --test`, migrate komutunu varsayılan `.env` yoluyla çağırdığı için durdu. Yedek alınmıştı; migration test veritabanına doğru ayarlarla elle uygulandı. Ana veritabanı geçişi `main` klasöründen yapılacağından etkilenmez.
 
+## Aşama M2c — Müşteri belge kayıtları
+- **Migration `0015_customer_documents`:** `customer_documents`, `customer_files`, `customer_document_files`, `user_sensitive_actions` tabloları.
+- **Migration `0016_customer_documents_rls`:**
+  - üç belge tablosunda zorunlu RLS ve 4 politika;
+  - tetikleyiciler:
+    - şirket, müşteri, tür, oluşturma bilgisi ve yenileme bağı değişmez;
+    - geçersiz sayılan dönem kesindir;
+    - kilitli dönem düzeltilemez;
+    - bir numara şirket içinde aynı anda yalnız bir müşteride etkindir; eşzamanlı kayıtlar sıraya alınır;
+    - yenileme yalnız aynı müşteri ve türde yapılabilir;
+  - çalışma rolüne DELETE verilmez; dosya ve sürüm tabloları yalnız eklemeye açıktır.
+- Bütün belge tabloları bileşik `(company_id, id)` yabancı anahtarla bağlıdır; başka şirketin müşterisine belge bağlanamaz.
+- **API** (`modules/customers/documents.ts`):
+  - listeleme; ekleme;
+  - düzeltme: sürüm çakışması kontrollü; yeni numara yazılırsa değişir, boş bırakılırsa korunur;
+  - doğrulama (aslı görüldü / yalnız kopya);
+  - yenileme: eski dönem değişmeden kalır; "numara aynı kalsın" seçeneği numarayı bellekte çözüp yeni kayıt için yeniden şifreler;
+  - gerekçeli geçersiz sayma;
+  - belge geçmişi;
+  - tam numarayla şirket içi arama: HMAC ile, hız sınırlı, numara yanıtta yok.
+- Yanıtlarda yalnız maskeli numara (`••••1001`) bulunur.
+- Belge olayları müşterinin kayıt geçmişinde de görünür; değer içermez.
+- Geçerlilik durumları: geçerli, yaklaşıyor (30 gün), süresi dolmuş, süresiz, başlamadı, yenilendi, geçersiz. "Bugün" şirket saat dilimine göre hesaplanır.
+- Test verisi (yalnız `acarvo_test`): sentetik `TEST-…` numaralı belgeler, çalıştırmaya özgü anahtarla şifreli. Aynı sentetik numara iki şirkette bulunur; bu, şirketler arası eşleşme olmadığını test eder.
+- Tarayıcı testleri için API sunucusu ve test sıfırlaması aynı çalıştırma anahtarını kullanır (`E2E_CUSTOMER_KEYS`).
+- **Testler:** `customer-documents.test.ts` (19). Kapsam:
+  - veritabanında ve işlem geçmişinde düz numara bulunmaması (tam tarama);
+  - taşınan şifreli değerin çözülmemesi;
+  - şirketler arası erişimin kapalı olması;
+  - anahtar yokken numara kaydının reddedilmesi;
+  - günlüklerde numara bulunmaması;
+  - mükerrer numaranın başka şirketi hiç sorgulamaması.
+
