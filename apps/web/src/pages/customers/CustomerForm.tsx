@@ -17,7 +17,7 @@ import { describe, Field, Input, Select, Textarea } from '@/components/fields'
 import { Sheet } from '@/components/Sheet'
 import { toast } from '@/components/Toaster'
 import { ApiRequestError, customersApi } from '@/lib/api'
-import { CONTACT_PREFERENCE_LABELS, countryOptions, CUSTOMER_FIELD_LABELS, DUPLICATE_REASON_LABELS, languageName } from '@/lib/customer-labels'
+import { CONTACT_PREFERENCE_LABELS, countryOptions, CUSTOMER_FIELD_LABELS, DUPLICATE_REASON_LABELS, languageName, RESIDENCY_LABELS } from '@/lib/customer-labels'
 import { cn } from '@/lib/utils'
 import { formatDateTime } from '@/lib/vehicle-labels'
 import { useSession } from '@/session'
@@ -26,8 +26,8 @@ import { useSession } from '@/session'
 interface FormValues {
   givenName: string
   familyName: string
-  residency: string
   nationality: string
+  residenceCountry: string
   dateOfBirth: string
   phone: string
   email: string
@@ -47,8 +47,8 @@ type Key = keyof FormValues
 const EMPTY: FormValues = {
   givenName: '',
   familyName: '',
-  residency: '',
   nationality: '',
+  residenceCountry: '',
   dateOfBirth: '',
   phone: '',
   email: '',
@@ -67,8 +67,8 @@ const EMPTY: FormValues = {
 const valuesFrom = (c: CustomerDetail): FormValues => ({
   givenName: c.givenName ?? '',
   familyName: c.familyName ?? '',
-  residency: c.residency,
   nationality: c.nationality ?? '',
+  residenceCountry: c.residenceCountry ?? '',
   dateOfBirth: c.dateOfBirth ?? '',
   phone: c.phoneRaw ?? '',
   email: c.email ?? '',
@@ -94,11 +94,27 @@ function Section({ title, hint, children }: { title: string; hint?: string; chil
   )
 }
 
-function CountrySelect({ id, label, register, name, error, companyCountry }: { id: string; label: string; register: UseFormRegister<FormValues>; name: Key; error?: string; companyCountry?: string | null }) {
+function CountrySelect({
+  id,
+  label,
+  register,
+  name,
+  error,
+  companyCountry,
+  hint,
+}: {
+  id: string
+  label: string
+  register: UseFormRegister<FormValues>
+  name: Key
+  error?: string
+  companyCountry?: string | null
+  hint?: string
+}) {
   const { frequent, all } = useMemo(() => countryOptions(companyCountry), [companyCountry])
   return (
-    <Field id={id} label={label} error={error}>
-      <Select {...describe(id, error)} {...register(name)}>
+    <Field id={id} label={label} error={error} hint={hint}>
+      <Select {...describe(id, error, !!hint)} {...register(name)}>
         <option value="">Seçilmedi</option>
         <optgroup label="Sık kullanılanlar">
           {frequent.map((c) => (
@@ -370,52 +386,35 @@ function CustomerForm({
               <Input {...describe('familyName', err('familyName'))} autoComplete="off" {...register('familyName')} />
             </Field>
           </div>
-          <fieldset aria-describedby={err('residency') ? 'residency-error residency-hint' : 'residency-hint'}>
-            <legend className="mb-1.5 flex items-baseline gap-1 text-[13.5px] font-medium text-ink">
-              İkamet durumu
-              <span className="text-alert" aria-hidden>
-                *
-              </span>
-              <span className="sr-only">(zorunlu)</span>
-            </legend>
-            <div className="grid grid-cols-2 gap-2">
-              {(
-                [
-                  ['local', 'Yerli (ikamet)', 'Yerel ikamet eden müşteri'],
-                  ['foreign', 'Yabancı (ikamet)', 'Yurt dışında ikamet eden müşteri'],
-                ] as const
-              ).map(([value, label, sub]) => (
-                <label
-                  key={value}
-                  className={cn(
-                    'flex cursor-pointer items-start gap-2.5 rounded-lg border px-3 py-2.5 transition-colors hover:border-ink-3/50 has-[:checked]:border-blue has-[:checked]:bg-blue-soft/50 has-[:focus-visible]:ring-3 has-[:focus-visible]:ring-blue/20',
-                    err('residency') ? 'border-alert' : 'border-line',
-                  )}
-                >
-                  <input type="radio" value={value} {...register('residency')} className="mt-1 size-4 accent-[var(--ac-blue)]" />
-                  <span className="min-w-0">
-                    <span className="block font-medium text-ink">{label}</span>
-                    <span className="block text-[12.5px] text-ink-2">{sub}</span>
-                  </span>
-                </label>
-              ))}
-            </div>
-            {err('residency') && (
-              <p id="residency-error" className="mt-1.5 text-[13px] text-alert">
-                {err('residency')}
-              </p>
-            )}
-            {/* The meaning stays visible next to an error: this is residence, not citizenship. */}
-            <p id="residency-hint" className="mt-1.5 text-[12.5px] leading-snug text-ink-3">
-              Vatandaşlık değil, ikamet sınıflandırmasıdır ve istenecek belgeleri belirler. Uyruktan, addan veya telefon kodundan tahmin edilmez; siz seçersiniz.
-            </p>
-          </fieldset>
           <div className="grid gap-4 sm:grid-cols-2">
             <CountrySelect id="nationality" label="Uyruk" name="nationality" register={register} error={err('nationality')} companyCountry={companyCountry} />
+            <CountrySelect
+              id="residenceCountry"
+              label="İkamet ettiği ülke"
+              name="residenceCountry"
+              register={register}
+              error={err('residenceCountry')}
+              companyCountry={companyCountry}
+              hint="Kişinin yaşadığı ülke; uyruktan ayrıdır ve uyruktan doldurulmaz."
+            />
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2">
             <Field id="dateOfBirth" label="Doğum tarihi" error={err('dateOfBirth')}>
               <Input type="date" max={new Date().toISOString().slice(0, 10)} {...describe('dateOfBirth', err('dateOfBirth'))} {...register('dateOfBirth')} />
             </Field>
           </div>
+          <p className="flex items-start gap-2 rounded-lg bg-ground/70 px-3 py-2.5 text-[12.5px] leading-snug text-ink-2">
+            <Info size={14} className="mt-[2px] shrink-0 text-ink-3" />
+            <span>
+              Kiralamada Yerli/Yabancı (ikamet) kararını, kiralamanın başladığı şubenin ülkesine göre personel verir; bu form karar vermez.
+              {customer?.residency && (
+                <>
+                  {' '}
+                  Bu kayıtta eski sınıflandırma (M1) korunuyor: <span className="font-medium text-ink">{RESIDENCY_LABELS[customer.residency]}</span>, referans ülke belirtilmemiş.
+                </>
+              )}
+            </span>
+          </p>
         </Section>
 
         <Section title="İletişim" hint="Telefon veya e-postadan en az biri gerekli.">

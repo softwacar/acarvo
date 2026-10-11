@@ -118,10 +118,16 @@ export const branches = pgTable(
     name: text('name').notNull(),
     code: text('code').notNull(),
     timezone: text('timezone').notNull(),
+    /** ISO 3166-1 alpha-2, set by the owner (M2). Empty until set: nothing assumes the company country. */
+    country: text('country'),
     status: text('status', { enum: ['active', 'inactive'] }).notNull().default('active'),
     createdAt: createdAt(),
   },
-  (t) => [unique('branches_company_code_key').on(t.companyId, t.code), unique('branches_company_id_key').on(t.companyId, t.id)],
+  (t) => [
+    unique('branches_company_code_key').on(t.companyId, t.code),
+    unique('branches_company_id_key').on(t.companyId, t.id),
+    check('branches_country_check', sql`${t.country} is null or ${t.country} ~ '^[A-Z]{2}$'`),
+  ],
 )
 
 export const membershipBranches = pgTable(
@@ -539,8 +545,14 @@ export const customers = pgTable(
     phoneRaw: text('phone_raw'),
     phoneE164: text('phone_e164'),
     email: text('email'),
-    residency: text('residency', { enum: ['local', 'foreign'] }).notNull(),
+    /**
+     * M1 Yerli/Yabancı classification with no defined reference country. Kept as recorded (never converted or
+     * derived); optional from M2. The rental-time classification is a separate, staff-confirmed snapshot.
+     */
+    residency: text('residency', { enum: ['local', 'foreign'] }),
     nationality: text('nationality'),
+    /** Country the person lives in (M2). Separate from nationality; never derived from it. */
+    residenceCountry: text('residence_country'),
     dateOfBirth: date('date_of_birth'),
     addressLine1: text('address_line1'),
     addressLine2: text('address_line2'),
@@ -584,6 +596,7 @@ export const customers = pgTable(
     check('customers_residency_check', sql`${t.residency} in ('local', 'foreign')`),
     check('customers_status_check', sql`${t.status} in ('active', 'archived', 'merged', 'anonymized')`),
     check('customers_country_check', sql`(${t.nationality} is null or ${t.nationality} ~ '^[A-Z]{2}$') and (${t.addressCountry} is null or ${t.addressCountry} ~ '^[A-Z]{2}$')`),
+    check('customers_residence_country_check', sql`${t.residenceCountry} is null or ${t.residenceCountry} ~ '^[A-Z]{2}$'`),
     check('customers_dob_check', sql`${t.dateOfBirth} is null or ${t.dateOfBirth} >= date '1900-01-01'`),
     check('customers_archive_check', sql`(${t.status} = 'archived') = (${t.archivedAt} is not null and ${t.archivedReason} is not null)`),
     check(

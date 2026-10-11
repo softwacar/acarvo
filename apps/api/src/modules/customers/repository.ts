@@ -56,7 +56,7 @@ export function phoneOrError(raw: string | undefined, country: string | null): {
 }
 
 /** Column values for the editable fields. */
-export function customerColumns(input: Omit<CustomerInput, 'residency'> & { residency?: CustomerInput['residency'] }, phone: { raw: string | null; e164: string | null }) {
+export function customerColumns(input: CustomerInput, phone: { raw: string | null; e164: string | null }) {
   const givenName = input.givenName ?? null
   const familyName = input.familyName ?? null
   return {
@@ -67,9 +67,10 @@ export function customerColumns(input: Omit<CustomerInput, 'residency'> & { resi
     phoneRaw: phone.raw,
     phoneE164: phone.e164,
     email: input.email ?? null,
-    // Present: the shared schema requires it (reported together with the other required fields).
-    residency: input.residency!,
+    // M1 classification: optional from M2 (callers keep a recorded value when an update leaves it out).
+    residency: input.residency ?? null,
     nationality: input.nationality ?? null,
+    residenceCountry: input.residenceCountry ?? null,
     dateOfBirth: input.dateOfBirth ?? null,
     addressLine1: input.addressLine1 ?? null,
     addressLine2: input.addressLine2 ?? null,
@@ -97,6 +98,7 @@ export async function listCustomers(tx: Tx, q: CustomerSearch) {
   const conds: SQL[] = [sql`c.status in ('active', 'archived')`]
   if (q.status !== 'all') conds.push(sql`c.status = ${q.status}`)
   if (q.residency) conds.push(sql`c.residency = ${q.residency}`)
+  if (q.residenceCountry) conds.push(sql`c.residence_country = ${q.residenceCountry}`)
   if (q.branchId) conds.push(sql`c.created_branch_id = ${q.branchId}`)
   if (q.q) {
     const text = q.q.trim().toLowerCase()
@@ -117,7 +119,7 @@ export async function listCustomers(tx: Tx, q: CustomerSearch) {
   const offset = (q.page - 1) * q.pageSize
   const rows = (
     await tx.execute(sql`
-      select c.id, c.customer_no, c.display_name, c.phone_e164, c.email, c.residency, c.nationality, c.status, c.created_at,
+      select c.id, c.customer_no, c.display_name, c.phone_e164, c.email, c.residency, c.nationality, c.residence_country, c.status, c.created_at,
              b.id as branch_id, b.name as branch_name, b.code as branch_code, count(*) over () as total_count
       from customers c
       left join branches b on b.company_id = c.company_id and b.id = c.created_branch_id
@@ -135,8 +137,9 @@ export async function listCustomers(tx: Tx, q: CustomerSearch) {
     displayName: r.display_name as string,
     phone: r.phone_e164 ? formatPhone(r.phone_e164 as string) : null,
     email: str(r.email),
-    residency: r.residency as CustomerListItem['residency'],
+    residency: (r.residency as CustomerListItem['residency']) ?? null,
     nationality: str(r.nationality),
+    residenceCountry: str(r.residence_country),
     status: r.status as CustomerListItem['status'],
     createdBranch: r.branch_id ? { id: r.branch_id as string, name: r.branch_name as string, code: r.branch_code as string } : null,
     createdAt: toIso(r.created_at),
@@ -168,8 +171,9 @@ export async function getCustomer(tx: Tx, id: string): Promise<CustomerDetail | 
     phone: r.phone_e164 ? formatPhone(r.phone_e164 as string) : null,
     phoneRaw: str(r.phone_raw),
     email: str(r.email),
-    residency: r.residency as CustomerDetail['residency'],
+    residency: (r.residency as CustomerDetail['residency']) ?? null,
     nationality: str(r.nationality),
+    residenceCountry: str(r.residence_country),
     dateOfBirth: dateOnly(r.date_of_birth),
     addressLine1: str(r.address_line1),
     addressLine2: str(r.address_line2),

@@ -1,4 +1,4 @@
-import { CUSTOMER_PAGE_SIZES, CUSTOMER_RESIDENCIES, CUSTOMER_SORTS, type CustomerResidency, type CustomerSort } from '@acarvo/shared'
+import { COUNTRY_CODES, CUSTOMER_PAGE_SIZES, CUSTOMER_RESIDENCIES, CUSTOMER_SORTS, type CustomerResidency, type CustomerSort } from '@acarvo/shared'
 
 /**
  * Customer list state kept in the URL: filters, sort and page only. The search text is NOT put in the URL
@@ -6,6 +6,7 @@ import { CUSTOMER_PAGE_SIZES, CUSTOMER_RESIDENCIES, CUSTOMER_SORTS, type Custome
  */
 export interface CustomerListSearch {
   residency?: CustomerResidency
+  residenceCountry?: string
   status?: 'archived' | 'all'
   branchId?: string
   sort?: CustomerSort
@@ -22,6 +23,7 @@ export function validateCustomerSearch(s: Record<string, unknown>): CustomerList
   const pageSize = Number(s.pageSize)
   const out: CustomerListSearch = {
     residency: oneOf(CUSTOMER_RESIDENCIES, s.residency),
+    residenceCountry: typeof s.residenceCountry === 'string' && COUNTRY_CODES.includes(s.residenceCountry) ? s.residenceCountry : undefined,
     status: oneOf(['archived', 'all'] as const, s.status),
     branchId: uuid(s.branchId),
     sort: oneOf(CUSTOMER_SORTS, s.sort),

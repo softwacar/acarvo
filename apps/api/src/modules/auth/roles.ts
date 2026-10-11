@@ -14,7 +14,14 @@ export const ROLE_PRESETS: Record<string, readonly Permission[]> = {
     'vehicles.history.correct',
     'customers.read',
     'customers.manage',
+    'customers.documents.read',
+    'customers.documents.manage',
+    'customers.documents.view',
+    'customers.documents.download',
+    'customers.identity.reveal',
     'branches.read',
+    'branches.manage',
+    'settings.documents.manage',
     'users.read',
     'roles.read',
     'audit.read',
@@ -31,6 +38,9 @@ export const ROLE_PRESETS: Record<string, readonly Permission[]> = {
     'vehicles.history.correct',
     'customers.read',
     'customers.manage',
+    'customers.documents.read',
+    'customers.documents.manage',
+    'customers.documents.view',
     'branches.read',
     'users.read',
   ],
@@ -43,6 +53,8 @@ export const ROLE_PRESETS: Record<string, readonly Permission[]> = {
     'vehicles.location.record',
     'customers.read',
     'customers.manage',
+    'customers.documents.read',
+    'customers.documents.manage',
     'branches.read',
   ],
 }
@@ -83,6 +95,24 @@ export const ROLE_PRESET_HISTORY: { version: number; presets: Record<string, rea
         'vehicles.odometer.record', 'vehicles.location.record', 'vehicles.history.correct', 'branches.read', 'users.read',
       ],
       Operasyon: ['vehicles.read', 'vehicles.documents.read', 'vehicles.documents.manage', 'vehicles.photos.manage', 'vehicles.odometer.record', 'vehicles.location.record', 'branches.read'],
+    },
+  },
+  {
+    // Customers M1 added customers.read and customers.manage.
+    version: 4,
+    presets: {
+      Sahip: [
+        'vehicles.read', 'vehicles.create', 'vehicles.update', 'vehicles.documents.read', 'vehicles.documents.manage', 'vehicles.photos.manage',
+        'vehicles.odometer.record', 'vehicles.location.record', 'vehicles.history.correct', 'customers.read', 'customers.manage', 'branches.read', 'users.read', 'roles.read', 'audit.read',
+      ],
+      Yönetici: [
+        'vehicles.read', 'vehicles.create', 'vehicles.update', 'vehicles.documents.read', 'vehicles.documents.manage', 'vehicles.photos.manage',
+        'vehicles.odometer.record', 'vehicles.location.record', 'vehicles.history.correct', 'customers.read', 'customers.manage', 'branches.read', 'users.read',
+      ],
+      Operasyon: [
+        'vehicles.read', 'vehicles.documents.read', 'vehicles.documents.manage', 'vehicles.photos.manage', 'vehicles.odometer.record', 'vehicles.location.record',
+        'customers.read', 'customers.manage', 'branches.read',
+      ],
     },
   },
 ]

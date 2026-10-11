@@ -16,7 +16,14 @@ export const PERMISSIONS = [
   'vehicles.history.correct',
   'customers.read',
   'customers.manage',
+  'customers.documents.read',
+  'customers.documents.manage',
+  'customers.documents.view',
+  'customers.documents.download',
+  'customers.identity.reveal',
   'branches.read',
+  'branches.manage',
+  'settings.documents.manage',
   'users.read',
   'roles.read',
   'audit.read',
@@ -44,7 +51,7 @@ export interface SessionInfo {
   company: { id: string; name: string; country: string; timezone: string; currency: string; roles: string[] } | null
   memberships: MembershipSummary[]
   permissions: Permission[]
-  branches: { id: string; name: string; code: string }[]
+  branches: { id: string; name: string; code: string; country: string | null }[]
   allBranches: boolean
   environment: 'development' | 'production' | 'test'
 }

@@ -83,9 +83,15 @@ export interface BranchRow {
   id: string
   name: string
   code: string
+  /** ISO country of the branch (M2); null until the owner sets it. */
+  country: string | null
 }
 export const branchesApi = {
   list: () => api<{ items: BranchRow[] }>('/branches'),
+  setCountry: (id: string, country: string | null) => api<{ items: BranchRow[] }>(`/branches/${id}/country`, { method: 'PUT', body: { country } }),
+  previewCountry: (country: string) => api<{ country: string; branches: { id: string; name: string; code: string }[] }>('/branches/country/preview', { method: 'POST', body: { country } }),
+  applyCountry: (country: string, branchIds: string[]) =>
+    api<{ changed: string[]; skipped: string[]; items: BranchRow[] }>('/branches/country/apply', { method: 'POST', body: { country, branchIds, confirm: true } }),
 }
 
 export const vehiclesApi = {

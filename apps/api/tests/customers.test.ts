@@ -28,6 +28,7 @@ const editable = (d: Record<string, unknown>, over: Record<string, unknown> = {}
   familyName: d.familyName,
   residency: d.residency,
   nationality: d.nationality,
+  residenceCountry: d.residenceCountry,
   dateOfBirth: d.dateOfBirth,
   phone: d.phoneRaw,
   email: d.email,
@@ -145,7 +146,11 @@ describe('permissions', () => {
     await asOwner(data.companies.drina, `insert into roles (company_id, name, permissions) values ($1, 'Kasa', $2)`, [data.companies.drina, [...v3.Operasyon!]])
     try {
       const first = await upgradePresetRoles(owner)
-      expect(first.filter((r) => r.company === 'Drina Rent a Car')).toEqual([{ company: 'Drina Rent a Car', role: 'Operasyon', added: ['customers.read', 'customers.manage'] }])
+      // A v3 Operasyon is brought up to the current preset: the customer permissions (and from M2 the document ones).
+      expect(first.filter((r) => r.company === 'Drina Rent a Car')).toEqual([
+        { company: 'Drina Rent a Car', role: 'Operasyon', added: ROLE_PRESETS.Operasyon!.filter((p) => !v3.Operasyon!.includes(p)) },
+      ])
+      expect(first[0]!.added).toEqual(expect.arrayContaining(['customers.read', 'customers.manage']))
       expect(await upgradePresetRoles(owner)).toEqual([])
       const roles = (await asOwner(data.companies.drina, `select name, permissions from roles`)).rows as { name: string; permissions: string[] }[]
       expect(roles.find((r) => r.name === 'Operasyon')!.permissions.sort()).toEqual([...ROLE_PRESETS.Operasyon!].sort())
@@ -289,7 +294,9 @@ describe('creating customers', () => {
   it('explains missing or invalid fields without repeating what was typed', async () => {
     const none = await adnan.post('/api/customers', {})
     expect(none.statusCode).toBe(400)
-    expect(none.json().error.fields).toMatchObject({ givenName: expect.any(String), phone: expect.any(String), residency: expect.any(String) })
+    expect(none.json().error.fields).toMatchObject({ givenName: expect.any(String), phone: expect.any(String) })
+    // M2 decision K-1: the M1 Yerli/Yabancı classification is no longer required for new customers.
+    expect(none.json().error.fields.residency).toBeUndefined()
     const bad = await adnan.post('/api/customers', { givenName: 'Geçersiz', email: 'gizli-deger-XYZ@', phone: 'abc-PRIVATE-123', residency: 'local', nationality: 'QQ', dateOfBirth: '2999-01-01' })
     expect(bad.statusCode).toBe(400)
     expect(Object.keys(bad.json().error.fields).sort()).toEqual(['dateOfBirth', 'email', 'nationality'])

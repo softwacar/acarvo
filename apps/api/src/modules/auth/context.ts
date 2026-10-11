@@ -52,7 +52,7 @@ export async function listMemberships(database: Database, userId: string) {
 }
 
 export async function branchSummaries(tx: Tx, access: CompanyAccess) {
-  const rows = await tx.select({ id: branches.id, name: branches.name, code: branches.code }).from(branches).where(eq(branches.status, 'active'))
+  const rows = await tx.select({ id: branches.id, name: branches.name, code: branches.code, country: branches.country }).from(branches).where(eq(branches.status, 'active'))
   return access.allBranches ? rows : rows.filter((b) => access.branchIds.includes(b.id))
 }
 

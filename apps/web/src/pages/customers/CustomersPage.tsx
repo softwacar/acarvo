@@ -2,18 +2,18 @@ import { CUSTOMER_PAGE_SIZES, type CustomerListItem, type CustomerSort } from '@
 import { Archive, CaretDown, CaretLeft, CaretRight, CaretUp, CaretUpDown, Info, MagnifyingGlass, Plus, Users, X } from '@phosphor-icons/react'
 import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import { Link, useNavigate, useSearch } from '@tanstack/react-router'
-import { type ReactNode, useEffect, useState } from 'react'
+import { type ReactNode, useEffect, useMemo, useState } from 'react'
 import { Select } from '@/components/fields'
 import { ErrorState, ForbiddenState, PageHeader, StatePanel } from '@/components/states'
 import { ApiRequestError, customersApi } from '@/lib/api'
-import { countryName, RESIDENCY_LABELS } from '@/lib/customer-labels'
+import { countryName, countryOptions, RESIDENCY_LABELS } from '@/lib/customer-labels'
 import { cn } from '@/lib/utils'
 import { formatDate } from '@/lib/vehicle-labels'
 import { can, useSession } from '@/session'
 import { CustomerFormSheet } from './CustomerForm'
 import { type CustomerListSearch, rememberedText, rememberListSearch, rememberText } from './search'
 
-const FILTER_KEYS = ['residency', 'status', 'branchId'] as const
+const FILTER_KEYS = ['residency', 'residenceCountry', 'status', 'branchId'] as const
 
 function SortHeader({ label, sort, search, className }: { label: string; sort: CustomerSort; search: CustomerListSearch; className?: string }) {
   const navigate = useNavigate({ from: '/musteriler' })
@@ -103,7 +103,11 @@ function CustomerRow({ c, onOpen }: { c: CustomerListItem; onOpen: () => void })
         </span>
       </td>
       <td className="py-2 pr-4 pl-3 leading-tight sm:px-3">
-        <span className="block whitespace-nowrap text-ink">{RESIDENCY_LABELS[c.residency]}</span>
+        {c.residenceCountry ? (
+          <span className="block truncate text-ink">İkamet: {countryName(c.residenceCountry)}</span>
+        ) : (
+          <span className="block truncate text-[13px] text-ink-3">İkamet ülkesi girilmemiş</span>
+        )}
         <span className="mt-0.5 block truncate text-[13px] text-ink-2">{c.nationality ? `Uyruk: ${countryName(c.nationality)}` : 'Uyruk girilmemiş'}</span>
       </td>
       <td className="hidden px-3 xl:table-cell">
@@ -144,6 +148,7 @@ export function CustomersPage() {
   const [text, setText] = useState(() => rememberedText(companyId))
   const [q, setQ] = useState(() => rememberedText(companyId).trim())
   const [creating, setCreating] = useState(false)
+  const countries = useMemo(() => countryOptions(session.company?.country), [session.company?.country])
   useEffect(() => rememberListSearch(companyId, search), [companyId, search])
   useEffect(() => {
     rememberText(companyId, text)
@@ -155,7 +160,7 @@ export function CustomersPage() {
     return () => clearTimeout(t)
   }, [text, q, companyId, search.page, navigate])
 
-  const body = { q: q || undefined, residency: search.residency, status: search.status ?? 'active', branchId: search.branchId, sort: search.sort ?? 'name', dir: search.dir ?? 'asc', page, pageSize }
+  const body = { q: q || undefined, residency: search.residency, residenceCountry: search.residenceCountry, status: search.status ?? 'active', branchId: search.branchId, sort: search.sort ?? 'name', dir: search.dir ?? 'asc', page, pageSize }
   const list = useQuery({
     // The query key holds the search text in memory only; it is sent in the request body.
     queryKey: ['customers', companyId, body],
@@ -201,10 +206,24 @@ export function CustomersPage() {
                 className="h-9 w-full rounded-lg border border-line bg-surface pr-3 pl-9 text-[13.5px] outline-none placeholder:text-ink-3 hover:border-ink-3/50 focus:border-blue focus:ring-3 focus:ring-blue/15"
               />
             </div>
-            <FilterSelect label="İkamet durumu" value={search.residency} onChange={(residency) => set({ residency: residency as CustomerListSearch['residency'] })}>
-              <option value="">İkamet: tümü</option>
-              <option value="local">{RESIDENCY_LABELS.local}</option>
-              <option value="foreign">{RESIDENCY_LABELS.foreign}</option>
+            <FilterSelect label="İkamet ettiği ülke" value={search.residenceCountry} onChange={(residenceCountry) => set({ residenceCountry })}>
+              <option value="">İkamet ülkesi: tümü</option>
+              {countries.frequent.map((c) => (
+                <option key={c.code} value={c.code}>
+                  {c.name}
+                </option>
+              ))}
+              <option disabled>──────────</option>
+              {countries.all.map((c) => (
+                <option key={`a-${c.code}`} value={c.code}>
+                  {c.name}
+                </option>
+              ))}
+            </FilterSelect>
+            <FilterSelect label="Eski sınıflandırma (M1)" value={search.residency} onChange={(residency) => set({ residency: residency as CustomerListSearch['residency'] })}>
+              <option value="">M1 sınıflandırması: tümü</option>
+              <option value="local">M1: {RESIDENCY_LABELS.local}</option>
+              <option value="foreign">M1: {RESIDENCY_LABELS.foreign}</option>
             </FilterSelect>
             {session.branches.length > 1 && (
               <FilterSelect label="Kayıt şubesi" value={search.branchId} onChange={(branchId) => set({ branchId })}>
@@ -279,7 +298,7 @@ export function CustomersPage() {
                       İletişim
                     </th>
                     <th scope="col" className="w-[132px] pr-4 pl-3 font-medium sm:w-[148px] sm:px-3">
-                      İkamet durumu
+                      İkamet ve uyruk
                     </th>
                     <th scope="col" className="hidden w-[200px] px-3 font-medium xl:table-cell">
                       Kayıt şubesi

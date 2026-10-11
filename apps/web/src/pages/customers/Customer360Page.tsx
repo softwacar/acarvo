@@ -294,7 +294,7 @@ function Header({ c, canManage, onEdit, onArchive, onRestore, restoring }: { c: 
           </div>
           <h1 className={cn('mt-1.5 text-[26px] leading-tight font-semibold tracking-[-0.025em] break-words sm:text-[30px]', archived && 'text-ink-2')}>{c.displayName}</h1>
           <p className="mt-1 text-ink-2">
-            İkamet durumu: {RESIDENCY_LABELS[c.residency]} · Uyruk: {nationality ?? 'girilmemiş'}
+            İkamet ettiği ülke: {countryName(c.residenceCountry) ?? 'girilmemiş'} · Uyruk: {nationality ?? 'girilmemiş'}
             {c.createdBranch && ` · ${c.createdBranch.name} şubesinde açıldı`}
           </p>
         </div>
@@ -408,8 +408,12 @@ function Overview({ c, canManage, onEdit, onTab }: { c: CustomerDetail; canManag
             rows={[
               ['Ad', c.givenName],
               ['Soyad', c.familyName],
-              ['İkamet durumu', RESIDENCY_LABELS[c.residency]],
+              ['İkamet ettiği ülke', countryName(c.residenceCountry)],
               ['Uyruk', countryName(c.nationality)],
+              // Shown only when recorded; its reference country was never defined (M1), so it is not a rental decision.
+              ...(c.residency
+                ? ([['Eski sınıflandırma (M1)', <span title="M1'de kaydedildi; referans ülke belirtilmemiş. Kiralamadaki kararı personel verir.">{RESIDENCY_LABELS[c.residency]}</span>]] as [string, ReactNode][])
+                : []),
               ['Doğum tarihi', c.dateOfBirth && <span className="tnum">{formatDate(c.dateOfBirth)}</span>],
               ['Müşteri no', <span className="tnum">{c.customerNo}</span>],
             ]}

@@ -17,8 +17,9 @@ interface SampleCustomer {
   family?: string
   phone?: string
   email?: string
-  residency: 'local' | 'foreign'
+  residency?: 'local' | 'foreign'
   nationality?: string
+  residence?: string
   dob?: string
   city?: string
   country?: string
@@ -28,15 +29,15 @@ interface SampleCustomer {
 }
 
 const DRINA: SampleCustomer[] = [
-  { given: 'Ajla', family: 'Testović', phone: '+38761000101', email: 'ajla.testovic@example.test', residency: 'local', nationality: 'BA', dob: '1990-04-12', city: 'Sarajevo', country: 'BA', branch: 'SJJ', language: 'bs' },
+  { given: 'Ajla', family: 'Testović', phone: '+38761000101', email: 'ajla.testovic@example.test', residency: 'local', nationality: 'BA', residence: 'BA', dob: '1990-04-12', city: 'Sarajevo', country: 'BA', branch: 'SJJ', language: 'bs' },
   { given: 'Emir', family: 'Primjerović', phone: '+38762000102', email: 'emir.primjerovic@example.test', residency: 'local', nationality: 'BA', dob: '1985-11-03', city: 'Sarajevo', country: 'BA', branch: 'SAC', language: 'bs' },
-  { given: 'Lena', family: 'Beispiel', phone: '+4915100000103', email: 'lena.beispiel@example.test', residency: 'foreign', nationality: 'DE', dob: '1993-02-27', city: 'München', country: 'DE', branch: 'SJJ', language: 'de' },
+  { given: 'Lena', family: 'Beispiel', phone: '+4915100000103', email: 'lena.beispiel@example.test', residency: 'foreign', nationality: 'DE', residence: 'DE', dob: '1993-02-27', city: 'München', country: 'DE', branch: 'SJJ', language: 'de' },
   { given: 'Mirza', family: 'Uzorak', phone: '+38761000104', residency: 'local', nationality: 'BA', branch: 'MST', language: 'bs' },
   { given: 'Sara', family: 'Probić', email: 'sara.probic@example.test', residency: 'local', nationality: 'BA', dob: '1999-07-19', branch: 'MST' },
-  { given: 'John', family: 'Sample', phone: '+447700000106', email: 'john.sample@example.test', residency: 'foreign', nationality: 'GB', city: 'London', country: 'GB', branch: 'SJJ', language: 'en' },
-  { given: 'Marie', family: 'Exemple', phone: '+33600000107', residency: 'foreign', nationality: 'FR', branch: 'SAC', language: 'fr' },
+  { given: 'John', family: 'Sample', phone: '+447700000106', email: 'john.sample@example.test', residency: 'foreign', nationality: 'GB', residence: 'GB', city: 'London', country: 'GB', branch: 'SJJ', language: 'en' },
+  { given: 'Marie', family: 'Exemple', phone: '+33600000107', residency: 'foreign', nationality: 'FR', residence: 'FR', branch: 'SAC', language: 'fr' },
   { given: 'Kenan', family: 'Örnek', phone: '+905000000108', email: 'kenan.ornek@example.test', residency: 'foreign', nationality: 'TR', dob: '1988-09-30', branch: 'SJJ', language: 'tr' },
-  { given: 'Selin', family: 'Deneme', phone: '+905000000109', residency: 'foreign', nationality: 'TR', branch: 'SAC', language: 'tr' },
+  { given: 'Selin', family: 'Deneme', phone: '+905000000109', residency: 'foreign', nationality: 'TR', residence: 'BA', branch: 'SAC', language: 'tr' },
   { given: 'Tarik', family: 'Testić', phone: '+38761000110', email: 'tarik.testic@example.test', residency: 'local', nationality: 'BA', dob: '1979-01-08', city: 'Mostar', country: 'BA', branch: 'MST' },
   { given: 'Amra', family: 'Demović', phone: '+38763000111', residency: 'local', nationality: 'BA', branch: 'SJJ' },
   // A single-name person: only one name part is filled.
@@ -79,7 +80,8 @@ export async function ensureTestCustomers(db: OwnerDb) {
           phoneRaw: c.phone ?? null,
           phoneE164: c.phone ?? null,
           email: c.email ?? null,
-          residency: c.residency,
+          residency: c.residency ?? null,
+          residenceCountry: c.residence ?? null,
           nationality: c.nationality ?? null,
           dateOfBirth: c.dob ?? null,
           city: c.city ?? null,
@@ -90,6 +92,8 @@ export async function ensureTestCustomers(db: OwnerDb) {
         })
       }
       await tx.insert(s.companySequences).values({ companyId: company.id, kind: 'customer', nextValue: n + 1 })
+      // Branch countries (M2) for the test company Drina only; Neretva keeps empty countries for the bulk-assignment tests.
+      if (company.name.startsWith('Drina')) await tx.execute(sql`update branches set country = 'BA' where country is null`)
       added.push(`${company.name}: ${n}`)
     })
   }

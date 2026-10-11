@@ -366,7 +366,7 @@ describe('database guards', () => {
     await asOwner(data.companies.drina, `insert into roles (company_id, name, permissions) values ($1, 'Sayım', $2)`, [data.companies.drina, [...v2.Operasyon!]])
     try {
       const first = await upgradePresetRoles(owner)
-      expect(first.filter((r) => r.company === 'Drina Rent a Car')).toEqual([{ company: 'Drina Rent a Car', role: 'Operasyon', added: ['vehicles.odometer.record', 'vehicles.location.record', 'customers.read', 'customers.manage'] }])
+      expect(first.filter((r) => r.company === 'Drina Rent a Car')).toEqual([{ company: 'Drina Rent a Car', role: 'Operasyon', added: ROLE_PRESETS.Operasyon!.filter((p) => !v2.Operasyon!.includes(p)) }])
       expect(await upgradePresetRoles(owner)).toEqual([])
       const roles = (await asOwner(data.companies.drina, `select name, permissions from roles`)).rows as { name: string; permissions: string[] }[]
       expect(roles.find((r) => r.name === 'Operasyon')!.permissions.sort()).toEqual([...ROLE_PRESETS.Operasyon!].sort())

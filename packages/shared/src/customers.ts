@@ -141,9 +141,14 @@ const today = () => new Date().toISOString().slice(0, 10)
 export const customerFieldsSchema = z.object({
   givenName: optText(80),
   familyName: optText(80),
-  // Required (checked in withRules, so that a missing name, contact and residency are reported together).
-  residency: z.preprocess(blank, z.enum(CUSTOMER_RESIDENCIES, { error: 'İkamet durumunu seçin: Yerli veya Yabancı (ikamet)' }).optional()),
+  /**
+   * M1 Yerli/Yabancı classification (reference country undefined). Optional from M2: new customers need not have it,
+   * and an update that leaves it out keeps the recorded value.
+   */
+  residency: z.preprocess(blank, z.enum(CUSTOMER_RESIDENCIES, { error: 'Yerli veya Yabancı (ikamet) seçin' }).optional()),
   nationality: country('Listeden bir ülke seçin'),
+  /** Country the person lives in (M2). Separate from nationality; never filled in from it. */
+  residenceCountry: country('Listeden bir ülke seçin'),
   dateOfBirth: z.preprocess(
     blank,
     z.iso
@@ -168,16 +173,15 @@ export const customerFieldsSchema = z.object({
   operationalNote: optText(1000),
 })
 
-type RequiredParts = { givenName?: string; familyName?: string; phone?: string; email?: string; residency?: CustomerResidency }
+type RequiredParts = { givenName?: string; familyName?: string; phone?: string; email?: string }
 const withRules = <T extends z.ZodType<RequiredParts>>(schema: T) =>
   schema.superRefine((c, ctx) => {
     if (!c.givenName && !c.familyName) ctx.addIssue({ code: 'custom', path: ['givenName'], message: 'Ad veya soyaddan en az birini girin' })
     if (!c.phone && !c.email) ctx.addIssue({ code: 'custom', path: ['phone'], message: 'Telefon veya e-postadan en az birini girin' })
-    if (!c.residency) ctx.addIssue({ code: 'custom', path: ['residency'], message: 'İkamet durumunu seçin: Yerli veya Yabancı (ikamet)' })
   })
 
 export const customerInputSchema = withRules(customerFieldsSchema)
-export type CustomerInput = z.infer<typeof customerFieldsSchema> & { residency: CustomerResidency }
+export type CustomerInput = z.infer<typeof customerFieldsSchema>
 
 export const customerCreateSchema = withRules(
   customerFieldsSchema.extend({
@@ -205,6 +209,7 @@ export const CUSTOMER_PAGE_SIZES = [25, 50, 100] as const
 export const customerSearchSchema = z.object({
   q: z.preprocess(blank, z.string().trim().max(100, 'Arama en fazla 100 karakter olabilir').optional()),
   residency: optEnum(CUSTOMER_RESIDENCIES, 'Geçersiz filtre'),
+  residenceCountry: country('Geçersiz filtre'),
   status: z.preprocess(blank, z.enum(CUSTOMER_STATUS_FILTERS).default('active')),
   branchId: z.preprocess(blank, z.uuid().optional()),
   sort: z.preprocess(blank, z.enum(CUSTOMER_SORTS).default('name')),
@@ -241,8 +246,9 @@ export interface CustomerListItem {
   displayName: string
   phone: string | null
   email: string | null
-  residency: CustomerResidency
+  residency: CustomerResidency | null
   nationality: string | null
+  residenceCountry: string | null
   status: CustomerStatus
   createdBranch: CustomerBranchRef | null
   createdAt: string
@@ -264,8 +270,9 @@ export interface CustomerDetail {
   phone: string | null
   phoneRaw: string | null
   email: string | null
-  residency: CustomerResidency
+  residency: CustomerResidency | null
   nationality: string | null
+  residenceCountry: string | null
   dateOfBirth: string | null
   addressLine1: string | null
   addressLine2: string | null
@@ -315,3 +322,41 @@ export interface CustomerActivityItem {
 
 /** Field names in audit entries. Personal values are not copied into the log, only which fields changed. */
 export const CUSTOMER_AUDITED_VALUE_FIELDS = ['residency', 'preferredLanguage', 'contactPreference'] as const
+
+// ---------------------------------------------------------------------------
+// Rental-time residency (prepared in M2, used by the Rentals module). Decision of 10.10.2026:
+// the reference is the country of the branch where the rental starts; staff confirm the class; the result is kept
+// in the rental's unchangeable record. Nothing here decides: it only offers a suggestion from facts staff entered.
+
+export interface ResidencySuggestion {
+  /** null when a fact is missing: then there is no suggestion at all. */
+  suggestion: CustomerResidency | null
+  reason: 'residence_matches_branch' | 'residence_differs_from_branch' | 'residence_country_missing' | 'branch_country_missing'
+}
+
+/**
+ * Suggestion only, from the customer's residence country and the starting branch's country.
+ * Never uses nationality, phone number, name or documents, and is never stored as a decision.
+ */
+export function suggestRentalResidency(residenceCountry: string | null | undefined, branchCountry: string | null | undefined): ResidencySuggestion {
+  if (!branchCountry) return { suggestion: null, reason: 'branch_country_missing' }
+  if (!residenceCountry) return { suggestion: null, reason: 'residence_country_missing' }
+  return residenceCountry === branchCountry
+    ? { suggestion: 'local', reason: 'residence_matches_branch' }
+    : { suggestion: 'foreign', reason: 'residence_differs_from_branch' }
+}
+
+/** Shape of the unchangeable residency record a rental will keep (Rentals module; documented here, not stored in M2). */
+export interface RentalResidencySnapshot {
+  residency: CustomerResidency
+  confirmedBy: string
+  confirmedAt: string
+  branchId: string
+  branchCountry: string
+  customerResidenceCountry: string | null
+  customerNationality: string | null
+  suggestion: ResidencySuggestion
+  documentPolicyId: string | null
+  documentPolicyVersion: number | null
+  documentIds: string[]
+}

@@ -153,7 +153,8 @@ export async function customerRoutes(app: FastifyInstance) {
       if (current.version !== input.version) throw await conflict(tx, id)
       if (current.status === 'archived') throw new AppError(409, 'CUSTOMER_ARCHIVED', 'Arşivdeki müşteri düzenlenemez. Önce arşivden çıkarın.')
 
-      const next = customerColumns(input, phoneOrError(input.phone, await companyCountry(tx, access)))
+      // An update that leaves out the M1 classification keeps the recorded value (never cleared silently).
+      const next = { ...customerColumns(input, phoneOrError(input.phone, await companyCountry(tx, access))), residency: input.residency ?? current.residency ?? null }
       const { fields, values } = changedFields(current, next)
       if (!fields.length) return getCustomer(tx, id)
       const contactChanged = fields.includes('phone') || fields.includes('email')
