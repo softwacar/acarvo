@@ -256,3 +256,113 @@ Hepsi otomatik testle doğrulandı.
 4. Bosna-Hersek için belge gereksinimi tanımlanacak mı? (Hukuk danışmanı; tanımlanmazsa zorunluluk gösterilmez.)
 5. Eski M1 "Eski sınıflandırma (M1)" filtresi listede kalsın mı, kaldırılsın mı? Şu an kalıyor; veriye dokunulmuyor.
 6. Yönetici rolünün belge görüntüsünü açabilmesi (plan K-8) uygun mu? Değiştirmek bir rol yükseltme sürümüyle yapılır; özel rollere dokunulmaz.
+
+---
+
+## Son güvenlik kontrolü ve main entegrasyonu (11–12.10.2026)
+
+### Ürün kararları (uygulandı)
+- **Yönetici:** belge görüntüsünü açabilir. İndiremez, tam numarayı göremez.
+- **Operasyon:** belge ekleyebilir, kayıtlı görüntüyü açamaz.
+- **Sahip:** indirebilir ve tam numarayı açabilir. Her açılışta gerekçe istenir, işlem geçmişine kayıt düşer (numara yazılmaz), kullanıcı başına saatte en fazla 30 açılış yapılabilir.
+- **Eski M1 filtresi** kaldı. Her yerde "Eski M1 sınıflandırması" diye yazar, güncel ikamet sınıflandırması olmadığı belirtilir.
+- **Şube ülkeleri** doldurulmadı (ana veritabanında 4 şubenin ülkesi boş).
+- **Ülke politikaları:** hiçbiri etkinleştirilmedi; Bosna-Hersek için kural oluşturulmadı.
+- **Etkinleştirme onayının metni:** "Bu kuralları şirketimizin kendi değerlendirmesiyle kontrol ettim. Bu işaret hukuki uygunluk onayı veya garantisi değildir; ACARVO mevzuata uygunluğu doğrulamaz."
+
+### Güvenlik incelemesi (kritik veya yüksek bulgu yok)
+**İncelenen alanlar:**
+- **Şifreleme:** AES-256-GCM, rastgele nonce, kayda bağlı AAD, şirket başına türetilmiş anahtar.
+- **Dosya güvenliği:** içerik doğrulama, şifreli saklama, bütünlük özeti, güvenli başlıklar.
+- **Erişim:** izinler oturuma, şirkete, dosyaya ve amaca bağlıdır; çıkışta ve şirket değişiminde düşer.
+- **Numara eşleştirme:** şirket içinde HMAC ile eşleşir; şirketler arası eşleşme yoktur.
+
+**Düzeltilen orta ve düşük bulgular** (commit `d91caab`, testleriyle):
+1. Dosya açma ve tam numara için `customers.documents.read` yetkisi de aranıyor. Bu yetkisi olmayan özel bir rol açamaz.
+2. "Numara başka müşteride kayıtlı" yanıtı, diğer müşterinin adını yalnız `customers.read` yetkisi olana gösteriyor.
+3. Açılan numara tarayıcının işlem önbelleğinde tutulmuyor.
+
+**Bilinçli mimari tercihler:**
+- Rol ayrımını API uygular. Veritabanı şirket izolasyonunu, değiştirilemezliği ve silme yasağını uygular.
+- Belge ekleme uç noktasında hız sınırı yok. Yetkili bir kullanıcı şirket içinde bir numaranın kayıtlı olup olmadığını deneyerek öğrenebilir. Bu işlem kayıt oluşturur ve işlem geçmişine düşer.
+
+### Git
+- Birleştirmeden önce iki çalışma alanı da temizdi ve `main`, `musteriler-m2`'nin atasıydı.
+- Birleştirme yalnız ileri sarma (`--ff-only`) ile yapıldı: `7cdf067 → d91caab`.
+- Sonradan test tohumu düzeltmesi (`9afc1de`) ve bu rapor da aynı şekilde eklendi.
+- Push yapılmadı. `musteriler-m2` dalı ve `acarvo-m2` çalışma alanı korunuyor.
+
+### Ana veritabanı migration'ı (14 → 20)
+1. **Önizleme:** bekleyen liste yalnız `0014`–`0019` idi.
+2. **SQL incelemesi:** var olan tabloları yalnız `0014` etkiliyor. `customers.residency` zorunlu olmaktan çıkıyor ve iki boş sütun ekleniyor. Var olan veride UPDATE, DELETE veya INSERT yok.
+3. **Önce/sonra parmak izi:** salt okunur; tablo başına sayı ve içerik özeti.
+4. **Doğrulanmış yedek:** `C:\Users\soena\Desktop\acarvo\backups\2026-10-11-21-56-57` (şema, genel tablolar, şirket başına döküm, dosya deposu, `report.json`).
+5. **Uygulama:** migration'lar uygulandı. Hazır roller yükseltildi: her şirkette 3 rol, 3 işlem geçmişi satırı (`role.preset_upgrade`).
+6. **safe-migrate son denetimde durdu:** "new table without RLS: user_sensitive_actions".
+   - Bu tablo tasarım gereği şirketten bağımsızdır: kullanıcı başına numara açma sayacı. Yalnız kullanıcı kimliği, işlem adı ve zaman tutar; müşteri verisi içermez. `users` ve `sessions` ile aynı sınıftadır.
+   - Uygulama rolünün yalnız SELECT ve INSERT yetkisi vardır. Kayıt sayısı 0.
+   - Geri yükleme yapılmadı, yıkıcı bir işlem yapılmadı. Yarım kalan doğrulama aşağıdaki gibi elle, salt okunur olarak tamamlandı.
+   - safe-migrate'in izin listesine bu tabloyu eklemek bir güvenlik denetimini değiştirmek olduğu için size bırakıldı. Eklenmezse bir sonraki migration'da aynı uyarı yine çıkar.
+7. **Sonuç:**
+   - Migration sayısı 20.
+   - Müşteriler aynı: her iki şirkette 0, içerik özeti değişmedi.
+   - Araçlar, belgeler, fotoğraflar, km, konum, kullanıcılar ve şirketler değişmedi.
+   - Şubelerde yalnız boş `country` sütunu eklendi; değerler aynı.
+   - Rollere yalnız beklenen M2 yetkileri eklendi, hiç yetki silinmedi.
+   - İşlem geçmişine yalnız rol yükseltme satırları eklendi.
+   - RLS, politika, yetki ve indeks listelerinden hiçbir şey çıkmadı. Eklenenler:
+
+     | Liste | Eklenen |
+     |---|---|
+     | Zorunlu RLS'li tablo | 6 |
+     | Politika | 24 |
+     | Tablo yetkisi | 19 (DELETE yalnız politika maddelerinde) |
+     | İndeks | 20 |
+
+   - Sentetik veri eklenmedi.
+
+### Testler (main üzerinde; yalnız `acarvo_test`, çalıştırmaya özgü sentetik anahtarlarla)
+
+| Kontrol | Sonuç |
+|---|---|
+| TypeScript (tüm paketler) | Hatasız |
+| Üretim derlemesi (web) | Başarılı |
+| API testleri | 285/285 |
+| Tarayıcı testleri | 70 geçti; 15 isteğe bağlı ekran görüntüsü testi atlandı |
+| Ekran görüntüsü testleri (ayrıca çalıştırıldı) | 8/8 |
+
+### Bulunan sorunlar
+- **Test tohumu:** sentetik belge tarihleri UTC gününe göre hesaplanıyordu. Yerel gece yarısı ile UTC gece yarısı arasında iki test 1 gün fark gördü. Uygulama doğru davranıyordu (şirket saat dilimi). Tohum `Europe/Sarajevo` gününe göre düzeltildi (`9afc1de`).
+- **Sahipsiz geliştirme sunucusu:** durdurulan geliştirme sunucusundan kalan bir Vite işlemi 5173 portunu tutuyordu. Kapatıldı ve temiz şekilde yeniden başlatıldı.
+
+### Anahtarsız güvenli davranış (doğrulandı)
+- API günlüğü: "Customer document numbers and files are closed: Customer data keys are not configured". Anahtar değeri okunmadı ve yazdırılmadı; `.env` değiştirilmedi.
+- M1 ekranları çalışıyor. M2 ekranları açılıyor.
+- Belgeler sekmesinde "Şifreleme anahtarı yapılandırılmadığı için…" uyarısı görünüyor. "Numarayı göster" ve dosya yükleme gösterilmiyor.
+- Numarasız belge kaydı ve düzeltme çalışıyor. Numara veya dosya gerektiren işlemler `503 CUSTOMER_KEYS_MISSING` döner. Şifresiz kayda geri dönüş yoktur.
+- Ana veritabanında belge, dosya veya numara kaydı yok. Sunucuda test anahtarı yok; test anahtarları her test çalıştırmasında bellekte üretilir.
+
+### Gerçek anahtarlar — sizin yapacaklarınız
+1. **Oluşturma:** `node scripts/customer-keys.mjs generate --out "C:\Users\soena\Documents\acarvo-anahtarlar\customer-keys.env"`. Klasör proje dışında olmalı. Ekranda yalnız anahtar kimliği ve parmak izi görünür.
+2. **Kurulum:** dosyadaki dört `CUSTOMER_*` satırını `.env`'e kendiniz ekleyin ve API'yi yeniden başlatın. Günlükte "Customer data keys loaded: k1 …" görünmeli.
+3. **İki ayrı yedek:**
+   - **(a) Parola yöneticisi kasası:** dosyanın içeriğini güvenli not olarak saklayın.
+   - **(b) Ayrı şifreli USB:** örneğin BitLocker To Go ile şifrelenmiş bir USB'ye dosyanın kopyasını koyun.
+   - Anahtarlar veritabanı yedeğiyle aynı yerde durmamalı. Anahtar kaybolursa numaralar ve dosyalar açılamaz.
+4. **Kısa geri yükleme kontrolü:**
+   - USB'deki ve kasadaki kopyanın, API günlüğündeki parmak iziyle aynı olduğunu karşılaştırın.
+   - İlk gerçek belge kaydından sonra en son yedeği boş bir veritabanına geri yükleyip `keys:check -- --db` çalıştırın; hata sayısı 0 olmalı (`TEKNIK_UYGULAMA` §8.7.2).
+5. **Kurulumdan sonra çalıştırılacak kontroller:**
+   - `npm run keys:check --workspace @acarvo/api`: anahtar biçimi ve parmak izi.
+   - `npm run keys:check --workspace @acarvo/api -- --db`: kayıtlı her değerin çözülebildiği, salt okunur olarak denetlenir.
+6. **Test anahtarlarını ana veritabanında kullanmayın.** Testler anahtarlarını kendileri üretir.
+
+### Son ekran kontrolü (1440 / 768 / 390)
+- Belgeler sekmesi, belge ayrıntısı, numara açma, belge ekleme hataları, Ayarlar, Şubeler, Operasyon görünümü ve anahtarsız durum incelendi.
+- Yatay taşma yok ve gerçek bir kullanım sorunu bulunmadı; yeniden tasarım yapılmadı.
+- Kiralama ve cari sekmeleri "henüz bağlı değil" der; sahte özellik gösterilmez.
+
+### Açık riskler (güncel)
+- Önceki listedeki riskler geçerli.
+- safe-migrate genel tablo uyarısı (yukarıda, 6. madde).
+- Gerçek anahtarlar kurulana kadar belge numarası ve dosya kaydedilemez.
