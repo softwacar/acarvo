@@ -366,3 +366,122 @@ Hepsi otomatik testle doğrulandı.
 - Önceki listedeki riskler geçerli.
 - safe-migrate genel tablo uyarısı (yukarıda, 6. madde).
 - Gerçek anahtarlar kurulana kadar belge numarası ve dosya kaydedilemez.
+
+---
+
+## Son güvenlik sertleştirmesi (12.10.2026)
+
+Bu bölüm, önceki bölümde açık kalan iki güvenlik konusunun çözümünü anlatır. Main'in başlangıç noktası `aed7f8e`, migration sayısı 20 idi.
+
+### 1. safe-migrate uyarısı: istisna yerine RLS
+
+**İnceleme sonucu (`user_sensitive_actions`):**
+- **Alanlar:** `id`, `user_id`, `action`, `at`. Müşteri, belge veya numara verisi yoktur.
+- **İlişkiler:** `users` tablosuna bağlıdır. Oturumlarla doğrudan bağı yoktur; sayaç kullanıcıya bağlıdır, bu yüzden yeni oturum açmak sınırı sıfırlamaz.
+- **Uygulama rolünün yetkileri:** yalnız SELECT ve INSERT. UPDATE ve DELETE yoktu, bu yüzden sayaç uygulama üzerinden sıfırlanamıyordu.
+- **Zayıf nokta:** RLS olmadığı için uygulama rolü veritabanı düzeyinde tüm şirketlerin, tüm kullanıcıların sayaç satırlarını okuyabiliyordu. API bunu hiçbir yerde göstermiyordu. Ayrıca tablo şirket bazlı yedeklerde değil, genel yedekteydi.
+
+**Seçilen çözüm** — istisnadan daha güvenli olduğu için:
+- `0020`: zorunlu `company_id` sütunu eklendi. Boş olmayan tabloda bu adım başarısız olur ve geri alınır; hiçbir kayıt dönüştürülmez.
+- `0021`: zorunlu RLS. Satırı kendi kullanıcısı (şirketler arası sınır için) ve kendi şirketi görür. Uygulama yalnız kendi adına ve aktif şirkette satır ekleyebilir. UPDATE, DELETE ve TRUNCATE yetkisi yoktur.
+- Sonuç olarak safe-migrate'e **hiçbir istisna eklenmedi**. Tablo artık normal bir şirket tablosu gibi denetleniyor ve şirket yedeklerine giriyor.
+
+**safe-migrate denetimleri** `scripts/lib/migration-checks.mjs` dosyasına taşındı:
+- **Sabit genel tablo listesi:** RLS'siz olabilecek tablolar adla sabitlendi (`companies`, `document_types`, `sessions`, `users`; hepsi M2'den önce vardı). Kalıp veya otomatik muafiyet yok; listede olmayan RLS'siz her tablo hata verir.
+- **Zorunlu RLS:** RLS'si zorunlu olmayan her tablo bildirilir.
+- **Sayaç tablosu:** sütunları, uygulama rolü yetkileri (yalnız SELECT ve INSERT) ve kuralları (yalnız incelenmiş SELECT ve INSERT kuralı) birebir denetlenir. Örneğin müşteri sütunu, UPDATE/DELETE yetkisi veya fazladan kural eklenirse hata verir.
+- **Satır sayısı:** RLS'ye geçen bir tablonun eski toplamı, şirket toplamlarıyla karşılaştırılır. Hiçbir şirketin göremediği satır "kayıp" olarak bildirilir.
+- **Yeni salt okunur komut:** `node --env-file=.env scripts/safe-migrate.mjs --verify [--test]`.
+
+### 2. Belge numarası deneme sınırı
+
+**Neler sayılıyor:**
+- Numara yazılarak yapılan belge ekleme, düzeltme ve yenileme.
+- Tam numara araması.
+
+**Nasıl sayılıyor:**
+- İstekten önce, ayrı ve kalıcı bir veritabanı işleminde. Böylece reddedilen denemeler de sınıra girer (numara kullanımda, geçersiz alan, sürüm çakışması).
+- Kullanıcı başına kilitle sıraya alınır; eşzamanlı istekler sınırı birlikte aşamaz.
+- Yeni oturum açmak veya sunucuyu yeniden başlatmak sınırı sıfırlamaz.
+
+**Sınırlar:**
+
+| Kapsam | Pencere | En fazla |
+|---|---|---|
+| Kullanıcı, aktif şirkette | 10 dakika | 30 |
+| Kullanıcı, aktif şirkette | 1 saat | 120 |
+| Kullanıcı, tüm şirketler | 24 saat | 600 |
+
+- **Gerekçe:** Yoğun bir bankoda müşteri başına birkaç numaralı belge girilir; bu pencereler gerçek işe yer bırakırken sistematik taramayı durdurur. Arama uç noktasındaki dakikada 30'luk bellek içi sınır da yerinde duruyor.
+
+**Sınır aşılınca:**
+- `429 DOCUMENT_NUMBER_LIMIT` ve `Retry-After` döner. Türkçe mesajda kaç dakika bekleneceği ve numarasız işlemlerin süreceği yazar.
+- Engellenen deneme kaydedilmez, bu yüzden bekleme süresi uzamaz.
+- Formda girilen bilgiler kaybolmaz.
+- Sunucu günlüğüne numarasız bir uyarı yazılır.
+
+**Sayılmayanlar:**
+- Saklanan numarayla yapılan yenileme ("numarayı koru").
+- Yalnız ülke değişikliği.
+- Numarasız işlemler.
+- Yetkisiz istekler: sayılmadan önce 401 veya 403 ile reddedilir.
+
+**Sızıntı önlemleri:**
+- Yanıtlarda, sayaç satırlarında, işlem geçmişinde ve günlüklerde numara yoktur.
+- Başka şirketin kayıtları hiçbir yanıtta görünmez; eşleşme şirket başına ayrı anahtarla yapılır.
+
+**IP sinyali kullanılmadı:** İstekler oturum açmış kullanıcıya ve şirkete bağlı. Ofislerde ortak IP yaygın olduğu için IP sınırı gerçek kullanıcıları engellerdi.
+
+**Numara açma** (saatte 30) aynı yardımcıyı kullanıyor.
+
+### Testler (yalnız `acarvo_test`)
+
+| Kontrol | Sonuç |
+|---|---|
+| API | 305/305 (285'e 20 yeni test eklendi) |
+| Tarayıcı | 71 geçti (70'e 1 yeni test eklendi); 15 isteğe bağlı test atlandı |
+| TypeScript ve üretim derlemesi | Hatasız |
+
+**Yeni API testleri:**
+- `tests/document-number-limits.test.ts`:
+  - aynı şirkette seri numara denemeleri, 429 ve `Retry-After`;
+  - reddedilen denemelerin sayılması;
+  - yeni oturum ve sunucu yeniden başlatma;
+  - başka kullanıcı ve şirket;
+  - şirketler arası günlük sınır;
+  - eşzamanlı istekler (25 + 10 paralel istekten tam 5'i geçer);
+  - yetkisiz sorgular;
+  - düzeltme ve yenileme;
+  - veritabanı düzeyinde: başka kullanıcının sayacını okuma, yazma, değiştirme, silme ve boşaltma denemeleri;
+  - yanıt, işlem geçmişi ve günlüklerde numara sızıntısı.
+- `tests/migration-checks.test.ts`:
+  - meşru tabloların denetlenmesi;
+  - RLS'siz yeni şirket tablosu;
+  - ilgisiz tablonun muafiyetten yararlanamaması;
+  - sayaç tablosuna müşteri sütunu, geniş yetki veya fazladan kural eklenmesi;
+  - migration sayıları;
+  - RLS'ye geçen tablonun satır sayısı;
+  - test veritabanının gerçek durumu (ilk 20 migration incelenmiş M1/M2 migration'larıdır).
+
+**Yeni tarayıcı testi:** sınır aşıldığında formun mesajı ve girilen bilgilerin korunması.
+
+**Uyarlanan testler:**
+- Yalnız ekleme yapılabilen sayaç tablosu: eski kayıtlar "eski tarihli" olarak yazılıyor. Sahip rolü bile sayacı değiştiremiyor.
+- `isolation.test.ts`: sayaç tablosunun yalnız SELECT ve INSERT kuralı açıkça denetleniyor.
+- Test veritabanında provadan önce, önceki bir testten kalan 1 sentetik sayaç satırı temizlendi. Test sıfırlaması bunu zaten her çalıştırmada yapar.
+
+### Veritabanları
+- **acarvo_test:**
+  1. İlk prova durdu: tablodaki 1 sentetik satır yüzünden NOT NULL adımı tasarlandığı gibi başarısız oldu ve geri alındı.
+  2. İkinci provada migration uygulandı. Satır sayısı karşılaştırmasının yanlış alarm verdiği görüldü (tablo genel sayımdan şirket sayımına geçmişti); bu düzeltildi ve testlendi.
+  3. Sonuç: `--verify` "sorun yok".
+- **Ana veritabanı (`acarvo`):**
+  1. Önce salt okunur `--verify` çalıştırıldı. Yalnız sayaç tablosunu ve bekleyen 2 migration'ı bildirdi.
+  2. Önce/sonra parmak izleri alındı ve doğrulanmış yedeklendi: `C:\Users\soena\Desktop\acarvo\backups\2026-10-12-15-21-03`.
+  3. Migration'lar uygulandı: 20 → 22. safe-migrate tam doğrulamadan durmadan geçti; `--verify` "sorun yok".
+  4. **Değişiklikler:** yalnız sayaç tablosunda RLS (zorunlu), 2 kural, 1 indeks ve boş tabloya eklenen sütun. Hiçbir yetki genişlemedi, hiçbir kural veya indeks kaldırılmadı.
+  5. **Mevcut veri:** değişmedi. 12.10.2026 15:00–15:01 arasında uygulamadan yapılan 1 giriş ve 1 müşteri kaydı geçişten önce ve sonra birebir aynı.
+
+### Açık konular
+- Gerçek şifreleme anahtarları kurulana kadar numara ve dosya işlemleri kapalı.
+- Bunun dışında anahtar kurulumunu engelleyen teknik bir sorun yok.

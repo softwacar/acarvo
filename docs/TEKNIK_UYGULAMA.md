@@ -484,7 +484,10 @@ Plan ve kararlar: `docs/M2_MUSTERI_BELGELERI_PLANI.md` (§0). Sprint raporu: `do
   - `customer_documents`: şifreli numara, ipucu, özet, tarihler, doğrulama, yenileme bağı, geçersiz sayma;
   - `customer_files`: şifreli dosya kaydı; yalnız şifreli içeriğin özeti;
   - `customer_document_files`: ön, arka ve ek sayfa sürümleri; değiştirilemez;
-  - `user_sensitive_actions`: kullanıcı başına numara açma sayacı; şirket verisi yok.
+  - `user_sensitive_actions`: kalıcı sınır sayaçları (numara açma, girilen numara denemesi). Yalnız kullanıcı, şirket, işlem türü ve zaman tutar; numara, müşteri veya belge tutmaz.
+    - `0020` ile `company_id` eklendi, `0021` ile zorunlu RLS geldi.
+    - Satırı kendi kullanıcısı ve kendi şirketi görür.
+    - Uygulama yalnız kendi adına ve aktif şirkette satır ekleyebilir. UPDATE, DELETE ve TRUNCATE yetkisi yoktur; sayaç sıfırlanamaz.
 - **`0016` kuralları:**
   - zorunlu RLS ve bileşik şirket anahtarları;
   - tetikleyiciler: kimlik sütunları değişmez; geçersiz sayma kesindir; kilitli dönem düzeltilemez; bir numara şirket içinde tek müşteride etkindir; yenileme aynı müşteri ve türde yapılır;
@@ -500,6 +503,20 @@ Plan ve kararlar: `docs/M2_MUSTERI_BELGELERI_PLANI.md` (§0). Sprint raporu: `do
   - `POST /api/customers/:id/documents/:docId/files?side=`;
   - `POST /api/customer-files/:id/access` (`view` / `download`), ardından `GET /api/customer-files/:id`. İzin oturum, şirket, tür, dosya ve amaca bağlıdır; Fetch Metadata denetlenir; GET işlem geçmişi yazmaz.
 - **Numara açma:** `POST …/:docId/reveal-number`. Gerekçe zorunludur; kullanıcı başına saatte 30, veritabanında sayılır; işlem geçmişine numara yazılmaz.
+- **Girilen numara sınırı** (`lib/sensitive-actions.ts`, `DOCUMENT_NUMBER_CHECK_LIMITS`):
+  - **Hangi istekler sayılır:** numara yazılarak yapılan ekleme, düzeltme ve yenileme ile tam eşleşme araması.
+  - **Ne zaman sayılır:** istekten önce, ayrı bir işlemde. Reddedilen denemeler de sayılır.
+  - **Sınırlar:**
+
+    | Kapsam | Pencere | En fazla |
+    |---|---|---|
+    | Kullanıcı, aktif şirkette | 10 dakika | 30 |
+    | Kullanıcı, aktif şirkette | 1 saat | 120 |
+    | Kullanıcı, tüm şirketler | 24 saat | 600 |
+
+  - **Sınır aşılınca:** `429 DOCUMENT_NUMBER_LIMIT` ve `Retry-After` döner; engellenen deneme kaydedilmez.
+  - **Eşzamanlı istekler:** kullanıcı başına kilitle sıraya alınır, sınırı birlikte aşamaz.
+  - **Değişmeyenler:** numarasız işlemler sürer; saklanan numarayla yenileme sayılmaz.
 - **Şubeler:** `PUT /api/branches/:id/country`, `POST /api/branches/country/preview|apply` (açık onay).
 - **Ayarlar:** `GET/PUT /api/settings/customer-documents`, `POST /api/settings/document-requirements/drafts`, `PUT …/:pid/items`, `POST …/:pid/activate` (onay zorunlu), `POST …/:pid/retire`.
 - **Yetkiler:** `customers.documents.read|manage|view|download`, `customers.identity.reveal`, `branches.manage`, `settings.documents.manage`. Hazır rollere `ROLE_PRESET_HISTORY` v4 ile eklenir; özel roller değişmez.
@@ -564,12 +581,20 @@ ACARVO uluslararası kullanılır; bilgisayarın saat dilimi hiçbir zaman sakla
 Sıra her zaman: **yedek → migration → doğrulama → kod**. Kod, migration'ı uygulanmamış bir veritabanına dağıtılmaz (Araç fotoğrafları aşamasında bu sıra bozulduğunda geçici 500 hataları görüldü).
 
 1. **Prova:** `node --env-file=.env scripts/safe-migrate.mjs --test` — aynı süreci `acarvo_test` üzerinde çalıştırır.
+   - **Salt okunur denetim:** `node --env-file=.env scripts/safe-migrate.mjs --verify [--test]`. Veritabanını değiştirmeden migration sayısını ve güvenlik denetimlerini çalıştırır.
 2. **Ne uygulanacak:** `node --env-file=.env scripts/safe-migrate.mjs --dry-run` — ana veritabanında bekleyen migration'ları yalnız listeler (salt okuma).
 3. **Uygulama:** `node --env-file=.env scripts/safe-migrate.mjs` — sırasıyla:
    - doğrulanmış yedek (`scripts/backup-db.mjs`: şema, global veri, her şirketin kendi RLS bağlamında verisi, satır sayısı karşılaştırması, özel depolama kopyası); doğrulanamazsa **durur**;
    - her tablonun (şirket tablolarında şirket bazında) satır sayısı fotoğrafı;
    - migration (Drizzle tek işlemde uygular; hata olursa veritabanı değişmez) + tekrarlanabilir rol şablonu yükseltmesi;
-   - doğrulama: tüm migration'lar uygulanmış mı, hiçbir tabloda satır azalmış mı, RLS'li her tablo hâlâ RLS'li ve zorunlu mu, yeni tablo RLS'siz mi; sorun varsa yedek klasörünü ve geri yükleme adımlarını yazıp **sıfır olmayan kodla durur**.
+   - doğrulama (`scripts/lib/migration-checks.mjs`, testleri `apps/api/tests/migration-checks.test.ts`):
+     - tüm migration'lar uygulanmış mı;
+     - hiçbir tabloda satır azalmış mı (RLS'ye geçen tablonun eski toplamı şirket toplamlarıyla karşılaştırılır);
+     - RLS'li her tablo hâlâ RLS'li ve zorunlu mu;
+     - RLS'siz tablolar yalnız adı sabit dört genel tablo mu (`companies`, `document_types`, `sessions`, `users`); muafiyet kalıbı yoktur;
+     - sayaç tablosu incelenmiş sütun, yetki ve kurallara birebir uyuyor mu.
+
+     Sorun varsa yedek klasörünü ve geri yükleme adımlarını yazıp **sıfır olmayan kodla durur**.
 4. **Kod dağıtımı** ancak bundan sonra.
 
 Üretim ortamı ayarları (sunucu açılışta eksikleri uyarı olarak yazar, `productionWarnings`):
