@@ -81,7 +81,7 @@ export const NAV: NavGroup[] = [
     label: 'Müşteri & Ticari',
     items: [
       { slug: 'musteriler', label: 'Müşteriler', icon: Users, permission: 'customers.read', built: true },
-      { slug: 'kurumsal-hesaplar', label: 'Kurumsal Hesaplar', icon: Buildings },
+      { slug: 'kurumsal-hesaplar', label: 'Kurumsal Hesaplar', icon: Buildings, permission: 'corporate.read', built: true },
       { slug: 'talep-merkezi', label: 'Talep Merkezi', icon: Tray },
       { slug: 'partnerler', label: 'Partnerler', icon: Handshake },
       { slug: 'arac-tedarikcileri', label: 'Araç Tedarikçileri', icon: Truck },
@@ -151,6 +151,8 @@ export const PERMISSION_LABELS: Record<Permission, string> = {
   'customers.documents.view': 'Müşteri belge görüntüsünü açma',
   'customers.documents.download': 'Müşteri belge dosyasını indirme',
   'customers.identity.reveal': 'Tam belge numarasını açma (gerekçeyle)',
+  'corporate.read': 'Kurumsal hesapları görüntüleme',
+  'corporate.manage': 'Kurumsal hesap ekleme, düzenleme ve kişi bağlama',
   'branches.read': 'Şubeleri görüntüleme',
   'branches.manage': 'Şube ülkesini yönetme',
   'settings.documents.manage': 'Müşteri belge gereksinimlerini yönetme',

@@ -21,6 +21,8 @@ export const PERMISSIONS = [
   'customers.documents.view',
   'customers.documents.download',
   'customers.identity.reveal',
+  'corporate.read',
+  'corporate.manage',
   'branches.read',
   'branches.manage',
   'settings.documents.manage',
@@ -66,3 +68,4 @@ export * from './history'
 export * from './time'
 export * from './customers'
 export * from './customer-documents'
+export * from './corporate'

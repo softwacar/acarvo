@@ -120,9 +120,10 @@ export async function customerRoutes(app: FastifyInstance) {
   /** What happened to this customer record. Personal values are not part of the entries, only which fields changed. */
   app.get('/:id/history', async (req) => {
     const id = parseId(req)
-    return withCompany(req, 'customers.read', async (tx) => {
+    return withCompany(req, 'customers.read', async (tx, access) => {
       if (!(await getCustomer(tx, id))) throw notFound(CUSTOMER_NOT_FOUND)
-      return { items: await customerActivity(tx, id) }
+      // Corporate link events name the account: shown only to users who may read corporate accounts.
+      return { items: await customerActivity(tx, id, access.permissions.has('corporate.read')) }
     })
   })
 

@@ -10,6 +10,7 @@ import pg from 'pg'
 import { loadDevData } from '../seed/dev-data'
 import { ensureDevDocumentSettings } from '../seed/dev-documents'
 import { ensureDevFleet } from '../seed/dev-fleet'
+import { ensureTestCorporateAccounts } from '../seed/test-corporate'
 import { ensureTestCustomerDocuments, ensureTestCustomers, ensureTestDocumentPolicies } from '../seed/test-customers'
 import { buildApp } from '../src/app'
 import type { MalwareScanner } from '../src/lib/malware'
@@ -71,7 +72,7 @@ export async function resetDatabase(): Promise<DevData> {
   await ensureTestDatabase()
   passwordHash ??= await hash(PASSWORD, ARGON2_OPTIONS)
   await ownerDb.execute(
-    sql`truncate document_requirement_items, document_requirement_policies, customer_document_settings, customer_document_files, customer_files, customer_documents, user_sensitive_actions, customers, company_sequences, vehicle_document_files, document_files, vehicle_documents, company_document_type_settings, vehicle_promo_photos, files, vehicle_location_corrections, odometer_corrections, vehicle_location_events, odometer_readings, vehicles, vehicle_classes, audit_log, membership_branches, membership_roles, memberships, roles, branches, sessions, users, companies restart identity cascade`,
+    sql`truncate corporate_account_people, corporate_addresses, corporate_tax_ids, corporate_contact_channels, corporate_accounts, document_requirement_items, document_requirement_policies, customer_document_settings, customer_document_files, customer_files, customer_documents, user_sensitive_actions, customers, company_sequences, vehicle_document_files, document_files, vehicle_documents, company_document_type_settings, vehicle_promo_photos, files, vehicle_location_corrections, odometer_corrections, vehicle_location_events, odometer_readings, vehicles, vehicle_classes, audit_log, membership_branches, membership_roles, memberships, roles, branches, sessions, users, companies restart identity cascade`,
   )
   const data = await loadDevData(ownerDb, passwordHash)
   await ensureDevFleet(ownerDb)
@@ -79,6 +80,7 @@ export async function resetDatabase(): Promise<DevData> {
   await ensureTestCustomers(ownerDb)
   await ensureTestCustomerDocuments(ownerDb, customerCryptoFromEnv(env).crypto!)
   await ensureTestDocumentPolicies(ownerDb)
+  await ensureTestCorporateAccounts(ownerDb)
   return data
 }
 

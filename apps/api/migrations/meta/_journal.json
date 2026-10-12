@@ -155,6 +155,20 @@
       "when": 1791817477454,
       "tag": "0021_sensitive_actions_rls",
       "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1791834220353,
+      "tag": "0022_corporate_accounts",
+      "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1791834221831,
+      "tag": "0023_corporate_accounts_rls",
+      "breakpoints": true
     }
   ]
 }

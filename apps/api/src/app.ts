@@ -22,6 +22,7 @@ import { createScanner, type MalwareScanner } from './lib/malware'
 import { vehicleClassRoutes, vehicleRoutes } from './modules/vehicles/routes'
 import { MAX_PHOTO_BYTES } from './lib/images'
 import { createStorage } from './lib/storage'
+import { corporateRoutes, customerCorporateLinkRoutes } from './modules/corporate/routes'
 import { registerAuth } from './plugins/auth'
 import { registerSecurity } from './plugins/security'
 
@@ -86,5 +87,7 @@ export async function buildApp({
   await app.register(customerDocumentFileRoutes, { prefix: '/api/customers' })
   await app.register(customerFileRoutes, { prefix: '/api/customer-files' })
   await app.register(documentRequirementRoutes, { prefix: '/api/settings' })
+  await app.register(corporateRoutes, { prefix: '/api/corporate-accounts' })
+  await app.register(customerCorporateLinkRoutes, { prefix: '/api/customers' })
   return app
 }
