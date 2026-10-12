@@ -94,6 +94,42 @@ test.describe('signed in', () => {
     await audit(page, 'subeler')
   })
 
+  test('corporate list, 360° tabs, forms, link panel and dialogs', async ({ page }) => {
+    await page.goto('/kurumsal-hesaplar')
+    await expect(page.getByRole('link', { name: 'Örnek Lojistik d.o.o.' })).toBeVisible()
+    await audit(page, 'kurumsal hesaplar')
+    await page.getByRole('link', { name: 'Örnek Lojistik d.o.o.' }).click()
+    await expect(page.getByRole('heading', { name: 'Örnek Lojistik d.o.o.' })).toBeVisible()
+    await audit(page, 'kurumsal 360 genel')
+    for (const [tab, label] of [
+      [/^Adresler/, 'adresler'],
+      [/^Vergi bilgileri/, 'vergi'],
+      [/^Sürücüler/, 'suruculer'],
+      ['Geçmiş', 'gecmis'],
+      ['Cari / Finans', 'cari bekliyor'],
+    ] as const) {
+      await page.getByRole('tab', { name: tab }).click()
+      await audit(page, `kurumsal ${label}`)
+    }
+    await page.getByRole('tab', { name: /^Kişiler/ }).click()
+    await page.getByRole('button', { name: 'Kişi bağla' }).click()
+    await page.getByRole('dialog', { name: 'Kişi bağla' }).getByLabel('Müşterilerde ara').fill('Tarik')
+    await expect(page.getByRole('list', { name: 'Arama sonuçları' })).toBeVisible()
+    await audit(page, 'kisi bagla')
+    await page.keyboard.press('Escape')
+    await page.getByRole('button', { name: 'Diğer işlemler' }).click()
+    await page.getByRole('menuitem', { name: 'Hesabı arşivle' }).click()
+    await audit(page, 'arsiv diyalogu')
+    await page.keyboard.press('Escape')
+    await page.goto('/kurumsal-hesaplar')
+    await page.getByRole('button', { name: 'Yeni kurumsal hesap' }).click()
+    const form = page.getByRole('dialog', { name: 'Yeni kurumsal hesap' })
+    await form.getByRole('button', { name: 'Hesabı kaydet' }).click()
+    await form.locator('#email').fill('info@ornek-lojistik.example.test')
+    await expect(form.getByRole('region', { name: 'Benzer kurumsal hesaplar' })).toBeVisible()
+    await audit(page, 'yeni kurumsal hesap hatalar ve benzer kayit')
+  })
+
   test('side panels trap focus, close with Escape and give focus back', async ({ page }) => {
     await openVehicle(page, 'A12-K-345', 'Konum ve geçmiş')
     const opener = page.getByRole('button', { name: 'Konumu güncelle' })

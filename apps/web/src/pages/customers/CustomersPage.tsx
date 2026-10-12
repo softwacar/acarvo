@@ -269,7 +269,7 @@ export function CustomersPage() {
           <div className="flex items-start gap-4 border-b border-line-soft bg-ground/50 px-4 py-2 text-[12.5px] text-ink-2 sm:px-5">
             <p className="flex flex-1 items-start gap-2">
               <Info size={15} className="mt-px shrink-0 text-ink-3" />
-              Kimlik ve ehliyet belgeleri, kurumsal hesap bağlantıları ve kiralama geçmişi ilgili aşamalar geliştirildiğinde bu listede gösterilecek.
+              Kişilerin kurumsal hesap bağlantıları Müşteri 360° ve Kurumsal Hesaplar ekranlarında; kiralama geçmişi ilgili modül geliştirildiğinde gösterilecek.
             </p>
             <span className="tnum shrink-0 font-medium text-ink" aria-live="polite">
               {data ? `${data.total} ${statusLabel}` : ''}

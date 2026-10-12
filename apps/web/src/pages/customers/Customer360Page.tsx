@@ -27,12 +27,13 @@ import {
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useNavigate, useParams, useSearch } from '@tanstack/react-router'
 import { Dialog, DropdownMenu } from 'radix-ui'
-import { type ReactNode, useEffect, useRef, useState } from 'react'
+import { type ReactNode, useEffect, useId, useRef, useState } from 'react'
 import { Field, Select } from '@/components/fields'
 import { ErrorState, StatePanel } from '@/components/states'
 import { toast } from '@/components/Toaster'
 import { useReturnFocus } from '@/components/useReturnFocus'
-import { ApiRequestError, customerDocumentsApi as customersDocsApi, customersApi } from '@/lib/api'
+import { ApiRequestError, corporateApi, customerDocumentsApi as customersDocsApi, customersApi } from '@/lib/api'
+import { PERSON_ROLE_LABELS } from '@/lib/corporate-labels'
 import {
   ARCHIVE_REASON_LABELS,
   CONTACT_PREFERENCE_LABELS,
@@ -89,10 +90,12 @@ const PENDING: Partial<Record<CustomerTab, { icon: Icon; module: string; will: s
 // Building blocks
 
 function Panel({ title, action, children, className }: { title: string; action?: ReactNode; children: ReactNode; className?: string }) {
+  // Named by its heading, so screen readers list the panels as regions.
+  const headingId = useId()
   return (
-    <section className={cn('rounded-xl border border-line bg-surface p-5', className)}>
+    <section aria-labelledby={headingId} className={cn('rounded-xl border border-line bg-surface p-5', className)}>
       <div className="mb-3 flex items-center justify-between gap-3">
-        <h2 className="text-[15px] font-semibold tracking-[-0.01em]">{title}</h2>
+        <h2 id={headingId} className="text-[15px] font-semibold tracking-[-0.01em]">{title}</h2>
         {action}
       </div>
       {children}
@@ -117,7 +120,7 @@ function Facts({ rows, columns = 2 }: { rows: [string, ReactNode][]; columns?: 1
 const btnPrimary = 'inline-flex h-10 items-center gap-2 rounded-lg bg-blue px-4 font-medium text-white transition-colors hover:bg-blue-ink'
 const btnSecondary = 'inline-flex h-10 items-center gap-2 rounded-lg border border-line bg-surface px-4 font-medium text-ink transition-colors hover:bg-line-soft'
 
-const LATER_ACTIONS = ['Rezervasyon oluştur', 'Kiralama aç', 'Kurumsal hesaba bağla', 'İletişim kaydı ekle']
+const LATER_ACTIONS = ['Rezervasyon oluştur', 'Kiralama aç', 'İletişim kaydı ekle']
 
 function MoreMenu({ c, canManage, onArchive, onRestore }: { c: CustomerDetail; canManage: boolean; onArchive: () => void; onRestore: () => void }) {
   return (
@@ -358,11 +361,59 @@ function DocumentsState({ c }: { c: CustomerDetail }) {
   return <span className="inline-flex items-center gap-1 text-ok"><CheckCircle size={14} weight="fill" />{current.length} belge</span>
 }
 
+/** Corporate links of the person (M3): only for users who may read corporate accounts. */
+function useCorporateLinks(c: CustomerDetail) {
+  const session = useSession()
+  const allowed = can(session, 'corporate.read')
+  const q = useQuery({ queryKey: ['customer-corporate-links', session.company?.id, c.id], queryFn: () => corporateApi.customerLinks(c.id), enabled: allowed })
+  return { allowed, q }
+}
+
+function CorporateLinksState({ c }: { c: CustomerDetail }) {
+  const { allowed, q } = useCorporateLinks(c)
+  if (!allowed) return <span className="text-ink-3">Yetki gerekli</span>
+  if (!q.data) return <span className="text-ink-3">…</span>
+  const active = q.data.items.filter((l) => l.active).length
+  return active ? <span className="text-ink">{active} kurumsal hesap</span> : <span className="text-ink-3">Bağlı değil</span>
+}
+
+function CorporateLinksPanel({ c }: { c: CustomerDetail }) {
+  const { allowed, q } = useCorporateLinks(c)
+  if (!allowed || !q.data || q.data.items.length === 0) return null
+  const active = q.data.items.filter((l) => l.active)
+  const ended = q.data.items.filter((l) => !l.active)
+  return (
+    <Panel title="Kurumsal ilişkiler">
+      <ul className="divide-y divide-line-soft">
+        {[...active, ...ended].map((l) => (
+          <li key={l.id} className={cn('flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 py-2.5', !l.active && 'opacity-70')}>
+            <span className="min-w-0">
+              <Link to="/kurumsal-hesaplar/$accountId" params={{ accountId: l.account.id }} className="font-medium text-ink hover:text-blue-ink hover:underline">
+                {l.account.legalName}
+              </Link>
+              <span className="tnum ml-2 text-[12.5px] text-ink-2">{l.account.accountNo}</span>
+              {l.account.status === 'archived' && <span className="ml-1 text-[12.5px] text-ink-2">· hesap arşivde</span>}
+            </span>
+            <span className="text-[12.5px] text-ink-2">
+              {l.roles.map((r) => PERSON_ROLE_LABELS[r]).join(', ')}
+              {!l.active && ` · ${l.endedAt ? formatDate(l.endedAt) : ''} sona erdi`}
+            </span>
+          </li>
+        ))}
+      </ul>
+      <p className="mt-3 flex items-start gap-1.5 text-[12.5px] text-ink-2">
+        <Info size={14} className="mt-[3px] shrink-0 text-ink-3" />
+        Aynı kişi birden fazla hesapta farklı rollerle yer alabilir; kişinin bilgileri tek kayıtta tutulur.
+      </p>
+    </Panel>
+  )
+}
+
 function FileStatus({ c, onTab }: { c: CustomerDetail; onTab: (t: CustomerTab) => void }) {
   const rows: [Icon, string, ReactNode, CustomerTab | null][] = [
     [UserCircle, 'Kişi ve iletişim bilgileri', <span className="inline-flex items-center gap-1 text-ok"><CheckCircle size={14} weight="fill" />Kayıtlı</span>, null],
     [IdentificationCard, 'Kimlik ve ehliyet belgeleri', <DocumentsState c={c} />, 'belgeler'],
-    [Buildings, 'Kurumsal hesap bağlantıları', <span className="text-ink-3">Henüz bağlı değil</span>, null],
+    [Buildings, 'Kurumsal hesap bağlantıları', <CorporateLinksState c={c} />, null],
     [CalendarCheck, 'Rezervasyonlar', <span className="text-ink-3">Henüz bağlı değil</span>, 'rezervasyonlar'],
     [Key, 'Kiralamalar', <span className="text-ink-3">Henüz bağlı değil</span>, 'kiralamalar'],
     [Coins, 'Cari hesap', <span className="text-ink-3">Finans modülüyle</span>, 'cari'],
@@ -443,6 +494,7 @@ function Overview({ c, canManage, onEdit, onTab }: { c: CustomerDetail; canManag
             </p>
           )}
         </Panel>
+        <CorporateLinksPanel c={c} />
         <Panel title="Operasyonel not" action={edit}>
           {c.operationalNote ? <p className="whitespace-pre-line text-ink">{c.operationalNote}</p> : <p className="text-ink-2">Not yok.</p>}
         </Panel>

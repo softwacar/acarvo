@@ -1,4 +1,4 @@
-import type { ApiError, CustomerActivityItem, CustomerDocument, CustomerDocumentsResponse, CustomerDocumentStatus, RequirementItem, RequirementPolicy, CustomerDetail, CustomerDuplicateResponse, CustomerListResponse, HistoryWriteResult, SessionInfo, VehicleActivityItem, VehicleDocumentDetail, VehicleDocumentsResponse, VehiclePhoto, VehiclePhotoList, VehicleClassSummary, VehicleDetail, VehicleHistory, VehicleListResponse } from '@acarvo/shared'
+import type { ApiError, CorporateActivityItem, CorporateDetail, CorporateDuplicateMatch, CorporateListResponse, CorporatePeopleResponse, CustomerCorporateLink, CustomerActivityItem, CustomerDocument, CustomerDocumentsResponse, CustomerDocumentStatus, RequirementItem, RequirementPolicy, CustomerDetail, CustomerDuplicateResponse, CustomerListResponse, HistoryWriteResult, SessionInfo, VehicleActivityItem, VehicleDocumentDetail, VehicleDocumentsResponse, VehiclePhoto, VehiclePhotoList, VehicleClassSummary, VehicleDetail, VehicleHistory, VehicleListResponse } from '@acarvo/shared'
 
 export class ApiRequestError extends Error {
   constructor(
@@ -189,6 +189,29 @@ export const customersApi = {
   archive: (id: string, version: number, reason: string) => api<CustomerDetail>(`/customers/${id}/archive`, { method: 'POST', body: { version, reason } }),
   restore: (id: string, version: number) => api<CustomerDetail>(`/customers/${id}/restore`, { method: 'POST', body: { version } }),
   duplicates: (body: Record<string, unknown>) => api<CustomerDuplicateResponse>('/customers/duplicate-check', { method: 'POST', body }),
+}
+
+type SubKind = 'channels' | 'tax-ids' | 'addresses'
+
+/** Corporate accounts (M3). Search text, tax ids and contacts travel in request bodies only. */
+export const corporateApi = {
+  search: (body: Record<string, unknown>) => api<CorporateListResponse>('/corporate-accounts/search', { method: 'POST', body }),
+  get: (id: string) => api<CorporateDetail>(`/corporate-accounts/${id}`),
+  history: (id: string) => api<{ items: CorporateActivityItem[] }>(`/corporate-accounts/${id}/history`),
+  create: (body: unknown) => api<CorporateDetail>('/corporate-accounts', { method: 'POST', body }),
+  update: (id: string, body: unknown) => api<CorporateDetail>(`/corporate-accounts/${id}`, { method: 'PUT', body }),
+  archive: (id: string, version: number, reason: string) => api<CorporateDetail>(`/corporate-accounts/${id}/archive`, { method: 'POST', body: { version, reason } }),
+  restore: (id: string, version: number, reason: string) => api<CorporateDetail>(`/corporate-accounts/${id}/restore`, { method: 'POST', body: { version, reason } }),
+  duplicates: (body: Record<string, unknown>) => api<{ matches: CorporateDuplicateMatch[] }>('/corporate-accounts/duplicate-check', { method: 'POST', body }),
+  addRecord: (id: string, kind: SubKind, body: unknown) => api<CorporateDetail>(`/corporate-accounts/${id}/${kind}`, { method: 'POST', body }),
+  updateRecord: (id: string, kind: SubKind, recordId: string, body: unknown) => api<CorporateDetail>(`/corporate-accounts/${id}/${kind}/${recordId}`, { method: 'PUT', body }),
+  removeRecord: (id: string, kind: SubKind, recordId: string, version: number) =>
+    api<CorporateDetail & { promotedAddressId?: string | null }>(`/corporate-accounts/${id}/${kind}/${recordId}/remove`, { method: 'POST', body: { version } }),
+  people: (id: string) => api<CorporatePeopleResponse>(`/corporate-accounts/${id}/people`),
+  link: (id: string, body: unknown) => api<{ id: string }>(`/corporate-accounts/${id}/people`, { method: 'POST', body }),
+  updateLink: (id: string, linkId: string, body: unknown) => api<{ id: string }>(`/corporate-accounts/${id}/people/${linkId}`, { method: 'PUT', body }),
+  endLink: (id: string, linkId: string, version: number, reason: string) => api<{ id: string }>(`/corporate-accounts/${id}/people/${linkId}/end`, { method: 'POST', body: { version, reason } }),
+  customerLinks: (customerId: string) => api<{ items: CustomerCorporateLink[] }>(`/customers/${customerId}/corporate-links`),
 }
 
 /** Customer documents (M2). Numbers are sent in bodies only and come back masked; the full number only from reveal. */

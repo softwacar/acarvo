@@ -1,4 +1,4 @@
-import { CUSTOMER_TABS, type CustomerTab, VEHICLE_TABS, type VehicleTab } from '@acarvo/shared'
+import { CORPORATE_TABS, type CorporateTab, CUSTOMER_TABS, type CustomerTab, VEHICLE_TABS, type VehicleTab } from '@acarvo/shared'
 import type { QueryClient } from '@tanstack/react-query'
 import { createRootRouteWithContext, createRoute, createRouter, lazyRouteComponent, Outlet, redirect, useParams } from '@tanstack/react-router'
 import { AppLayout } from './components/AppLayout'
@@ -12,6 +12,7 @@ import { ProfilePage } from './pages/ProfilePage'
 import { VehiclesPage } from './pages/vehicles/VehiclesPage'
 import { validateVehicleSearch } from './pages/vehicles/search'
 import { validateCustomerSearch } from './pages/customers/search'
+import { validateCorporateSearch } from './pages/corporate/search'
 import { sessionQuery } from './session'
 
 const rootRoute = createRootRouteWithContext<{ queryClient: QueryClient }>()({
@@ -82,6 +83,19 @@ const customer360Route = createRoute({
     (CUSTOMER_TABS as readonly string[]).includes(s.sekme as string) && s.sekme !== 'genel' ? { sekme: s.sekme as CustomerTab } : {},
   component: lazyRouteComponent(() => import('./pages/customers/Customer360Page'), 'Customer360Page'),
 })
+const corporateRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/kurumsal-hesaplar',
+  validateSearch: validateCorporateSearch,
+  component: lazyRouteComponent(() => import('./pages/corporate/CorporatePage'), 'CorporatePage'),
+})
+const corporate360Route = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/kurumsal-hesaplar/$accountId',
+  validateSearch: (s: Record<string, unknown>): { sekme?: CorporateTab } =>
+    (CORPORATE_TABS as readonly string[]).includes(s.sekme as string) && s.sekme !== 'genel' ? { sekme: s.sekme as CorporateTab } : {},
+  component: lazyRouteComponent(() => import('./pages/corporate/Corporate360Page'), 'Corporate360Page'),
+})
 const settingsRoute = createRoute({
   getParentRoute: () => appRoute,
   path: '/ayarlar',
@@ -97,7 +111,7 @@ const moduleRoute = createRoute({
   },
 })
 
-const routeTree = rootRoute.addChildren([loginRoute, appRoute.addChildren([indexRoute, branchesRoute, vehiclesRoute, vehicleNewRoute, vehicle360Route, vehicleEditRoute, customersRoute, customer360Route, settingsRoute, profileRoute, moduleRoute])])
+const routeTree = rootRoute.addChildren([loginRoute, appRoute.addChildren([indexRoute, branchesRoute, vehiclesRoute, vehicleNewRoute, vehicle360Route, vehicleEditRoute, customersRoute, customer360Route, corporateRoute, corporate360Route, settingsRoute, profileRoute, moduleRoute])])
 
 export function createAppRouter(queryClient: QueryClient) {
   return createRouter({ routeTree, context: { queryClient }, defaultPreload: 'intent', scrollRestoration: true })

@@ -129,3 +129,38 @@ test('phone: customer documents tab, detail panel and reveal fit the screen', as
   await expect(reveal.getByTestId('revealed-number')).toBeInViewport()
   await expectNoHorizontalOverflow(page)
 })
+
+test('phone: corporate list, 360° tabs, record and link panels fit the screen', async ({ page }) => {
+  await page.goto('/kurumsal-hesaplar')
+  await expect(page.getByRole('link', { name: 'Örnek Lojistik d.o.o.' })).toBeVisible()
+  // Number and people count sit under the name; nothing scrolls sideways.
+  await expect(page.locator('tbody tr').first()).toContainText('K-0000')
+  await expectNoHorizontalOverflow(page)
+  await page.getByRole('button', { name: 'Yeni kurumsal hesap' }).click()
+  const form = page.getByRole('dialog', { name: 'Yeni kurumsal hesap' })
+  expect(Math.round((await form.boundingBox())!.width)).toBe(390)
+  await expect(form.getByRole('button', { name: 'Hesabı kaydet' })).toBeInViewport()
+  await page.keyboard.press('Escape')
+  await page.getByRole('link', { name: 'Örnek Lojistik d.o.o.' }).click()
+  await expect(page.getByRole('heading', { name: 'Örnek Lojistik d.o.o.' })).toBeVisible()
+  await expectNoHorizontalOverflow(page)
+  const call = page.getByRole('link', { name: '+387 33 000 501' }).first()
+  expect((await call.boundingBox())!.height).toBeGreaterThanOrEqual(36)
+  await page.getByRole('tab', { name: /^Vergi bilgileri/ }).click()
+  const visible = await page.evaluate(() => {
+    const el = document.querySelector('[role=tab][aria-selected=true]')!
+    const bar = el.parentElement!.getBoundingClientRect()
+    const r = el.getBoundingClientRect()
+    return r.left >= bar.left - 1 && r.right <= bar.right + 1
+  })
+  expect(visible).toBe(true)
+  // Row actions stay reachable and large enough to tap.
+  const edit = page.getByRole('button', { name: /PDV TEST-PDV-200501 düzenle/ })
+  expect((await edit.boundingBox())!.height).toBeGreaterThanOrEqual(36)
+  await page.getByRole('button', { name: 'Vergi kimliği ekle' }).click()
+  await expect(page.getByRole('dialog', { name: 'Vergi kimliği ekle' }).getByRole('button', { name: 'Kaydet' })).toBeInViewport()
+  await page.keyboard.press('Escape')
+  await page.getByRole('tab', { name: /^Sürücüler/ }).click()
+  await expect(page.locator('li', { hasText: 'Ajla Testović' })).toContainText('Ehliyet')
+  await expectNoHorizontalOverflow(page)
+})
