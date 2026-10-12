@@ -126,11 +126,19 @@ describe('typed document numbers are limited in the database', () => {
     expect((await lookup(lejla, 'TEST-BA-1001')).json().matches.map((m: { displayName: string }) => m.displayName)).toEqual(['Dino Neretvić'])
   })
 
-  it('the daily limit counts one user across all companies', async () => {
+  it('the daily limit counts the same user’s attempts in every company, and the answer names no other company', async () => {
     await clearCounters()
     // 600 checks earlier today, outside the hourly windows, split over both companies.
     await fill(data.companies.drina, users.adnan!, 300, 120)
     await fill(data.companies.neretva, users.adnan!, 300, 120)
+    const blocked = await lookup(adnan, 'TEST-DAY-1')
+    expect(blocked.json().error.code).toBe('DOCUMENT_NUMBER_LIMIT')
+    expect(blocked.body).not.toMatch(/Neretva|company/i)
+    // 599 in total is still allowed: the cap is the sum over both companies, not each company's share.
+    await clearCounters()
+    await fill(data.companies.drina, users.adnan!, 299, 120)
+    await fill(data.companies.neretva, users.adnan!, 300, 120)
+    expect((await lookup(adnan, 'TEST-DAY-0')).statusCode).toBe(200)
     expect((await lookup(adnan, 'TEST-DAY-1')).json().error.code).toBe('DOCUMENT_NUMBER_LIMIT')
     expect((await adnan.post('/api/auth/switch-company', { companyId: data.companies.neretva })).statusCode).toBe(200)
     try {
@@ -216,6 +224,14 @@ describe('counters at database level (runtime role)', () => {
     expect(await as(null, users.lejla!, (c) => c.query('select count(*)::int n from user_sensitive_actions').then((r) => r.rows[0].n))).toBe(2)
     // Adnan sees his own rows in every company context (limits that count across companies).
     expect(await as(data.companies.neretva, users.adnan!, (c) => count(c, users.adnan!))).toBe(3)
+    // Adnan is a member of both companies: in Drina he never sees Lejla's Neretva counters, and in Neretva he sees
+    // Neretva's rows (Lejla's) but none of another Drina user's.
+    await fill(data.companies.drina, users.selma!, 4)
+    expect(await as(data.companies.drina, users.adnan!, (c) => count(c, users.lejla!))).toBe(0)
+    expect(await as(data.companies.neretva, users.adnan!, (c) => count(c, users.selma!))).toBe(0)
+    expect(await as(data.companies.neretva, users.adnan!, (c) => count(c, users.lejla!))).toBe(2)
+    // Without a company context only his own rows, from both companies.
+    expect(await as(null, users.adnan!, (c) => c.query('select count(*)::int n, count(distinct company_id)::int companies from user_sensitive_actions').then((r) => r.rows[0]))).toEqual({ n: 3, companies: 1 })
     // Writing for another user or into another company is refused.
     await expect(as(data.companies.neretva, users.lejla!, (c) => c.query(`insert into user_sensitive_actions (user_id, company_id, action) values ($1, $2, 'document_number_check')`, [users.adnan, data.companies.neretva]))).rejects.toThrow(/row-level security/)
     await expect(as(data.companies.neretva, users.lejla!, (c) => c.query(`insert into user_sensitive_actions (user_id, company_id, action) values ($1, $2, 'document_number_check')`, [users.lejla, data.companies.drina]))).rejects.toThrow(/row-level security/)
