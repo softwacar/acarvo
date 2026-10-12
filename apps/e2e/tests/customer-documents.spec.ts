@@ -207,3 +207,30 @@ test('as a manager (Yönetici): may view a document image, but not download it o
   if (process.env.SCREENSHOTS) await page.screenshot({ path: path.join(import.meta.dirname, '..', 'screenshots', 'm2', '10-yonetici-ayrinti-1440.png') })
   await ctx.close()
 })
+
+test.describe('number check limit', () => {
+  test.use({ storageState: authFile('adnan') })
+
+  test('over the limit the form says why and how long to wait, and keeps what was typed (simulated 429)', async ({ page }) => {
+    // The limit itself is tested against the database in the API tests; here only how the screen answers it.
+    await page.route('**/api/customers/*/documents', async (route) => {
+      if (route.request().method() !== 'POST') return route.continue()
+      await route.fulfill({
+        status: 429,
+        headers: { 'retry-after': '420' },
+        json: { error: { code: 'DOCUMENT_NUMBER_LIMIT', message: 'Kısa sürede çok sayıda belge numarası girildi. Güvenlik nedeniyle numara içeren işlemler geçici olarak durduruldu; yaklaşık 7 dakika sonra tekrar deneyin. Numarasız işlemler devam edebilir.', details: { retryAfterSeconds: 420 } } },
+      })
+    })
+    await openDocuments(page, 'Emir Primjerović')
+    await page.getByRole('button', { name: 'Belge ekle' }).first().click()
+    const form = page.getByRole('dialog', { name: 'Belge ekle' })
+    await form.getByLabel('Belge türü').selectOption('passport')
+    await form.getByLabel('Düzenleyen ülke').selectOption('BA')
+    await form.getByLabel('Belge numarası').fill('TEST-LIMIT-1')
+    await form.getByLabel('Son geçerlilik').fill('2034-03-01')
+    await form.getByRole('button', { name: 'Belgeyi kaydet' }).click()
+    await expect(form.getByText('yaklaşık 7 dakika sonra tekrar deneyin', { exact: false })).toBeVisible()
+    await expect(form.getByLabel('Belge numarası')).toHaveValue('TEST-LIMIT-1')
+    await expect(form).toBeVisible()
+  })
+})

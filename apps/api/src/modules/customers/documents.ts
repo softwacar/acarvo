@@ -17,6 +17,7 @@ import {
   validateDocumentUpdate,
   type CustomerDocumentStatus,
   evaluateRequirements,
+  type Permission,
 } from '@acarvo/shared'
 import { sql } from 'drizzle-orm'
 import type { FastifyInstance, FastifyRequest } from 'fastify'
@@ -27,6 +28,7 @@ import { audit } from '../../lib/audit'
 import { documentUploadPolicy } from '../../lib/malware'
 import type { CustomerCrypto } from '../../lib/customer-crypto'
 import { AppError, notFound } from '../../lib/errors'
+import { consumeSensitiveAction, DOCUMENT_NUMBER_CHECK_LIMITS } from '../../lib/sensitive-actions'
 import { toIso } from '../../lib/timestamps'
 import { withCompany } from '../../plugins/auth'
 import type { CompanyAccess } from '../auth/context'
@@ -224,6 +226,36 @@ const docAudit = (tx: Tx, access: CompanyAccess, req: FastifyRequest, action: st
   audit(tx, { companyId: access.companyId, actorUserId: req.auth!.user.id, action, entity: 'customer_document', entityId: docId, summary: { customerId: customer.id, customerNo: customer.customerNo, ...summary } })
 
 export async function customerDocumentRoutes(app: FastifyInstance) {
+  /**
+   * Counts a typed document number (DOCUMENT_NUMBER_CHECK_LIMITS) in its own committed transaction before the request
+   * runs, so refused attempts (number in use, invalid fields, conflicts) count too. Needs the same permission as the
+   * request; without keys nothing is compared and nothing is counted. The number itself is never stored or logged.
+   */
+  async function chargeNumberCheck(req: FastifyRequest, permission: Permission, also?: Permission) {
+    if (!app.customerCrypto) return
+    try {
+      await withCompany(req, permission, async (tx, access) => {
+        if (also && !access.permissions.has(also)) throw new AppError(403, 'FORBIDDEN', 'Bu işlem için yetkiniz yok.')
+        await consumeSensitiveAction(tx, {
+          userId: req.auth!.user.id,
+          companyId: access.companyId,
+          action: 'document_number_check',
+          limits: DOCUMENT_NUMBER_CHECK_LIMITS,
+          code: 'DOCUMENT_NUMBER_LIMIT',
+          message: (minutes) =>
+            `Kısa sürede çok sayıda belge numarası girildi. Güvenlik nedeniyle numara içeren işlemler geçici olarak durduruldu; yaklaşık ${minutes} dakika sonra tekrar deneyin. Numarasız işlemler devam edebilir.`,
+        })
+      })
+    } catch (e) {
+      if (e instanceof AppError && e.status === 429) req.log.warn({ userId: req.auth?.user.id, code: e.code }, 'document number check limit reached')
+      throw e
+    }
+  }
+  const typedNumber = (body: unknown) => {
+    const n = (body as { number?: unknown } | null | undefined)?.number
+    return typeof n === 'string' && n.trim() !== ''
+  }
+
   const context = async (tx: Tx, access: CompanyAccess) => ({ today: await companyToday(tx, access), warningDays: await documentWarningDays(tx) })
   const one = async (tx: Tx, access: CompanyAccess, customerId: string, docId: string) => {
     const { today, warningDays } = await context(tx, access)
@@ -242,6 +274,7 @@ export async function customerDocumentRoutes(app: FastifyInstance) {
 
   app.post('/:id/documents', async (req, reply) => {
     const { id } = parse(custParams, req.params, CUSTOMER_NOT_FOUND)
+    if (typedNumber(req.body)) await chargeNumberCheck(req, 'customers.documents.manage')
     const created = await withCompany(req, 'customers.documents.manage', async (tx, access) => {
       const input = customerDocumentCreateSchema.parse(req.body)
       const customer = await activeCustomer(tx, id)
@@ -284,6 +317,7 @@ export async function customerDocumentRoutes(app: FastifyInstance) {
   /** Corrects a period. The stored number is replaced only when a new one is typed. */
   app.put('/:id/documents/:docId', async (req) => {
     const { id, docId } = parse(docParams, req.params, DOCUMENT_NOT_FOUND)
+    if (typedNumber(req.body)) await chargeNumberCheck(req, 'customers.documents.manage')
     return withCompany(req, 'customers.documents.manage', async (tx, access) => {
       const input = customerDocumentUpdateSchema.parse(req.body)
       const customer = await activeCustomer(tx, id)
@@ -348,6 +382,7 @@ export async function customerDocumentRoutes(app: FastifyInstance) {
   /** New period of the same document; the previous period and its files stay unchanged. */
   app.post('/:id/documents/:docId/renew', async (req, reply) => {
     const { id, docId } = parse(docParams, req.params, DOCUMENT_NOT_FOUND)
+    if (typedNumber(req.body)) await chargeNumberCheck(req, 'customers.documents.manage')
     const created = await withCompany(req, 'customers.documents.manage', async (tx, access) => {
       const input = customerDocumentRenewSchema.parse(req.body)
       const customer = await activeCustomer(tx, id)
@@ -462,13 +497,15 @@ export async function customerDocumentRoutes(app: FastifyInstance) {
 
   /**
    * Finds the customer holding an exact document number, inside the active company only. The number travels in the
-   * body, is compared as a per-company HMAC and is never logged or returned. Rate limited against sweeping.
+   * body, is compared as a per-company HMAC and is never logged or returned. Rate limited against sweeping: per minute in
+   * memory and DOCUMENT_NUMBER_CHECK_LIMITS in the database (shared with typed numbers in create, correct and renew).
    */
   app.post(
     '/document-lookup',
     { config: { rateLimit: { max: 30, timeWindow: '1 minute', keyGenerator: (req: FastifyRequest) => `doc-lookup|${req.auth?.user.id ?? req.ip}` } } },
-    async (req) =>
-      withCompany(req, 'customers.documents.read', async (tx, access) => {
+    async (req) => {
+      await chargeNumberCheck(req, 'customers.documents.read', 'customers.read')
+      return withCompany(req, 'customers.documents.read', async (tx, access) => {
         if (!access.permissions.has('customers.read')) throw new AppError(403, 'FORBIDDEN', 'Bu işlem için yetkiniz yok.')
         const input = documentLookupSchema.parse(req.body)
         const crypto = requireCrypto(app.customerCrypto)
@@ -481,6 +518,7 @@ export async function customerDocumentRoutes(app: FastifyInstance) {
             limit 5`)
         ).rows as Row[]
         return { matches: rows.map((r) => ({ id: r.id as string, customerNo: r.customer_no as string, displayName: r.display_name as string, status: r.status as string })) }
-      }),
+      })
+    },
   )
 }

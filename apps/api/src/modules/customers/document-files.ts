@@ -16,6 +16,7 @@ import { audit } from '../../lib/audit'
 import { validateDocumentFile } from '../../lib/document-files'
 import { documentUploadPolicy } from '../../lib/malware'
 import { AppError, forbidden, notFound } from '../../lib/errors'
+import { consumeSensitiveAction } from '../../lib/sensitive-actions'
 import { withCompany } from '../../plugins/auth'
 import { UPLOAD_RATE_LIMIT } from '../../plugins/security'
 import { companyToday } from '../vehicles/document-overview'
@@ -129,13 +130,15 @@ export async function customerDocumentFileRoutes(app: FastifyInstance) {
       if (!d) throw notFound(DOCUMENT_NOT_FOUND)
       if (d.number_ciphertext == null) throw new AppError(409, 'NO_NUMBER', 'Bu belgede kayıtlı numara yok.')
       const userId = req.auth!.user.id
-      await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${`number-reveal:${userId}`}, 0))`)
-      const used = (await tx.execute(sql`select count(*)::int as n from user_sensitive_actions where user_id = ${userId} and action = 'document_number_reveal' and at > now() - interval '1 hour'`)).rows[0] as { n: number }
-      if (used.n >= NUMBER_REVEAL_LIMIT_PER_HOUR) {
-        throw new AppError(429, 'REVEAL_LIMIT', `Bir saat içinde en fazla ${NUMBER_REVEAL_LIMIT_PER_HOUR} belge numarası açılabilir. Daha sonra tekrar deneyin.`)
-      }
+      const { remaining } = await consumeSensitiveAction(tx, {
+        userId,
+        companyId: access.companyId,
+        action: 'document_number_reveal',
+        limits: [{ scope: 'user', minutes: 60, max: NUMBER_REVEAL_LIMIT_PER_HOUR }],
+        code: 'REVEAL_LIMIT',
+        message: () => `Bir saat içinde en fazla ${NUMBER_REVEAL_LIMIT_PER_HOUR} belge numarası açılabilir. Daha sonra tekrar deneyin.`,
+      })
       const number = crypto.decrypt(access.companyId, 'number', docId, d.number_ciphertext as Buffer, d.number_key_id as string).toString('utf8')
-      await tx.execute(sql`insert into user_sensitive_actions (user_id, action) values (${userId}, 'document_number_reveal')`)
       await audit(tx, {
         companyId: access.companyId,
         actorUserId: userId,
@@ -144,7 +147,7 @@ export async function customerDocumentFileRoutes(app: FastifyInstance) {
         entityId: docId,
         summary: { customerId: id, customerNo: customer.customerNo, type: d.type, reason },
       })
-      return { number, visibleSeconds: NUMBER_REVEAL_VISIBLE_SECONDS, remainingThisHour: NUMBER_REVEAL_LIMIT_PER_HOUR - used.n - 1 }
+      return { number, visibleSeconds: NUMBER_REVEAL_VISIBLE_SECONDS, remainingThisHour: remaining }
     })
   })
 }

@@ -54,6 +54,8 @@ export async function registerSecurity(app: FastifyInstance, env: Env) {
 
   app.setErrorHandler((err: FastifyError | AppError | ZodError, req, reply) => {
     if (err instanceof AppError) {
+      const retry = (err.details as { retryAfterSeconds?: unknown } | null | undefined)?.retryAfterSeconds
+      if (err.status === 429 && typeof retry === 'number') reply.header('retry-after', String(retry))
       return reply.code(err.status).send({ error: { code: err.code, message: err.message, fields: err.fields, details: err.details } })
     }
     if (err instanceof ZodError) {
