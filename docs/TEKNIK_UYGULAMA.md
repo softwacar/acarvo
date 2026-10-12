@@ -526,6 +526,60 @@ Plan ve kararlar: `docs/M2_MUSTERI_BELGELERI_PLANI.md` (§0). Sprint raporu: `do
 - Kiralama modülünde personel Yerli/Yabancı (ikamet) kararını onaylar. Karar, şube ülkesi, politika sürümü ve belge sürümleriyle birlikte değiştirilemez kayda (`RentalResidencySnapshot`) yazılır.
 - Müşteri 360° hiçbir sınıflandırma üretmez; etkin politikaları her iki sınıf için yan yana gösterir.
 
+### 8.8 Kurumsal hesaplar — M3 (dal `kurumsal-m3`; yalnız `acarvo_test`'e uygulandı)
+
+Plan ve kararlar: `docs/M3_KURUMSAL_HESAPLAR_PLANI.md` (D1–D13). Rapor: `docs/M3_GELISTIRME_RAPORU.md`.
+
+#### 8.8.1 Veri modeli (migration'lar `0022` yapı, `0023` güvenlik; yalnız yeni tablolar)
+
+| Tablo | Ne tutar | Önemli kurallar |
+|---|---|---|
+| `corporate_accounts` | `K-00042` numarası, unvan, kısa ad, ülke, sicil, durum, arşiv bilgisi, sürüm | `(company_id, account_no)` tekil |
+| `corporate_contact_channels` | telefon, e-posta, web sitesi, diğer | tür başına tek birincil |
+| `corporate_tax_ids` | ülke, serbest tür kodu, değer ve normalize değer, kontrol durumu | aynı hesapta aynı değer tek; tek birincil |
+| `corporate_addresses` | resmi, fatura, yazışma veya diğer adres | tür başına tek birincil |
+| `corporate_account_people` | müşteriye bağlantı, roller dizisi, görev, geçerlilik, sona erme | hesap ve kişi başına tek etkin ilişki |
+
+**Güvenlik kuralları:**
+- Zorunlu RLS (4 politika) ve bileşik yabancı anahtarlar: `(company_id, account_id)` → hesap, `(company_id, customer_id)` → müşteri.
+- Uygulama rolüne DELETE verilmez.
+- **Tetikleyiciler:**
+  - kimlik sütunları değişmez;
+  - kaldırılmış alt kayıt değiştirilemez;
+  - sona ermiş ilişki değiştirilemez.
+- Numaralar `company_sequences` (`corporate_account`) satır kilidiyle üretilir.
+
+#### 8.8.2 API (`/api/corporate-accounts`)
+- **Hesap uçları:** `POST /search`, `POST /duplicate-check`, `GET/PUT /:id`, `POST /`, `POST /:id/archive|restore`, `GET /:id/history`.
+- **Alt kayıtlar:** `POST /:id/{channels|tax-ids|addresses}`, `PUT …/:sid`, `POST …/:sid/remove`.
+- **Kişiler:** `GET/POST /:id/people`, `PUT …/:sid`, `POST …/:sid/end`.
+- **Müşteri tarafı:** `GET /api/customers/:id/corporate-links`.
+- **Yetkiler:**
+
+  | Yetki | Hazır rollerde |
+  |---|---|
+  | `corporate.read` | Sahip, Yönetici, Operasyon |
+  | `corporate.manage` | Sahip, Yönetici |
+
+  - Ekleme `ROLE_PRESET_HISTORY` v5 ile yapılır.
+  - Kişi uçları ayrıca `customers.read` ister.
+  - Ehliyet özeti yalnız `customers.documents.read` ile gösterilir; numara içermez.
+- **Mükerrer önerisi** (yalnız şirket içi):
+  - güçlü: aynı vergi kimliği, e-posta veya telefon; kullanıcı onayı gerekir;
+  - olası: aynı unvan, ya da aynı ülke ve sicil no;
+  - otomatik birleştirme yok.
+- **İşlem geçmişi:** `corporate.*` olayları. Vergi kimliği, adres, telefon ve e-posta değerleri tutulmaz. Kişi olayları Müşteri 360° geçmişinde de görünür, yalnız `corporate.read` yetkisi olana.
+
+#### 8.8.3 Ekranlar
+- `/kurumsal-hesaplar`: liste.
+- `/kurumsal-hesaplar/$accountId`: 360°, sekme adres çubuğunda `?sekme=` ile tutulur.
+- Yeni hesap / düzenleme paneli, kayıt panelleri, kişi bağlama paneli.
+- Müşteri 360°'ta "Kurumsal ilişkiler".
+
+#### 8.8.4 Test verisi
+- `seed/test-corporate.ts` yalnız `acarvo_test`'e yükler.
+- Sentetik hesaplar: 4 Drina, 1 Neretva.
+
 ## 9. API kuralları
 
 - REST, JSON; tüm uçlar `/api` altında. Liste uçları sunucu tarafında arama, filtre, sıralama ve sayfalama yapar.
