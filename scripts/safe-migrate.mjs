@@ -4,6 +4,7 @@
 //   node --env-file=.env scripts/safe-migrate.mjs --test             acarvo_test (rehearsal)
 //   node --env-file=.env scripts/safe-migrate.mjs --dry-run          main database: only list pending migrations
 //   node --env-file=.env scripts/safe-migrate.mjs                    main database: full run (asks nothing; decide first)
+//   node --env-file=.env scripts/safe-migrate.mjs --verify [--test]  read-only security check of the database as it is
 //
 // Steps:
 //   1. List migrations in apps/api/migrations that the database has not applied yet. None → stop (nothing to do).
@@ -11,18 +12,22 @@
 //   3. Snapshot: row count of every table, per company for company tables (inside that company's RLS context).
 //   4. Apply migrations with the project's migrate script (also runs the idempotent preset-role upgrade).
 //   5. Verify: all journal migrations applied; no table lost rows; every table that had RLS still has it enabled and
-//      forced. Any failure → non-zero exit with the backup folder and restore steps.
+//      forced; no new table without RLS; only the known global tables lack RLS; the rate-limit counter table matches its
+//      reviewed spec (scripts/lib/migration-checks.mjs). Any failure → non-zero exit with the backup folder and restore steps.
+// --verify runs only the read-only checks of step 5 against the current database (in a read-only transaction).
 // No secret is printed. Connection strings come only from the environment.
 import { spawnSync } from 'node:child_process'
 import { readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import path from 'node:path'
+import { checkCurrentState, checkMigration, checkMigrationCount, checkRowCounts, snapshotSecurity } from './lib/migration-checks.mjs'
 
 const require = createRequire(new URL('../apps/api/package.json', import.meta.url))
 const pg = require('pg')
 const args = new Set(process.argv.slice(2))
 const test = args.has('--test')
 const dryRun = args.has('--dry-run')
+const verifyOnly = args.has('--verify')
 const ownerUrl = test ? process.env.TEST_DATABASE_OWNER_URL : process.env.DATABASE_OWNER_URL
 if (!ownerUrl) throw new Error('Owner connection string missing (run with --env-file=.env).')
 const dbName = decodeURIComponent(new URL(ownerUrl).pathname.slice(1))
@@ -46,6 +51,25 @@ async function withClient(fn) {
   } finally {
     await c.end()
   }
+}
+
+if (verifyOnly) {
+  const state = await withClient(async (c) => {
+    await c.query('begin read only')
+    try {
+      return await snapshotSecurity(c)
+    } finally {
+      await c.query('rollback')
+    }
+  })
+  const problems = [...checkMigrationCount(state.migrations, journal.length), ...checkCurrentState(state)]
+  say(`verify (read-only) "${dbName}": ${state.migrations} migrations applied, ${journal.length} in the project; ${Object.keys(state.rls).length} tables, ${Object.values(state.rls).filter((r) => r.enabled).length} with RLS`)
+  if (problems.length) {
+    for (const p of problems) console.error(`[safe-migrate] PROBLEM: ${p}`)
+    process.exit(1)
+  }
+  say('verify: no problems')
+  process.exit(0)
 }
 
 // 1. Pending migrations
@@ -93,6 +117,7 @@ async function snapshot() {
   })
 }
 const before = await snapshot()
+const securityBefore = await withClient(snapshotSecurity)
 
 // 4. Migrate
 say('applying migrations …')
@@ -103,18 +128,12 @@ if (migrate.status !== 0) fail('migration failed (the migrator runs in one trans
 
 // 5. Verify
 const after = await snapshot()
+const securityAfter = await withClient(snapshotSecurity)
 const nowApplied = await withClient(async (c) => Number((await c.query('select count(*) n from drizzle.__drizzle_migrations')).rows[0].n))
 const problems = []
 if (nowApplied !== journal.length) problems.push(`applied migrations ${nowApplied} != project ${journal.length}`)
-for (const [k, n] of Object.entries(before.counts)) {
-  const m = after.counts[k]
-  if (m === undefined) problems.push(`table disappeared: ${k}`)
-  else if (m < n) problems.push(`rows lost: ${k} ${n} → ${m}`)
-}
-for (const [t, r] of Object.entries(before.rls)) {
-  if (r.enabled && !(after.rls[t]?.enabled && after.rls[t]?.forced === r.forced)) problems.push(`RLS weakened on ${t}`)
-}
-for (const [t, r] of Object.entries(after.rls)) if (!(t in before.rls) && !r.enabled && t !== 'document_types') problems.push(`new table without RLS: ${t} (check it is meant to be global)`)
+problems.push(...checkRowCounts(before.counts, after.counts))
+problems.push(...checkMigration(securityBefore, securityAfter))
 if (problems.length) fail(problems.join('\n'), backupDir)
 const grown = Object.entries(after.counts).filter(([k, n]) => n !== before.counts[k]).map(([k, n]) => `${k}: ${before.counts[k] ?? 0} → ${n}`)
 say(`verified. Changed counts (additions only): ${grown.length ? grown.join('; ') : 'none'}`)

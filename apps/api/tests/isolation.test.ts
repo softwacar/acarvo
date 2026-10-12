@@ -61,6 +61,7 @@ describe('runtime database role', () => {
       'odometer_corrections',
       'odometer_readings',
       'roles',
+      'user_sensitive_actions',
       'vehicle_classes',
       'vehicle_document_files',
       'vehicle_documents',
@@ -70,7 +71,9 @@ describe('runtime database role', () => {
       'vehicles',
     ])
     for (const r of rows) {
-      expect(r, r.table).toMatchObject({ enabled: true, forced: true, cmds: ['DELETE', 'INSERT', 'SELECT', 'UPDATE'] })
+      // Rate-limit counters are append-only: no UPDATE or DELETE policy, so no one can reset them.
+      const cmds = r.table === 'user_sensitive_actions' ? ['INSERT', 'SELECT'] : ['DELETE', 'INSERT', 'SELECT', 'UPDATE']
+      expect(r, r.table).toMatchObject({ enabled: true, forced: true, cmds })
     }
   })
 })

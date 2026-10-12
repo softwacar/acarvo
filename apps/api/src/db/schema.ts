@@ -732,20 +732,24 @@ export const customerDocumentFiles = pgTable(
 )
 
 /**
- * Per-user log of sensitive actions used for server-side limits (full-number reveals: 30 per hour per user,
- * across sessions, restarts and companies). Holds no company data and no values.
+ * Log of sensitive actions used for server-side limits that survive sessions and restarts (full-number reveals and
+ * typed document-number checks). Holds who, what kind, when and in which company: never a number, a customer or a
+ * document. RLS (0020): a row is visible to its own user and inside its company; inserts only for oneself in the
+ * active company; no UPDATE or DELETE for the app, so a counter cannot be reset.
  */
 export const userSensitiveActions = pgTable(
   'user_sensitive_actions',
   {
     id: id(),
     userId: uuid('user_id').notNull().references(() => users.id),
+    companyId: uuid('company_id').notNull().references(() => companies.id),
     action: text('action').notNull(),
     at: timestamp('at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
     index('user_sensitive_actions_user_at_idx').on(t.userId, t.action, t.at),
-    check('user_sensitive_actions_action_check', sql`${t.action} in ('document_number_reveal')`),
+    index('user_sensitive_actions_company_user_at_idx').on(t.companyId, t.userId, t.action, t.at),
+    check('user_sensitive_actions_action_check', sql`${t.action} in ('document_number_reveal', 'document_number_check')`),
   ],
 )
 

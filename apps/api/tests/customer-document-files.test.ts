@@ -7,7 +7,7 @@ import sharp from 'sharp'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { customerCryptoFromEnv } from '../src/lib/customer-crypto'
 import type { MalwareScanner, ScanResult } from '../src/lib/malware'
-import { appPool, asOwner, Client, type DevData, EMAILS, env, makeApp, ownerPool, resetDatabase, TEST_STORAGE } from './helpers'
+import { appPool, asOwner, asOwnerAs, Client, type DevData, EMAILS, env, makeApp, ownerPool, resetDatabase, TEST_STORAGE } from './helpers'
 
 // M2d: encrypted customer document files, separate view / download / reveal permissions, grants and limits.
 
@@ -278,8 +278,11 @@ describe('full number reveal', () => {
 
   it('at most 30 per user per hour, kept in the database: a new session or a restarted server does not reset it', async () => {
     const userId = (await asOwner(null, `select id from users where email = $1`, [EMAILS.adnan])).rows[0].id
-    // One reveal is already counted; add 28 more as if done earlier this hour.
-    await asOwner(null, `insert into user_sensitive_actions (user_id, action) select $1, 'document_number_reveal' from generate_series(1, 28)`, [userId])
+    // Reveals older than an hour do not count (rows cannot be edited or deleted, so old ones are written as old).
+    await asOwnerAs(data.companies.drina, userId, `insert into user_sensitive_actions (user_id, company_id, action, at) select $1, $2, 'document_number_reveal', now() - interval '61 minutes' from generate_series(1, 40)`, [userId, data.companies.drina])
+    expect((await adnan.post(`/api/customers/${ajla}/documents/${doc.id}/reveal-number`, { reason: 'document_check' })).json().remainingThisHour).toBe(28)
+    // Two reveals are counted this hour; add 27 more as if done earlier this hour.
+    await asOwnerAs(data.companies.drina, userId, `insert into user_sensitive_actions (user_id, company_id, action) select $1, $2, 'document_number_reveal' from generate_series(1, 27)`, [userId, data.companies.drina])
     const last = await adnan.post(`/api/customers/${ajla}/documents/${doc.id}/reveal-number`, { reason: 'document_check' })
     expect(last.statusCode).toBe(200)
     expect(last.json().remainingThisHour).toBe(0)
@@ -292,9 +295,10 @@ describe('full number reveal', () => {
     } finally {
       await restarted.close()
     }
-    // Reveals older than an hour no longer count.
-    await asOwner(null, `update user_sensitive_actions set at = now() - interval '2 hours' where user_id = $1`, [userId])
-    expect((await adnan.post(`/api/customers/${ajla}/documents/${doc.id}/reveal-number`, { reason: 'document_check' })).statusCode).toBe(200)
+    // Not even the owner role can rewrite a counter: there is no UPDATE or DELETE policy (forced RLS).
+    const rewritten = await asOwnerAs(data.companies.drina, userId, `update user_sensitive_actions set at = now() - interval '2 hours' where user_id = $1`, [userId])
+    expect(rewritten.rowCount).toBe(0)
+    expect((await adnan.post(`/api/customers/${ajla}/documents/${doc.id}/reveal-number`, { reason: 'document_check' })).json().error.code).toBe('REVEAL_LIMIT')
   })
 })
 

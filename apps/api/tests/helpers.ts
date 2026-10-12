@@ -100,6 +100,27 @@ export async function asOwner(companyId: string | null, text: string, values: un
   }
 }
 
+/**
+ * Like asOwner, in a company and user context: tables whose RLS also checks the user (user_sensitive_actions) accept
+ * owner inserts only for that user.
+ */
+export async function asOwnerAs(companyId: string, userId: string, text: string, values: unknown[] = []) {
+  await ensureTestDatabase()
+  const c = await ownerPool.connect()
+  try {
+    await c.query('begin')
+    await c.query(`select set_config('app.company_id', $1, true), set_config('app.user_id', $2, true)`, [companyId, userId])
+    const r = await c.query(text, values)
+    await c.query('commit')
+    return r
+  } catch (e) {
+    await c.query('rollback')
+    throw e
+  } finally {
+    c.release()
+  }
+}
+
 /** Runs `fn` as acarvo_app with the given company context, always rolled back. */
 export async function asApp<T>(companyId: string | null, fn: (c: pg.PoolClient) => Promise<T>): Promise<T> {
   await ensureTestDatabase()

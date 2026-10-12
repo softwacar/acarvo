@@ -141,6 +141,20 @@
       "when": 1791751898423,
       "tag": "0019_document_requirements_rls",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1791817464637,
+      "tag": "0020_sensitive_actions_company",
+      "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1791817477454,
+      "tag": "0021_sensitive_actions_rls",
+      "breakpoints": true
     }
   ]
 }
