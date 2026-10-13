@@ -10,7 +10,7 @@ import path from 'node:path'
  * route to S3-compatible storage later.
  */
 const KEY_PATTERN =
-  /^(?:[0-9a-f-]{36}\/\d{4}\/[0-9a-f-]{36}(-thumb)?\.webp|documents\/[0-9a-f-]{36}\/\d{4}\/[0-9a-f-]{36}\.(?:pdf|jpg|png)|customers\/[0-9a-f-]{36}\/\d{4}\/[0-9a-f-]{36}\.bin|rentals\/[0-9a-f-]{36}\/\d{4}\/[0-9a-f-]{36}(-thumb)?\.webp)$/
+  /^(?:[0-9a-f-]{36}\/\d{4}\/[0-9a-f-]{36}(-thumb)?\.webp|documents\/[0-9a-f-]{36}\/\d{4}\/[0-9a-f-]{36}\.(?:pdf|jpg|png)|customers\/[0-9a-f-]{36}\/\d{4}\/[0-9a-f-]{36}\.bin|rentals\/[0-9a-f-]{36}\/\d{4}\/[0-9a-f-]{36}(-thumb)?\.webp|contracts\/[0-9a-f-]{36}\/\d{4}\/[0-9a-f-]{36}\.pdf)$/
 
 export function createStorage(root: string) {
   const resolve = (key: string) => {
@@ -39,6 +39,10 @@ export function createStorage(root: string) {
     /** Customer document files (M2): encrypted bytes only; no extension or personal data in the name. */
     newCustomerFileKey(companyId: string, fileId: string) {
       return `customers/${companyId}/${new Date().getUTCFullYear()}/${fileId}.bin`
+    },
+    /** Contract draft PDFs: own prefix, a random name (no contract number or personal data in the path). */
+    newContractKey(companyId: string) {
+      return `contracts/${companyId}/${new Date().getUTCFullYear()}/${randomUUID()}.pdf`
     },
     async readAll(key: string) {
       return readFile(resolve(key))

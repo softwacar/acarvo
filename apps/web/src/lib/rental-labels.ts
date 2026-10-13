@@ -1,3 +1,5 @@
+import { type ContractStatus, formatMoney } from '@acarvo/shared'
+import { CONTRACT_STATUS_LABEL } from './pricing-labels'
 import type {
   ChecklistAnswer,
   ChecklistItem,
@@ -105,16 +107,18 @@ export function gateText(code: RentalGateCode, state: string, d: Record<string, 
       return state === 'ok' ? `${d.count} fotoğraf yüklendi.` : `${d.count ?? 0} fotoğraf var; ${kind === 'handover' ? 'teslim' : 'iade'} için en az 4, en fazla 5 gerçek fotoğraf gerekli.`
     case 'external_terms':
       return state === 'blocked'
-        ? 'ACARVO’da sözleşme ve fiyat modülü yok ve şirketin dış sözleşme/fiyat modu kapalı; teslim yapılamaz. Modu yalnız şirket sahibi Ayarlar’dan açabilir.'
+        ? 'ACARVO’daki fiyat teklifi ve sözleşme taslağı teslimi tek başına açmaz (hukuki onay, imza ve ödeme süreci yok). Şirketin dış sözleşme/fiyat modu kapalı; teslim yapılamaz. Modu yalnız şirket sahibi Ayarlar’dan açabilir.'
         : 'Dış sözleşme/fiyat modu açık. Teslimde sözleşme ve fiyat için iki ayrı beyan ve dış referans istenir.'
     case 'return_record':
       return state === 'ok' ? 'Temizlik, genel durum ve kontrol listesi girildi.' : `${plural(d.missing, 'alan')} eksik.`
     case 'findings':
       return state === 'ok' ? 'Teslimde olmayan yeni işaret yok.' : `${plural(d.count, 'yeni bulgu')} var. Kapatırken gördüğünüzü onaylayın; hasar dosyası, sorumluluk veya ücret oluşturulmaz.`
     case 'pricing':
-      return 'Hesaplanmadı. Fiyatlandırma ve Finans modülleri henüz yok; ödeme, depozito veya borç kaydı oluşturulmaz.'
+      if (!d.quoteNo) return 'Hesaplanmadı. Bu kiralama için kayıtlı fiyat teklifi yok; ödeme, depozito veya borç kaydı oluşturulmaz.'
+      return `${d.matchesPlan === 0 ? 'Güncel değil: plan teklif sonrası değişti. ' : ''}Teklif ${d.quoteNo}: ${formatMoney(Number(d.grossMinor ?? d.netMinor), String(d.currency))}${d.grossMinor == null ? ' (net; vergi yapılandırılmadı)' : ''}. Teklif ödeme veya fatura değildir; teslimi tek başına açmaz.`
     case 'contract':
-      return 'ACARVO’da sözleşme yok. İmza veya hukuki geçerlilik iddiası yoktur.'
+      if (!d.contractNo) return 'Sözleşme taslağı yok. İmza veya hukuki geçerlilik iddiası yoktur.'
+      return `Sözleşme ${d.contractNo} (sürüm ${d.revision}): ${CONTRACT_STATUS_LABEL[String(d.status) as ContractStatus] ?? d.status}. Taslak hukuki onay bekler; imzalı sözleşme değildir ve teslimi tek başına açmaz.`
   }
 }
 

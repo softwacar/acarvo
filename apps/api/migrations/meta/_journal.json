@@ -232,6 +232,13 @@
       "when": 1791917956995,
       "tag": "0032_pricing_contracts_rls",
       "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1791925000000,
+      "tag": "0033_pricing_contracts_history",
+      "breakpoints": true
     }
   ]
 }

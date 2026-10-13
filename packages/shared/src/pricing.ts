@@ -155,7 +155,7 @@ export interface PriceListDetail extends Omit<PriceListSummary, 'rateCount'> {
 export interface PricingResult extends EngineResult {
   priceList: { id: string; name: string; revision: number } | null
   /** Why no price could be computed (no active list for the branch/currency, problems of the engine). */
-  unavailable: null | { reason: 'no_price_list' | 'engine'; problems?: EngineProblem[] }
+  unavailable: null | { reason: 'no_price_list' | 'ambiguous_price_list' | 'engine'; problems?: EngineProblem[] }
 }
 
 export interface PriceQuote {
@@ -179,4 +179,6 @@ export interface PriceQuote {
   calculatedAt: string
   createdByName: string | null
   supersededAt: string | null
+  /** False when the reservation / rental plan or class changed after the quote: it is then shown as outdated. */
+  matchesPlan: boolean
 }
