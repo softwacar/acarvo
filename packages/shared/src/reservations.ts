@@ -229,6 +229,17 @@ export interface ReservationDetail extends Omit<ReservationListItem, 'customer'>
   updatedByName: string | null
 }
 
+/**
+ * Something holding a vehicle (one definition for reservations and rentals, database function vehicle_busy): a confirmed
+ * reservation or a rental. An open end (null) = handed over, planned return passed and not back yet (K2).
+ */
+export interface AllocationConflict {
+  kind: 'reservation' | 'rental'
+  refNo: string
+  startsAt: string
+  endsAt: string | null
+}
+
 export interface AvailabilityVehicle {
   id: string
   plate: string
@@ -238,8 +249,8 @@ export interface AvailabilityVehicle {
   homeBranch: ReservationRef
   available: boolean
   atOtherBranch: boolean
-  /** Confirmed reservations of this vehicle overlapping the period: numbers and times only, no customer data. */
-  conflicts: { reservationNo: string; pickupAt: string; returnAt: string }[]
+  /** Confirmed reservations and rentals of this vehicle overlapping the period: numbers and times only, no customer data. */
+  conflicts: AllocationConflict[]
 }
 
 export interface AvailabilityResponse {
@@ -249,7 +260,7 @@ export interface AvailabilityResponse {
   /** R1: information only, never a capacity guarantee. */
   classSummary: { activeVehicles: number; overlappingConfirmed: number; estimateOnly: true }
   /** Domains ACARVO cannot check yet (R2). */
-  notChecked: ('maintenance' | 'transfer' | 'rentals' | 'external_sourcing' | 'vehicle_location')[]
+  notChecked: ('maintenance' | 'transfer' | 'external_sourcing' | 'vehicle_location')[]
 }
 
 export interface TimelineResponse {
@@ -261,6 +272,8 @@ export interface TimelineResponse {
   windowEnd: string
   vehicles: { id: string; plate: string; make: string; model: string; className: string; status: string }[]
   bars: { id: string; reservationNo: string; vehicleId: string; status: ReservationStatus; pickupAt: string; returnAt: string }[]
+  /** Rentals holding a vehicle in the window; endsAt null = handed over, overdue and not back yet (K2). */
+  rentalBars: { id: string; rentalNo: string; vehicleId: string; status: 'prepared' | 'delivered' | 'returned' | 'closed'; startsAt: string; endsAt: string | null }[]
   unassigned: number
 }
 

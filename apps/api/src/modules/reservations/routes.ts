@@ -21,6 +21,7 @@ import type { Tx } from '../../db/client'
 import { audit } from '../../lib/audit'
 import { AppError, forbidden, notFound } from '../../lib/errors'
 import { toIso } from '../../lib/timestamps'
+import { lockVehicleAllocation, vehicleBusy } from '../../lib/vehicle-allocation'
 import { withCompany } from '../../plugins/auth'
 import type { CompanyAccess } from '../auth/context'
 import { documentWarningDays } from '../customers/documents'
@@ -37,7 +38,6 @@ import {
   RESERVATION_NOT_FOUND,
   reservationActivity,
   timeline,
-  vehicleConflicts,
 } from './repository'
 
 type Row = Record<string, unknown>
@@ -141,18 +141,31 @@ async function resolveParties(tx: Tx, input: ReservationInput, current?: Row) {
   return { customer, booker, drivers, account, cls: { id: cls.id as string, name: cls.name as string }, vehicle }
 }
 
-/** Friendly 409 before the write; the database trigger is the final guard (also under concurrency). */
+/**
+ * Friendly 409 before the write, from the shared allocation truth (confirmed reservations and rentals); the database
+ * trigger is the final guard, under the same lock (also under concurrency).
+ */
 async function assertVehicleFree(tx: Tx, companyId: string, vehicle: { id: string; plate: string; status: string }, pickupAt: string, returnAt: string, exceptId?: string) {
-  await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${`reservation-vehicle:${companyId}:${vehicle.id}`}, 0))`)
+  await lockVehicleAllocation(tx, companyId, vehicle.id)
   if (vehicle.status !== 'active') throw new AppError(409, 'VEHICLE_NOT_ACTIVE', `${vehicle.plate} şu anda hizmet dışı; onaylı rezervasyon yapılamaz.`, { vehicleId: 'Araç hizmet dışı' })
-  const conflicts = await vehicleConflicts(tx, vehicle.id, pickupAt, returnAt, exceptId)
-  if (conflicts.length) throw new AppError(409, 'VEHICLE_UNAVAILABLE', `${vehicle.plate} bu dönemde başka bir onaylı rezervasyonda.`, { vehicleId: 'Araç bu dönemde dolu' }, { conflicts })
+  const conflicts = await vehicleBusy(tx, companyId, vehicle.id, pickupAt, returnAt, { reservationId: exceptId })
+  if (conflicts.length) {
+    const rented = conflicts.some((c) => c.kind === 'rental')
+    throw new AppError(
+      409,
+      'VEHICLE_UNAVAILABLE',
+      rented ? `${vehicle.plate} bu dönemde kirada veya kiralama için ayrılmış (${conflicts.map((c) => c.refNo).join(', ')}).` : `${vehicle.plate} bu dönemde başka bir onaylı rezervasyonda.`,
+      { vehicleId: 'Araç bu dönemde dolu' },
+      { conflicts },
+    )
+  }
 }
 
 /** Database guards end as the same answers (concurrent saves, direct changes). */
 function mapGuard(e: unknown): never {
   const pg = ((e as { cause?: unknown }).cause ?? e) as { code?: string; constraint?: string }
   if (pg.constraint === 'reservations_vehicle_overlap') throw new AppError(409, 'VEHICLE_UNAVAILABLE', 'Araç bu dönemde başka bir onaylı rezervasyonda.', { vehicleId: 'Araç bu dönemde dolu' })
+  if (pg.constraint === 'reservations_vehicle_rented') throw new AppError(409, 'VEHICLE_UNAVAILABLE', 'Araç bu dönemde kirada veya kiralama için ayrılmış.', { vehicleId: 'Araç bu dönemde dolu' })
   if (pg.constraint === 'reservations_vehicle_not_active') throw new AppError(409, 'VEHICLE_NOT_ACTIVE', 'Araç hizmet dışı; onaylı rezervasyon yapılamaz.', { vehicleId: 'Araç hizmet dışı' })
   if (pg.constraint === 'reservations_vehicle_class') throw invalid({ vehicleId: 'Araç seçilen sınıftan değil' })
   if (pg.constraint === 'reservations_lifecycle' || pg.constraint === 'reservations_final') throw new AppError(409, 'INVALID_TRANSITION', 'Bu rezervasyonun durumu bu işleme izin vermiyor.')

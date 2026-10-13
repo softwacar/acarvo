@@ -204,7 +204,7 @@ describe('vehicle availability and double booking', () => {
     const r1 = await get(adnan, ids['R-000001'])
     const overlap = await adnan.post('/api/reservations', { ...base(), vehicleId: ids.octavia, pickupLocal: local(4, '09:00'), returnLocal: local(6, '09:00'), confirm: true })
     expect(overlap.statusCode).toBe(409)
-    expect(overlap.json().error).toMatchObject({ code: 'VEHICLE_UNAVAILABLE', details: { conflicts: [{ reservationNo: 'R-000001', pickupAt: r1.pickup.at, returnAt: r1.return.at }] } })
+    expect(overlap.json().error).toMatchObject({ code: 'VEHICLE_UNAVAILABLE', details: { conflicts: [{ kind: 'reservation', refNo: 'R-000001', startsAt: r1.pickup.at, endsAt: r1.return.at }] } })
     expect(overlap.body).not.toMatch(/Ajla/)
     // Ends exactly when R-000001 starts, and starts exactly when it ends: both allowed.
     expect((await adnan.post('/api/reservations', { ...base(), vehicleId: ids.octavia, pickupLocal: local(1, '10:00'), returnLocal: local(2, '10:00'), confirm: true })).statusCode).toBe(201)
@@ -238,10 +238,10 @@ describe('vehicle availability and double booking', () => {
   it('availability lists the class with conflicts as numbers and times only, marks what cannot be checked yet, and is not a capacity guarantee', async () => {
     const res = (await adnan.post('/api/reservations/availability', { vehicleClassId: ids.orta, pickupBranchId: ids.sjj, returnBranchId: ids.sjj, pickupLocal: local(3, '10:00'), returnLocal: local(4, '10:00') })).json() as AvailabilityResponse
     const octavia = res.vehicles.find((v) => v.plate === 'A12-K-345')!
-    expect(octavia).toMatchObject({ available: false, conflicts: [expect.objectContaining({ reservationNo: 'R-000001' })] })
+    expect(octavia).toMatchObject({ available: false, conflicts: [expect.objectContaining({ kind: 'reservation', refNo: 'R-000001' })] })
     expect(res.vehicles.filter((v) => v.available).length).toBeGreaterThan(0)
     expect(res.classSummary.estimateOnly).toBe(true)
-    expect(res.notChecked).toEqual(['maintenance', 'transfer', 'rentals', 'external_sourcing', 'vehicle_location'])
+    expect(res.notChecked).toEqual(['maintenance', 'transfer', 'external_sourcing', 'vehicle_location'])
     expect(JSON.stringify(res)).not.toMatch(/Ajla|Testović|customer/i)
     // The reservation being edited does not conflict with itself.
     const own = (await adnan.post('/api/reservations/availability', { vehicleClassId: ids.orta, pickupBranchId: ids.sjj, returnBranchId: ids.sjj, pickupLocal: local(3, '10:00'), returnLocal: local(4, '10:00'), excludeReservationId: ids['R-000001'] })).json() as AvailabilityResponse
@@ -284,7 +284,7 @@ describe('edit, lifecycle and history', () => {
     // Moving into another confirmed reservation of the same vehicle is refused.
     const golfOther = (await adnan.post('/api/reservations', { ...base(), vehicleClassId: ids.kompakt, vehicleId: ids.golf, pickupLocal: local(10, '08:30'), returnLocal: local(11, '08:30'), confirm: true })).json() as ReservationDetail
     const into = await adnan.put(`/api/reservations/${r.id}`, { ...body, returnLocal: local(10, '12:00'), version: r.version + 1, changeReason: 'operational' })
-    expect(into.json().error).toMatchObject({ code: 'VEHICLE_UNAVAILABLE', details: { conflicts: [expect.objectContaining({ reservationNo: golfOther.reservationNo })] } })
+    expect(into.json().error).toMatchObject({ code: 'VEHICLE_UNAVAILABLE', details: { conflicts: [expect.objectContaining({ refNo: golfOther.reservationNo })] } })
   })
 
   it('cancel and no-show: reasons, only allowed transitions, released capacity, final states (also in the database)', async () => {
@@ -398,7 +398,7 @@ describe('final security review (integration)', () => {
     const blocker = (await adnan.post('/api/reservations', { ...base(), vehicleId: other, pickupLocal: local(81, '10:00'), returnLocal: local(81, '18:00'), confirm: true })).json() as ReservationDetail
     const body = { ...base(), customerId: ids.mirza, vehicleClassId: ids.orta, pickupLocal: r.pickup.local, returnLocal: r.return.local, version: r.version, changeReason: 'operational' }
     const into = await adnan.put(`/api/reservations/${r.id}`, { ...body, vehicleId: other })
-    expect(into.json().error).toMatchObject({ code: 'VEHICLE_UNAVAILABLE', details: { conflicts: [expect.objectContaining({ reservationNo: blocker.reservationNo })] } })
+    expect(into.json().error).toMatchObject({ code: 'VEHICLE_UNAVAILABLE', details: { conflicts: [expect.objectContaining({ refNo: blocker.reservationNo })] } })
     const free = (await one(`select id from vehicles where plate = 'O58-E-467'`)).id as string
     expect((await adnan.put(`/api/reservations/${r.id}`, { ...body, vehicleId: free })).statusCode).toBe(200)
     // The Octavia is free again for that period.

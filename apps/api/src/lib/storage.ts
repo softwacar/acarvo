@@ -10,7 +10,7 @@ import path from 'node:path'
  * route to S3-compatible storage later.
  */
 const KEY_PATTERN =
-  /^(?:[0-9a-f-]{36}\/\d{4}\/[0-9a-f-]{36}(-thumb)?\.webp|documents\/[0-9a-f-]{36}\/\d{4}\/[0-9a-f-]{36}\.(?:pdf|jpg|png)|customers\/[0-9a-f-]{36}\/\d{4}\/[0-9a-f-]{36}\.bin)$/
+  /^(?:[0-9a-f-]{36}\/\d{4}\/[0-9a-f-]{36}(-thumb)?\.webp|documents\/[0-9a-f-]{36}\/\d{4}\/[0-9a-f-]{36}\.(?:pdf|jpg|png)|customers\/[0-9a-f-]{36}\/\d{4}\/[0-9a-f-]{36}\.bin|rentals\/[0-9a-f-]{36}\/\d{4}\/[0-9a-f-]{36}(-thumb)?\.webp)$/
 
 export function createStorage(root: string) {
   const resolve = (key: string) => {
@@ -24,6 +24,12 @@ export function createStorage(root: string) {
     newKeys(companyId: string) {
       const id = randomUUID()
       const dir = `${companyId}/${new Date().getUTCFullYear()}`
+      return { main: `${dir}/${id}.webp`, thumb: `${dir}/${id}-thumb.webp` }
+    },
+    /** Handover and return evidence photos (rentals): own prefix, apart from promotional photos. */
+    newRentalPhotoKeys(companyId: string) {
+      const id = randomUUID()
+      const dir = `rentals/${companyId}/${new Date().getUTCFullYear()}`
       return { main: `${dir}/${id}.webp`, thumb: `${dir}/${id}-thumb.webp` }
     },
     /** Vehicle documents live under their own prefix, apart from promotional photos. */

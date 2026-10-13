@@ -10,7 +10,7 @@ export default async function globalSetup() {
   rmSync(E2E_STORAGE, { recursive: true, force: true })
   execFileSync('npx', ['tsx', `--env-file=${ENV_FILE}`, 'tests/e2e-reset.ts'], {
     cwd: path.resolve(import.meta.dirname, '../api'),
-    env: { ...process.env, E2E_PASSWORD: password, E2E_FIXTURES },
+    env: { ...process.env, E2E_PASSWORD: password, E2E_FIXTURES, E2E_STORAGE },
     stdio: 'inherit',
     shell: true,
   })

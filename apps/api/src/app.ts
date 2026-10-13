@@ -24,6 +24,7 @@ import { MAX_PHOTO_BYTES } from './lib/images'
 import { createStorage } from './lib/storage'
 import { corporateRoutes, customerCorporateLinkRoutes } from './modules/corporate/routes'
 import { relatedReservationRoutes, reservationRoutes } from './modules/reservations/routes'
+import { relatedRentalRoutes, rentalRoutes } from './modules/rentals/routes'
 import { registerAuth } from './plugins/auth'
 import { registerSecurity } from './plugins/security'
 
@@ -92,5 +93,7 @@ export async function buildApp({
   await app.register(customerCorporateLinkRoutes, { prefix: '/api/customers' })
   await app.register(reservationRoutes, { prefix: '/api/reservations' })
   await app.register(relatedReservationRoutes, { prefix: '/api' })
+  await app.register(rentalRoutes, { prefix: '/api/rentals' })
+  await app.register(relatedRentalRoutes, { prefix: '/api' })
   return app
 }

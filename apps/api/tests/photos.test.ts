@@ -292,7 +292,7 @@ describe('isolation', () => {
 
   it('files are not reachable outside the API and the stored copy sits under the company folder', async () => {
     expect((await adnan.get('/storage')).statusCode).toBe(404)
-    const rows = await asOwner(data.companies.drina, `select storage_key from files limit 1`)
+    const rows = await asOwner(data.companies.drina, `select storage_key from files where kind = 'vehicle_promo_photo' limit 1`)
     const key = rows.rows[0].storage_key as string
     expect(key.startsWith(`${data.companies.drina}/`)).toBe(true)
     expect((await adnan.get(`/${key}`)).statusCode).toBe(404)

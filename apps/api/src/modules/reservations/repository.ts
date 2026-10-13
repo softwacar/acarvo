@@ -149,7 +149,7 @@ export async function relatedReservations(tx: Tx, access: CompanyAccess, filter:
   return rows.map((r) => listItem(r, access.permissions.has('corporate.read')))
 }
 
-async function people(tx: Tx, ids: string[], access: CompanyAccess, today: { day: string; warningUntil: string } | null): Promise<Map<string, ReservationPerson>> {
+export async function people(tx: Tx, ids: string[], access: CompanyAccess, today: { day: string; warningUntil: string } | null): Promise<Map<string, ReservationPerson>> {
   const out = new Map<string, ReservationPerson>()
   if (!ids.length) return out
   const contact = access.permissions.has('customers.read')
@@ -277,35 +277,25 @@ async function warningsFor(tx: Tx, d: ReservationDetail, accountId: string | nul
   return out
 }
 
-/** Confirmed reservations of a vehicle overlapping [from, to) — numbers and times only. */
-export async function vehicleConflicts(tx: Tx, vehicleId: string, from: string, to: string, exceptId?: string) {
-  return (
-    await tx.execute(sql`select reservation_no, pickup_at, return_at from reservations
-      where vehicle_id = ${vehicleId} and status = 'confirmed' ${exceptId ? sql`and id <> ${exceptId}` : sql``}
-        and tstzrange(pickup_at, return_at, '[)') && tstzrange(${from}::timestamptz, ${to}::timestamptz, '[)')
-      order by pickup_at`)
-  ).rows.map((r) => ({ reservationNo: (r as Row).reservation_no as string, pickupAt: toIso((r as Row).pickup_at), returnAt: toIso((r as Row).return_at) }))
-}
-
-/** Vehicles of a class for a period, as far as ACARVO can tell (R1, R2): status and confirmed reservations only. */
+/**
+ * Vehicles of a class for a period, as far as ACARVO can tell (R1, R2): status, confirmed reservations and rentals, from
+ * the database function the guards use (vehicle_busy), so reservations and rentals never disagree about a vehicle.
+ */
 export async function availability(
   tx: Tx,
   access: CompanyAccess,
-  input: { vehicleClassId: string; pickupBranchId: string; pickupAt: string; returnAt: string; excludeReservationId?: string },
+  input: { vehicleClassId: string; pickupBranchId: string; pickupAt: string; returnAt: string; excludeReservationId?: string; excludeRentalId?: string },
 ): Promise<Pick<AvailabilityResponse, 'vehicles' | 'classSummary' | 'notChecked'>> {
   const scope = access.allBranches ? sql`true` : access.branchIds.length ? sql`v.home_branch_id in ${access.branchIds}` : sql`false`
   const rows = (
     await tx.execute(sql`
       select v.id, v.plate, v.make, v.model, v.status, b.id as b_id, b.name as b_name, b.code as b_code,
-        coalesce(json_agg(json_build_object('reservationNo', r.reservation_no, 'pickupAt', r.pickup_at, 'returnAt', r.return_at) order by r.pickup_at)
-          filter (where r.id is not null), '[]') as conflicts
+        coalesce((select json_agg(json_build_object('kind', x.kind, 'refNo', x.ref_no, 'startsAt', x.starts_at, 'endsAt', x.ends_at) order by x.starts_at)
+          from vehicle_busy(v.company_id, v.id, ${input.pickupAt}::timestamptz, ${input.returnAt}::timestamptz,
+            ${input.excludeReservationId ?? null}::uuid, ${input.excludeRentalId ?? null}::uuid) x), '[]') as conflicts
       from vehicles v
       join branches b on b.company_id = v.company_id and b.id = v.home_branch_id
-      left join reservations r on r.company_id = v.company_id and r.vehicle_id = v.id and r.status = 'confirmed'
-        ${input.excludeReservationId ? sql`and r.id <> ${input.excludeReservationId}` : sql``}
-        and tstzrange(r.pickup_at, r.return_at, '[)') && tstzrange(${input.pickupAt}::timestamptz, ${input.returnAt}::timestamptz, '[)')
       where v.class_id = ${input.vehicleClassId} and v.status in ('active', 'out_of_service') and ${scope}
-      group by v.id, b.id
       order by (v.status = 'active') desc, (v.home_branch_id = ${input.pickupBranchId}) desc, v.plate`)
   ).rows as Row[]
   const summary = (
@@ -317,7 +307,11 @@ export async function availability(
   ).rows[0] as Row
   return {
     vehicles: rows.map((r) => {
-      const conflicts = (r.conflicts as { reservationNo: string; pickupAt: string; returnAt: string }[]).map((c) => ({ ...c, pickupAt: toIso(c.pickupAt), returnAt: toIso(c.returnAt) }))
+      const conflicts = (r.conflicts as { kind: 'reservation' | 'rental'; refNo: string; startsAt: string; endsAt: string | null }[]).map((c) => ({
+        ...c,
+        startsAt: toIso(c.startsAt),
+        endsAt: c.endsAt == null ? null : toIso(c.endsAt),
+      }))
       return {
         id: r.id as string,
         plate: r.plate as string,
@@ -331,7 +325,7 @@ export async function availability(
       }
     }),
     classSummary: { activeVehicles: Number(summary.active_vehicles), overlappingConfirmed: Number(summary.overlapping), estimateOnly: true },
-    notChecked: ['maintenance', 'transfer', 'rentals', 'external_sourcing', 'vehicle_location'],
+    notChecked: ['maintenance', 'transfer', 'external_sourcing', 'vehicle_location'],
   }
 }
 
@@ -359,6 +353,16 @@ export async function timeline(tx: Tx, access: CompanyAccess, input: { from: str
           order by r.pickup_at`)
       ).rows as Row[])
     : []
+  // Rentals hold the vehicle too (same rule as vehicle_busy; an overdue rental runs to the window's end).
+  const rentalBars = ids.length
+    ? ((
+        await tx.execute(sql`select k.id, k.rental_no, k.vehicle_id, k.status, lower(o.span) as starts_at, upper(o.span) as ends_at from rentals k
+          cross join lateral (select rental_occupancy(k.status, k.planned_pickup_at, k.planned_return_at, k.delivered_at, k.returned_at) as span) o
+          where k.vehicle_id in ${ids} and k.status in ('prepared', 'delivered', 'returned', 'closed') and o.span && tstzrange(${start}::timestamptz, ${stop}::timestamptz, '[)')
+            and (${access.allBranches ? sql`true` : access.branchIds.length ? sql`(k.pickup_branch_id in ${access.branchIds} or k.return_branch_id in ${access.branchIds} or k.actual_return_branch_id in ${access.branchIds})` : sql`false`})
+          order by 5`)
+      ).rows as Row[])
+    : []
   const unassigned = (
     await tx.execute(sql`select count(*)::int n from reservations r where r.vehicle_id is null and r.status = 'pending' and r.return_at > ${start} and r.pickup_at < ${stop} and ${scopeSql(access)}
       ${input.vehicleClassId ? sql`and r.vehicle_class_id = ${input.vehicleClassId}` : sql``}`)
@@ -371,6 +375,14 @@ export async function timeline(tx: Tx, access: CompanyAccess, input: { from: str
     windowEnd: stop,
     vehicles: vehicles.map((v) => ({ id: v.id as string, plate: v.plate as string, make: v.make as string, model: v.model as string, className: v.class_name as string, status: v.status as string })),
     bars: bars.map((b) => ({ id: b.id as string, reservationNo: b.reservation_no as string, vehicleId: b.vehicle_id as string, status: b.status as TimelineResponse['bars'][number]['status'], pickupAt: toIso(b.pickup_at), returnAt: toIso(b.return_at) })),
+    rentalBars: rentalBars.map((b) => ({
+      id: b.id as string,
+      rentalNo: b.rental_no as string,
+      vehicleId: b.vehicle_id as string,
+      status: b.status as TimelineResponse['rentalBars'][number]['status'],
+      startsAt: toIso(b.starts_at),
+      endsAt: b.ends_at == null ? null : toIso(b.ends_at),
+    })),
     unassigned: Number(unassigned.n),
   }
 }

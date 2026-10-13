@@ -75,8 +75,8 @@ describe('database', () => {
       }))
     expect(await count(null)).toEqual({ customers: 0, sequences: 0 })
     // Three counters per company: customers, corporate accounts and reservations (test data).
-    expect(await count(data.companies.drina)).toEqual({ customers: 14, sequences: 3 })
-    expect(await count(data.companies.neretva)).toEqual({ customers: 3, sequences: 3 })
+    expect(await count(data.companies.drina)).toEqual({ customers: 14, sequences: 4 })
+    expect(await count(data.companies.neretva)).toEqual({ customers: 3, sequences: 4 })
   })
 
   it('the runtime role cannot delete customers or counters', async () => {

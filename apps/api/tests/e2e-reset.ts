@@ -3,7 +3,7 @@
 import { appPool, asOwner, ownerPool, resetDatabase } from './helpers'
 
 if (!process.env.E2E_PASSWORD) throw new Error('E2E_PASSWORD missing')
-const data = await resetDatabase()
+const data = await resetDatabase(process.env.E2E_STORAGE)
 // Browser DST test: one vehicle registered early enough for the 2025 clock changes to be valid back-dated entries.
 await asOwner(data.companies.drina, `update vehicles set created_at = '2025-01-01T00:00:00Z' where plate = 'A05-J-418'`)
 await ownerPool.end()
