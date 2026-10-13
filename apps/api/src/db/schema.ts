@@ -749,7 +749,7 @@ export const userSensitiveActions = pgTable(
   (t) => [
     index('user_sensitive_actions_user_at_idx').on(t.userId, t.action, t.at),
     index('user_sensitive_actions_company_user_at_idx').on(t.companyId, t.userId, t.action, t.at),
-    check('user_sensitive_actions_action_check', sql`${t.action} in ('document_number_reveal', 'document_number_check')`),
+    check('user_sensitive_actions_action_check', sql`${t.action} in ('document_number_reveal', 'document_number_check', 'corporate_duplicate_check')`),
   ],
 )
 

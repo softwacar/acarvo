@@ -30,6 +30,7 @@ import type { Tx } from '../../db/client'
 import { branches, corporateAccounts } from '../../db/schema'
 import { audit } from '../../lib/audit'
 import { AppError, forbidden, notFound } from '../../lib/errors'
+import { consumeSensitiveAction, CORPORATE_DUPLICATE_CHECK_LIMITS } from '../../lib/sensitive-actions'
 import { withCompany } from '../../plugins/auth'
 import type { CompanyAccess } from '../auth/context'
 import { CUSTOMER_NOT_FOUND, companyCountry, getCustomer } from '../customers/repository'
@@ -160,6 +161,15 @@ export async function corporateRoutes(app: FastifyInstance) {
   app.post('/duplicate-check', { config: DUPLICATE_CHECK_RATE_LIMIT }, async (req) =>
     withCompany(req, 'corporate.manage', async (tx, access) => {
       const input = corporateDuplicateCheckSchema.parse(req.body ?? {})
+      // Counted in the database (sessions and restarts do not reset it); the per-minute memory limit stays as a burst guard.
+      await consumeSensitiveAction(tx, {
+        userId: req.auth!.user.id,
+        companyId: access.companyId,
+        action: 'corporate_duplicate_check',
+        limits: CORPORATE_DUPLICATE_CHECK_LIMITS,
+        code: 'DUPLICATE_CHECK_LIMIT',
+        message: (minutes) => `Kısa sürede çok sayıda benzer kayıt kontrolü yapıldı. Yaklaşık ${minutes} dakika sonra tekrar deneyin; kayıt yine de kaydedilirken denetlenir.`,
+      })
       const name = input.legalName ? normalizeName(input.legalName) : ''
       return {
         matches: await findAccountDuplicates(tx, {

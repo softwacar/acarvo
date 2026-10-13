@@ -2,7 +2,7 @@ import { Writable } from 'node:stream'
 import { type CorporateDetail, type CorporateListResponse, type CorporatePeopleResponse, taxIdWarnings } from '@acarvo/shared'
 import type { FastifyInstance } from 'fastify'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { appPool, asApp, asOwner, Client, type DevData, EMAILS, makeApp, ownerPool, resetDatabase } from './helpers'
+import { appPool, asApp, asOwner, asOwnerAs, Client, type DevData, EMAILS, makeApp, ownerPool, resetDatabase } from './helpers'
 
 // M3: corporate accounts, their records and links to people, on the test database with synthetic data only.
 
@@ -487,5 +487,30 @@ describe('database level and leaks', () => {
     const history = await auditText()
     expect(history).not.toMatch(/TEST-PDV|TEST-JIB|DETEST|ATU123|Örnek Caddesi|Fatura Sokak|Pošta 3|@|\+387|000 ?999/)
     expect(logs).not.toMatch(/TEST-PDV|Fatura Sokak|primjer-turizam|061 000 999/)
+  })
+})
+
+describe('duplicate suggestions are limited in the database', () => {
+  it('stop at the limit with 429, survive a new session and a restart, and never count another company or store a value', async () => {
+    const userId = (await asOwner(null, `select id from users where email = $1`, [EMAILS.adnan])).rows[0].id as string
+    await asOwner(null, 'truncate user_sensitive_actions')
+    await asOwnerAs(data.companies.drina, userId, `insert into user_sensitive_actions (user_id, company_id, action) select $1, $2, 'corporate_duplicate_check' from generate_series(1, 149)`, [userId, data.companies.drina])
+    const check = (c: Client) => c.post('/api/corporate-accounts/duplicate-check', { taxValue: 'TEST-PDV-200502' })
+    expect((await check(adnan)).statusCode).toBe(200)
+    const blocked = await check(adnan)
+    expect(blocked.statusCode).toBe(429)
+    expect(blocked.json().error.code).toBe('DUPLICATE_CHECK_LIMIT')
+    expect(Number(blocked.headers['retry-after'])).toBeGreaterThan(0)
+    expect(blocked.body).not.toContain('TEST-PDV')
+    const restarted = await makeApp()
+    try {
+      expect((await check(await login(EMAILS.adnan, restarted))).statusCode).toBe(429)
+    } finally {
+      await restarted.close()
+    }
+    expect((await lejla.post('/api/corporate-accounts/duplicate-check', { taxValue: 'TEST-PDV-200502' })).statusCode).toBe(200)
+    const rows = (await asOwner(data.companies.drina, `select coalesce(string_agg(row_to_json(u)::text, ' '), '') s from user_sensitive_actions u where action = 'corporate_duplicate_check'`)).rows[0].s as string
+    expect(rows).not.toContain('TEST')
+    await asOwner(null, 'truncate user_sensitive_actions')
   })
 })

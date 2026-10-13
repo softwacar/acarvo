@@ -2,7 +2,7 @@ import { sql } from 'drizzle-orm'
 import type { Tx } from '../db/client'
 import { AppError } from './errors'
 
-export type SensitiveAction = 'document_number_reveal' | 'document_number_check'
+export type SensitiveAction = 'document_number_reveal' | 'document_number_check' | 'corporate_duplicate_check'
 
 /** One window of a limit: per user in the active company, or per user across all companies. */
 export interface SensitiveLimit {
@@ -20,6 +20,18 @@ export const DOCUMENT_NUMBER_CHECK_LIMITS: SensitiveLimit[] = [
   { scope: 'user_company', minutes: 10, max: 30 },
   { scope: 'user_company', minutes: 60, max: 120 },
   { scope: 'user', minutes: 24 * 60, max: 600 },
+]
+
+/**
+ * Live duplicate suggestions while a corporate account form is typed in (debounced in the browser). Each check compares
+ * tax ids, e-mail addresses and phone numbers with the company's accounts, so it is limited like typed document numbers:
+ * in the database, per user in the company and per user overall, so new sessions and restarts do not reset it. Typing
+ * a whole form produces a few dozen checks; these windows leave ample room for that and stop sweeps.
+ */
+export const CORPORATE_DUPLICATE_CHECK_LIMITS: SensitiveLimit[] = [
+  { scope: 'user_company', minutes: 10, max: 150 },
+  { scope: 'user_company', minutes: 60, max: 500 },
+  { scope: 'user', minutes: 24 * 60, max: 2000 },
 ]
 
 /**
