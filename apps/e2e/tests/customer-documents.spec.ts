@@ -157,7 +157,9 @@ test.describe('as operations (Operasyon)', () => {
     await expect(detail.getByText('Açma yetkiniz yok')).toBeVisible()
     await expect(detail.getByRole('button', { name: /görüntüle|indir/i })).toHaveCount(0)
     await page.goto('/ayarlar')
-    await expect(page.getByText('Görebileceğiniz ayar yok')).toBeVisible()
+    // Document requirement settings stay owner-only; since Rentals V1 the rental mode is shown read-only.
+    await expect(page.getByRole('heading', { name: 'Müşteri belge gereksinimleri' })).toHaveCount(0)
+    await expect(page.getByRole('region', { name: 'Kiralama çalışma modu' })).toContainText('Yalnız şirket sahibi değiştirebilir')
   })
 })
 
