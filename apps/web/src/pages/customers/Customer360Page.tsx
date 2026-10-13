@@ -49,6 +49,7 @@ import { can, useSession } from '@/session'
 import { CustomerDocuments } from './CustomerDocuments'
 import { CustomerFormSheet } from './CustomerForm'
 import { RelatedReservations } from '../reservations/RelatedReservations'
+import { RelatedRentals } from '../rentals/RelatedRentals'
 import { listSearchToReturnTo } from './search'
 
 // ---------------------------------------------------------------------------
@@ -121,7 +122,7 @@ function Facts({ rows, columns = 2 }: { rows: [string, ReactNode][]; columns?: 1
 const btnPrimary = 'inline-flex h-10 items-center gap-2 rounded-lg bg-blue px-4 font-medium text-white transition-colors hover:bg-blue-ink'
 const btnSecondary = 'inline-flex h-10 items-center gap-2 rounded-lg border border-line bg-surface px-4 font-medium text-ink transition-colors hover:bg-line-soft'
 
-const LATER_ACTIONS = ['Rezervasyon oluştur', 'Kiralama aç', 'İletişim kaydı ekle']
+const LATER_ACTIONS = ['Rezervasyon oluştur', 'İletişim kaydı ekle']
 
 function MoreMenu({ c, canManage, onArchive, onRestore }: { c: CustomerDetail; canManage: boolean; onArchive: () => void; onRestore: () => void }) {
   return (
@@ -416,7 +417,7 @@ function FileStatus({ c, onTab }: { c: CustomerDetail; onTab: (t: CustomerTab) =
     [IdentificationCard, 'Kimlik ve ehliyet belgeleri', <DocumentsState c={c} />, 'belgeler'],
     [Buildings, 'Kurumsal hesap bağlantıları', <CorporateLinksState c={c} />, null],
     [CalendarCheck, 'Rezervasyonlar', <span className="text-ink-2">Listeyi aç</span>, 'rezervasyonlar'],
-    [Key, 'Kiralamalar', <span className="text-ink-3">Henüz bağlı değil</span>, 'kiralamalar'],
+    [Key, 'Kiralamalar', <span className="text-ink-2">Listeyi aç</span>, 'kiralamalar'],
     [Coins, 'Cari hesap', <span className="text-ink-3">Finans modülüyle</span>, 'cari'],
   ]
   return (
@@ -446,7 +447,7 @@ function FileStatus({ c, onTab }: { c: CustomerDetail; onTab: (t: CustomerTab) =
       {c.status === 'active' && (
         <p className="mt-3 flex items-start gap-1.5 border-t border-line-soft pt-3 text-[12.5px] text-ink-2">
           <Info size={14} className="mt-[3px] shrink-0 text-ink-3" />
-          Eksik belgeler rezervasyonu engellemez; kiralama öncesi kontrol Kiralamalar modülüyle gelecek.
+          Eksik belgeler rezervasyonu engellemez; kiralamada her sürücü için belge kararı teslimden önce verilir.
         </p>
       )}
     </Panel>
@@ -743,7 +744,7 @@ export function Customer360Page() {
           {tab === 'genel' && <Overview c={c} canManage={canManage} onEdit={() => setEditing(true)} onTab={onTab} />}
           {tab === 'belgeler' && <CustomerDocuments customer={c} />}
           {tab === 'gecmis' && <HistoryTab c={c} />}
-          {tab === 'rezervasyonlar' && can(session, 'reservations.read') ? <RelatedReservations kind="customer" id={c.id} /> : PENDING[tab] && <Pending tab={tab} />}
+          {tab === 'rezervasyonlar' && can(session, 'reservations.read') ? <RelatedReservations kind="customer" id={c.id} /> : tab === 'kiralamalar' && can(session, 'rentals.read') ? <RelatedRentals kind="customer" id={c.id} /> : PENDING[tab] && <Pending tab={tab} />}
         </div>
       </div>
       {editing && <CustomerFormSheet mode="edit" customer={c} onClose={() => setEditing(false)} />}

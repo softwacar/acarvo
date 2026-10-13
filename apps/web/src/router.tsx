@@ -1,4 +1,4 @@
-import { CORPORATE_TABS, type CorporateTab, CUSTOMER_TABS, RESERVATION_TABS, type ReservationTab, type CustomerTab, VEHICLE_TABS, type VehicleTab } from '@acarvo/shared'
+import { CORPORATE_TABS, type CorporateTab, CUSTOMER_TABS, RENTAL_TABS, type RentalTab, RESERVATION_TABS, type ReservationTab, type CustomerTab, VEHICLE_TABS, type VehicleTab } from '@acarvo/shared'
 import type { QueryClient } from '@tanstack/react-query'
 import { createRootRouteWithContext, createRoute, createRouter, lazyRouteComponent, Outlet, redirect, useParams } from '@tanstack/react-router'
 import { AppLayout } from './components/AppLayout'
@@ -14,6 +14,7 @@ import { validateVehicleSearch } from './pages/vehicles/search'
 import { validateCustomerSearch } from './pages/customers/search'
 import { validateCorporateSearch } from './pages/corporate/search'
 import { validateReservationSearch } from './pages/reservations/search'
+import { validateRentalSearch } from './pages/rentals/search'
 import { sessionQuery } from './session'
 
 const rootRoute = createRootRouteWithContext<{ queryClient: QueryClient }>()({
@@ -120,6 +121,39 @@ const reservationEditRoute = createRoute({
   path: '/rezervasyonlar/$reservationId/duzenle',
   component: lazyRouteComponent(() => import('./pages/reservations/ReservationRoutes'), 'EditReservationPage'),
 })
+const rentalsRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/kiralamalar',
+  validateSearch: validateRentalSearch,
+  component: lazyRouteComponent(() => import('./pages/rentals/RentalsPage'), 'RentalsPage'),
+})
+const rentalNewRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/kiralamalar/yeni',
+  component: lazyRouteComponent(() => import('./pages/rentals/RentalRoutes'), 'NewRentalPage'),
+})
+const rental360Route = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/kiralamalar/$rentalId',
+  validateSearch: (s: Record<string, unknown>): { sekme?: RentalTab } =>
+    (RENTAL_TABS as readonly string[]).includes(s.sekme as string) && s.sekme !== 'genel' ? { sekme: s.sekme as RentalTab } : {},
+  component: lazyRouteComponent(() => import('./pages/rentals/Rental360Page'), 'Rental360Page'),
+})
+const rentalEditRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/kiralamalar/$rentalId/duzenle',
+  component: lazyRouteComponent(() => import('./pages/rentals/RentalRoutes'), 'EditRentalPage'),
+})
+const rentalHandoverRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/kiralamalar/$rentalId/teslim',
+  component: lazyRouteComponent(() => import('./pages/rentals/InspectionPage'), 'HandoverPage'),
+})
+const rentalReturnRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/kiralamalar/$rentalId/iade',
+  component: lazyRouteComponent(() => import('./pages/rentals/InspectionPage'), 'ReturnPage'),
+})
 const settingsRoute = createRoute({
   getParentRoute: () => appRoute,
   path: '/ayarlar',
@@ -135,7 +169,7 @@ const moduleRoute = createRoute({
   },
 })
 
-const routeTree = rootRoute.addChildren([loginRoute, appRoute.addChildren([indexRoute, branchesRoute, vehiclesRoute, vehicleNewRoute, vehicle360Route, vehicleEditRoute, customersRoute, customer360Route, corporateRoute, corporate360Route, reservationsRoute, reservationNewRoute, reservation360Route, reservationEditRoute, settingsRoute, profileRoute, moduleRoute])])
+const routeTree = rootRoute.addChildren([loginRoute, appRoute.addChildren([indexRoute, branchesRoute, vehiclesRoute, vehicleNewRoute, vehicle360Route, vehicleEditRoute, customersRoute, customer360Route, corporateRoute, corporate360Route, reservationsRoute, reservationNewRoute, reservation360Route, reservationEditRoute, rentalsRoute, rentalNewRoute, rental360Route, rentalEditRoute, rentalHandoverRoute, rentalReturnRoute, settingsRoute, profileRoute, moduleRoute])])
 
 export function createAppRouter(queryClient: QueryClient) {
   return createRouter({ routeTree, context: { queryClient }, defaultPreload: 'intent', scrollRestoration: true })

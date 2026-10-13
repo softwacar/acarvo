@@ -58,6 +58,7 @@ import { btnPrimary, btnSecondary, conflictMessage, Panel, ReasonDialog, useAcco
 import { AddressesTab, ChannelsPanel, TaxIdsTab } from './CorporateRecords'
 import { listSearchToReturnTo } from './search'
 import { RelatedReservations } from '../reservations/RelatedReservations'
+import { RelatedRentals } from '../rentals/RelatedRentals'
 
 const TAB_LABELS: Record<CorporateTab, string> = {
   genel: 'Genel',
@@ -585,7 +586,7 @@ export function Corporate360Page() {
           {tab === 'kisiler' && <PeopleTab a={a} mode="all" canManage={canManage} />}
           {tab === 'suruculer' && <PeopleTab a={a} mode="drivers" canManage={canManage} />}
           {tab === 'gecmis' && <HistoryTab a={a} />}
-          {tab === 'rezervasyonlar' && can(session, 'reservations.read') ? <RelatedReservations kind="account" id={a.id} /> : PENDING[tab] && <Pending tab={tab} />}
+          {tab === 'rezervasyonlar' && can(session, 'reservations.read') ? <RelatedReservations kind="account" id={a.id} /> : tab === 'kiralamalar' && can(session, 'rentals.read') ? <RelatedRentals kind="account" id={a.id} /> : PENDING[tab] && <Pending tab={tab} />}
         </div>
       </div>
       {tab === 'genel' && a.status === 'active' && (

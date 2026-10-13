@@ -18,7 +18,7 @@ import { Field, Select, Textarea } from '@/components/fields'
 import { ErrorState, StatePanel } from '@/components/states'
 import { toast } from '@/components/Toaster'
 import { useReturnFocus } from '@/components/useReturnFocus'
-import { ApiRequestError, reservationsApi } from '@/lib/api'
+import { ApiRequestError, rentalsApi, reservationsApi } from '@/lib/api'
 import { countryName } from '@/lib/customer-labels'
 import {
   CANCEL_REASON_LABELS,
@@ -131,6 +131,69 @@ function ReasonNoteDialog<T extends string>({ title, description, reasons, label
               </button>
             </div>
           </form>
+        </Dialog.Content>
+      </Dialog.Portal>
+    </Dialog.Root>
+  )
+}
+
+/** Confirmed reservation → prepared rental (atomic on the server; once; a resent request returns the same rental). */
+function ConvertDialog({ r, onClose }: { r: ReservationDetail; onClose: () => void }) {
+  const session = useSession()
+  const navigate = useNavigate()
+  const qc = useQueryClient()
+  const returnFocus = useReturnFocus()
+  const [requestId] = useState(() => crypto.randomUUID())
+  const [error, setError] = useState<string | null>(null)
+  const [pending, setPending] = useState(false)
+  return (
+    <Dialog.Root open onOpenChange={(o) => !o && onClose()}>
+      <Dialog.Portal>
+        <Dialog.Overlay className="fixed inset-0 z-50 bg-ink/30" />
+        <Dialog.Content onCloseAutoFocus={returnFocus} className="fixed top-1/2 left-1/2 z-50 w-[480px] max-w-[calc(100vw-32px)] -translate-x-1/2 -translate-y-1/2 animate-fade rounded-xl border border-line bg-surface p-5 shadow-xl outline-none">
+          <Dialog.Title className="text-[17px] font-semibold">Kiralamaya dönüştür</Dialog.Title>
+          <Dialog.Description className="mt-1 text-[13.5px] text-ink-2">
+            {r.reservationNo} için “Teslim bekliyor” durumunda bir kiralama açılır. Araç ({r.vehicle?.plate}), dönem, şubeler, müşteri, kurumsal hesap ve sürücüler kiralamaya taşınır. Rezervasyon “Kiralamaya dönüştü” olur ve artık değiştirilemez; bilgileri kendi kaydında korunur.
+          </Dialog.Description>
+          <ul className="mt-3 space-y-1 rounded-lg bg-ground/70 px-3.5 py-2.5 text-[12.5px] text-ink-2">
+            <li>Teslim ayrı bir adımdır: belge kararı, km, yakıt, kontrol listesi ve 4–5 fotoğraf teslim masasında alınır.</li>
+            <li>Fiyat, ödeme, depozito ve sözleşme oluşturulmaz.</li>
+          </ul>
+          {error && (
+            <p role="alert" className="mt-3 text-[13px] font-medium text-alert">
+              {error}
+            </p>
+          )}
+          <div className="mt-4 flex flex-wrap justify-end gap-2">
+            <Dialog.Close className="h-10 rounded-lg px-3.5 font-medium text-ink-2 hover:bg-ground hover:text-ink">Vazgeç</Dialog.Close>
+            <button
+              type="button"
+              disabled={pending}
+              onClick={async () => {
+                setPending(true)
+                setError(null)
+                try {
+                  const rental = await rentalsApi.fromReservation(r.id, r.version, requestId)
+                  qc.setQueryData(['rental', session.company?.id, rental.id], rental)
+                  void qc.invalidateQueries({ queryKey: ['reservation', session.company?.id, r.id] })
+                  void qc.invalidateQueries({ queryKey: ['reservations'] })
+                  void qc.invalidateQueries({ queryKey: ['rentals'] })
+                  toast(`${rental.rentalNo} hazırlandı; ${r.reservationNo} kiralamaya dönüştü.`)
+                  onClose()
+                  void navigate({ to: '/kiralamalar/$rentalId', params: { rentalId: rental.id } })
+                } catch (e) {
+                  setError(e instanceof ApiRequestError ? e.message : 'Dönüştürülemedi. Bağlantınızı kontrol edin; tekrar denediğinizde ikinci kiralama oluşmaz.')
+                  void qc.invalidateQueries({ queryKey: ['reservation', session.company?.id, r.id] })
+                } finally {
+                  setPending(false)
+                }
+              }}
+              className={btnPrimary}
+            >
+              {pending && <SpinnerGap size={16} className="animate-spin" />}
+              Kiralamayı hazırla
+            </button>
+          </div>
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog.Root>
@@ -279,7 +342,15 @@ export function Reservation360Page() {
   const history = useQuery({ queryKey: ['reservation-history', session.company?.id, reservationId], queryFn: () => reservationsApi.history(reservationId), enabled: tab === 'gecmis' })
   const updated = useUpdated(reservationId)
   const [dialog, setDialog] = useState<'cancel' | 'noShow' | null>(null)
+  const [convertOpen, setConvertOpen] = useState(false)
   const [actionError, setActionError] = useState<string | null>(null)
+  const converted = q.data?.status === 'converted'
+  const rentalLink = useQuery({
+    queryKey: ['reservation-rental', session.company?.id, reservationId],
+    queryFn: () => rentalsApi.search({ view: 'all', q: q.data!.reservationNo, pageSize: 25 }),
+    enabled: converted && can(session, 'rentals.read'),
+  })
+  const rental = rentalLink.data?.items.find((x) => x.reservation?.id === reservationId)
   const onTab = (t: ReservationTab) => void navigate({ to: '/rezervasyonlar/$reservationId', params: { reservationId }, search: t === 'genel' ? {} : { sekme: t }, replace: true, resetScroll: false })
   const confirm = useMutation({
     mutationFn: () => reservationsApi.confirm(reservationId, q.data!.version),
@@ -347,8 +418,19 @@ export function Reservation360Page() {
               {formatMoment(r.pickup, zone)} <ArrowRight size={13} className="inline" /> {formatMoment(r.return, zone)} · {formatDuration(r.durationMinutes)}
             </p>
           </div>
+          {r.status === 'converted' && rental && (
+            <Link to="/kiralamalar/$rentalId" params={{ rentalId: rental.id }} className={btnPrimary}>
+              <Key size={16} /> Kiralamaya git · {rental.rentalNo}
+            </Link>
+          )}
           {active && (
             <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
+              {r.status === 'confirmed' && can(session, 'rentals.manage') && (
+                <button type="button" onClick={() => setConvertOpen(true)} className={btnPrimary}>
+                  <Key size={16} />
+                  Kiralamaya dönüştür
+                </button>
+              )}
               {r.status === 'pending' && canConfirm && (
                 <button type="button" onClick={() => confirm.mutate()} disabled={confirm.isPending || !r.vehicle} title={!r.vehicle ? 'Önce belirli bir araç atayın' : undefined} className={btnPrimary}>
                   {confirm.isPending ? <SpinnerGap size={16} className="animate-spin" /> : <CheckCircle size={16} />}
@@ -356,7 +438,7 @@ export function Reservation360Page() {
                 </button>
               )}
               {canManage && (
-                <Link to="/rezervasyonlar/$reservationId/duzenle" params={{ reservationId: r.id }} className={r.status === 'pending' && canConfirm ? btnSecondary : btnPrimary}>
+                <Link to="/rezervasyonlar/$reservationId/duzenle" params={{ reservationId: r.id }} className={(r.status === 'pending' && canConfirm) || (r.status === 'confirmed' && can(session, 'rentals.manage')) ? btnSecondary : btnPrimary}>
                   <PencilSimple size={16} />
                   Düzenle
                 </Link>
@@ -379,7 +461,7 @@ export function Reservation360Page() {
                       )}
                       <DropdownMenu.Separator className="my-1 h-px bg-line" />
                       <DropdownMenu.Label className="px-2.5 pt-1.5 pb-1 text-[12px] text-ink-3">İlgili modüllerle açılacak</DropdownMenu.Label>
-                      {['Kiralamaya dönüştür', 'Kaparo al', 'Fiyatı gözden geçir'].map((x) => (
+                      {['Kaparo al', 'Fiyatı gözden geçir'].map((x) => (
                         <DropdownMenu.Item key={x} disabled className="flex h-8 items-center justify-between rounded-md px-2.5 text-[13.5px] text-ink-3 outline-none">
                           {x}
                           <span className="text-[11.5px]">yakında</span>
@@ -474,13 +556,13 @@ export function Reservation360Page() {
                 <Panel title="Not">{r.note ? <p className="whitespace-pre-line text-ink">{r.note}</p> : <p className="text-ink-2">Not yok.</p>}</Panel>
                 <p className="flex items-start gap-1.5 text-[12.5px] text-ink-2">
                   <Info size={14} className="mt-[3px] shrink-0 text-ink-3" />
-                  {r.status === 'confirmed' ? 'Onay, araç ve zaman ayırmasıdır. ' : ''}Bu rezervasyon için fiyat hesaplanmadı; ödeme alınmadı, sözleşme oluşturulmadı ve kiralama başlamadı.
+                  {r.status === 'converted' ? 'Bu rezervasyon kiralamaya dönüştü; teslim, iade ve kapanış kiralama kaydında izlenir. ' : r.status === 'confirmed' ? 'Onay, araç ve zaman ayırmasıdır. ' : ''}Bu rezervasyon için fiyat hesaplanmadı; ödeme alınmadı ve sözleşme oluşturulmadı.
                 </p>
               </div>
               <div className="min-w-0 space-y-5">
                 <Panel title="Belge durumu">
                   <p className="text-[13.5px] text-ink">Rezervasyon oluşturulabilir. Eksik belgeler kiralama başlamadan önce tamamlanmalıdır.</p>
-                  <p className="mt-2 text-[12.5px] text-ink-2">Kişilerin belge özeti Kişiler sekmesinde. Kiralama öncesi zorunlu belge kontrolü Kiralamalar modülüyle gelecek.</p>
+                  <p className="mt-2 text-[12.5px] text-ink-2">Kişilerin belge özeti Kişiler sekmesinde. Belge kararı kiralamanın teslim masasında her sürücü için ayrı verilir.</p>
                 </Panel>
                 <Panel title="Kayıt bilgisi">
                   <Facts
@@ -532,7 +614,7 @@ export function Reservation360Page() {
               )}
               <p className="mt-3 flex items-start gap-1.5 border-t border-line-soft pt-3 text-[12.5px] text-ink-2">
                 <Info size={14} className="mt-[3px] shrink-0 text-ink-3" />
-                Rezervasyonlar arasında hazırlık süresi bırakılmaz: bir rezervasyonun bittiği anda başlayan rezervasyon kabul edilir. Bu, aracın temizlenmiş, kontrol edilmiş veya teslime hazır olduğu anlamına gelmez; hazırlık, temizlik, hasar ve teslim kontrolleri Teslim/İade modülüyle gelecek.
+                Rezervasyonlar arasında hazırlık süresi bırakılmaz: bir rezervasyonun bittiği anda başlayan rezervasyon kabul edilir. Bu, aracın temizlenmiş, kontrol edilmiş veya teslime hazır olduğu anlamına gelmez; temizlik, hasar ve teslim kontrolleri kiralamanın teslim masasında yapılır ve önceki iade kontrolü bitmemiş araç teslim edilemez.
               </p>
             </Panel>
           )}
@@ -593,7 +675,7 @@ export function Reservation360Page() {
                     {[
                       [Coins, 'Fiyat dökümü ve fiyat anlık görüntüsü (Fiyatlandırma)'],
                       [Coins, 'Kaparo / ön ödeme (Finans)'],
-                      [Key, 'Kiralamaya dönüştürme, teslim ve sözleşme (Kiralamalar)'],
+                      [Key, 'Sözleşme ve imza (Sözleşme modülü)'],
                     ].map(([Ico, t]) => (
                       <li key={t as string} className="flex items-start gap-2.5">
                         {(() => {
@@ -611,6 +693,7 @@ export function Reservation360Page() {
         </div>
       </div>
 
+      {convertOpen && <ConvertDialog r={r} onClose={() => setConvertOpen(false)} />}
       {dialog === 'cancel' && (
         <ReasonNoteDialog<ReservationCancelReason>
           title="Rezervasyonu iptal et"

@@ -46,6 +46,7 @@ import { VehicleDocuments } from './VehicleDocuments'
 import { VehicleGallery } from './VehicleGallery'
 import { OdometerLocationSection, placeText } from './VehicleHistory'
 import { RelatedReservations } from '../reservations/RelatedReservations'
+import { RelatedRentals } from '../rentals/RelatedRentals'
 
 // ---------------------------------------------------------------------------
 // Tabs (spec §13.3: 8 fixed tabs inside the vehicle, never sidebar links)
@@ -138,7 +139,7 @@ const btnSecondary =
   'inline-flex h-10 items-center gap-2 rounded-lg border border-line bg-surface px-4 font-medium text-ink shadow-[0_1px_2px_rgb(16_24_40/0.04)] transition-colors hover:bg-line-soft'
 
 /** Spec §13.3 quick actions. Shown so the user knows where they will live; each says why it is not available yet. */
-const LATER_ACTIONS = ['Yeni rezervasyon', 'Kiralama aç', 'Müsaitliği kontrol et', 'Bakım planla', 'Hasar bildir', 'Ceza kaydet', 'Transfer başlat']
+const LATER_ACTIONS = ['Yeni rezervasyon', 'Müsaitliği kontrol et', 'Bakım planla', 'Hasar bildir', 'Ceza kaydet', 'Transfer başlat']
 
 function MoreMenu({ vehicleId, canEdit }: { vehicleId: string; canEdit: boolean }) {
   const navigate = useNavigate()
@@ -194,7 +195,7 @@ function StatusCard({ v }: { v: VehicleDetail }) {
       <div className="mt-4 flex items-center gap-2.5 border-t border-line-soft pt-3.5 text-[13px]">
         <CalendarCheck size={16} className="shrink-0 text-ink-3" />
         <span className="font-medium text-ink">Müsaitlik ve kiralama</span>
-        <span className="text-ink-2">Rezervasyon ve kiralama modülleriyle gelecek</span>
+        <span className="text-ink-2">Rezervasyonlar Müsaitlik, kiralamalar Kiralama geçmişi sekmesinde</span>
       </div>
     </div>
   )
@@ -883,7 +884,7 @@ export function Vehicle360Page() {
         {tab === 'belgeler' && <VehicleDocuments vehicleId={v.id} plate={v.plate} />}
         {tab === 'gecmis' && <HistoryTab v={v} history={history.data} isLoading={history.isPending} error={history.error} onRetry={() => history.refetch()} />}
         {tab === 'musaitlik' && can(session, 'reservations.read') && <div className="mb-5"><RelatedReservations kind="vehicle" id={vehicleId} /></div>}
-        {PENDING[tab] && <Pending tab={tab} />}
+        {tab === 'kiralamalar' && can(session, 'rentals.read') ? <RelatedRentals kind="vehicle" id={vehicleId} /> : PENDING[tab] && <Pending tab={tab} />}
       </div>
     </>
   )

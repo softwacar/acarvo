@@ -7,6 +7,7 @@ import { Select } from '@/components/fields'
 import { ErrorState } from '@/components/states'
 import { reservationsApi } from '@/lib/api'
 import { dayLabel, RESERVATION_STATUS_LABELS } from '@/lib/reservation-labels'
+import { RENTAL_STATUS_LABELS } from '@/lib/rental-labels'
 import { cn } from '@/lib/utils'
 import { useSession } from '@/session'
 
@@ -75,6 +76,9 @@ export function ReservationTimeline({ branches, classes, today }: { branches: Re
           <span className="inline-flex items-center gap-1.5">
             <span aria-hidden className="h-2.5 w-5 rounded-sm border border-dashed border-hold bg-hold-soft" /> Bekleyen (aracı tutmaz)
           </span>
+          <span className="inline-flex items-center gap-1.5">
+            <span aria-hidden className="h-2.5 w-5 rounded-sm bg-blue/80" /> Kiralama
+          </span>
         </span>
       </div>
       {q.isError ? (
@@ -135,6 +139,29 @@ export function ReservationTimeline({ branches, classes, today }: { branches: Re
                             </Link>
                           )
                         })}
+                      {t.rentalBars
+                        .filter((b) => b.vehicleId === v.id)
+                        .map((b) => {
+                          const left = pos(b.startsAt)
+                          // Open end: handed over, planned return passed and not back yet; it runs to the window's end.
+                          const width = Math.max(1.2, (b.endsAt ? pos(b.endsAt) : 100) - left)
+                          return (
+                            <Link
+                              key={b.id}
+                              to="/kiralamalar/$rentalId"
+                              params={{ rentalId: b.id }}
+                              aria-label={`${b.rentalNo}, kiralama ${RENTAL_STATUS_LABELS[b.status]}${b.endsAt ? '' : ', iade gecikti'}`}
+                              className={cn(
+                                'absolute top-2 bottom-2 flex items-center overflow-hidden rounded-md px-1.5 text-[11px] font-semibold whitespace-nowrap text-white',
+                                b.endsAt ? 'bg-blue/80 hover:bg-blue' : 'bg-alert/85 hover:bg-alert',
+                              )}
+                              style={{ left: `${left}%`, width: `${width}%` }}
+                            >
+                              {b.rentalNo}
+                              {!b.endsAt && ' · gecikmede'}
+                            </Link>
+                          )
+                        })}
                     </div>
                   </li>
                 ))}
@@ -146,7 +173,7 @@ export function ReservationTimeline({ branches, classes, today }: { branches: Re
       <p className="flex items-start gap-1.5 border-t border-line-soft px-4 py-2.5 text-[12.5px] text-ink-2 sm:px-5">
         <Info size={14} className="mt-[3px] shrink-0 text-ink-3" />
         {t?.unassigned ? `${t.unassigned} bekleyen rezervasyonda henüz araç atanmadı (yalnız sınıf). ` : ''}
-        Bakım, transfer ve kiralama kayıtları ilgili modüller geliştirildiğinde bu çizelgede görünecek.
+        Kiralamalar mavi gösterilir; iadesi gecikmiş kiralama araç geri gelene kadar aracı tutar. Bakım ve transfer kayıtları ilgili modüllerle görünecek.
       </p>
     </section>
   )

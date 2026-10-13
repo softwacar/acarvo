@@ -241,16 +241,15 @@ export async function loadInspection(tx: Tx, rentalId: string, kind: 'handover' 
 
 /** Unanswered checklist items, empty fields: what still blocks finishing an inspection. */
 export function missingRecordFields(i: RentalInspection | null, kind: 'handover' | 'return'): string[] {
-  if (!i) return ['inspection']
   const out: string[] = []
   if (kind === 'handover') {
-    if (i.km == null) out.push('km')
-    if (!i.fuel) out.push('fuel')
-    if (!i.counterpart) out.push('counterpart')
+    if (i?.km == null) out.push('km')
+    if (!i?.fuel) out.push('fuel')
+    if (!i?.counterpart) out.push('counterpart')
   }
-  if (!i.cleanliness) out.push('cleanliness')
-  if (!i.condition) out.push('condition')
-  for (const item of CHECKLIST_ITEMS) if (!i.checklist[item]) out.push(`checklist.${item}`)
+  if (!i?.cleanliness) out.push('cleanliness')
+  if (!i?.condition) out.push('condition')
+  for (const item of CHECKLIST_ITEMS) if (!i?.checklist[item]) out.push(`checklist.${item}`)
   return out
 }
 

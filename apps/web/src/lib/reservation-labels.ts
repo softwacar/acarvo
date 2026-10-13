@@ -73,7 +73,6 @@ export const WARNING_LABELS: Record<ReservationWarningCode, string> = {
 export const NOT_CHECKED_LABELS: Record<string, string> = {
   maintenance: 'Bakım',
   transfer: 'Transfer',
-  rentals: 'Kiralamalar',
   external_sourcing: 'Dış kaynak araçlar',
   vehicle_location: 'Aracın o tarihteki konumu',
 }

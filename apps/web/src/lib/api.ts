@@ -1,4 +1,4 @@
-import type { ApiError, AvailabilityResponse, ReservationActivityItem, ReservationBranch, ReservationDetail, ReservationListItem, ReservationListResponse, TimelineResponse, CorporateActivityItem, CorporateDetail, CorporateDuplicateMatch, CorporateListResponse, CorporatePeopleResponse, CustomerCorporateLink, CustomerActivityItem, CustomerDocument, CustomerDocumentsResponse, CustomerDocumentStatus, RequirementItem, RequirementPolicy, CustomerDetail, CustomerDuplicateResponse, CustomerListResponse, HistoryWriteResult, SessionInfo, VehicleActivityItem, VehicleDocumentDetail, VehicleDocumentsResponse, VehiclePhoto, VehiclePhotoList, VehicleClassSummary, VehicleDetail, VehicleHistory, VehicleListResponse } from '@acarvo/shared'
+import type { ApiError, AvailabilityResponse, RentalActivityItem, RentalDetail, RentalListItem, RentalListResponse, ReservationActivityItem, ReservationBranch, ReservationDetail, ReservationListItem, ReservationListResponse, TimelineResponse, CorporateActivityItem, CorporateDetail, CorporateDuplicateMatch, CorporateListResponse, CorporatePeopleResponse, CustomerCorporateLink, CustomerActivityItem, CustomerDocument, CustomerDocumentsResponse, CustomerDocumentStatus, RequirementItem, RequirementPolicy, CustomerDetail, CustomerDuplicateResponse, CustomerListResponse, HistoryWriteResult, SessionInfo, VehicleActivityItem, VehicleDocumentDetail, VehicleDocumentsResponse, VehiclePhoto, VehiclePhotoList, VehicleClassSummary, VehicleDetail, VehicleHistory, VehicleListResponse } from '@acarvo/shared'
 
 export class ApiRequestError extends Error {
   constructor(
@@ -230,6 +230,40 @@ export const reservationsApi = {
   forCustomer: (id: string) => api<{ items: ReservationListItem[] }>(`/customers/${id}/reservations`),
   forAccount: (id: string) => api<{ items: ReservationListItem[] }>(`/corporate-accounts/${id}/reservations`),
   forVehicle: (id: string) => api<{ items: ReservationListItem[] }>(`/vehicles/${id}/reservations`),
+}
+
+export interface RentalBranch {
+  id: string
+  name: string
+  code: string
+  timeZone: string
+  country: string | null
+  inScope: boolean
+}
+
+/** Rentals, handover and return (V1). Every state change carries the version the user saw and a request id. */
+export const rentalsApi = {
+  search: (body: Record<string, unknown>) => api<RentalListResponse>('/rentals/search', { method: 'POST', body }),
+  get: (id: string) => api<RentalDetail>(`/rentals/${id}`),
+  history: (id: string) => api<{ items: RentalActivityItem[] }>(`/rentals/${id}/history`),
+  branches: () => api<{ items: RentalBranch[] }>('/rentals/branches'),
+  availability: (body: Record<string, unknown>) => api<AvailabilityResponse>('/rentals/availability', { method: 'POST', body }),
+  create: (body: unknown) => api<RentalDetail>('/rentals', { method: 'POST', body }),
+  fromReservation: (reservationId: string, version: number, requestId: string) => api<RentalDetail>(`/rentals/from-reservation/${reservationId}`, { method: 'POST', body: { version, requestId } }),
+  update: (id: string, body: unknown) => api<RentalDetail>(`/rentals/${id}`, { method: 'PUT', body }),
+  cancel: (id: string, body: unknown) => api<RentalDetail>(`/rentals/${id}/cancel`, { method: 'POST', body }),
+  documentCheck: (id: string, body: unknown) => api<RentalDetail>(`/rentals/${id}/document-check`, { method: 'PUT', body }),
+  saveInspection: (id: string, kind: 'handover' | 'return', body: unknown) => api<RentalDetail>(`/rentals/${id}/inspections/${kind}`, { method: 'PUT', body }),
+  uploadPhoto: (id: string, kind: 'handover' | 'return', angle: string, file: File, onProgress?: (f: number) => void) =>
+    uploadFile<RentalDetail>(`/rentals/${id}/inspections/${kind}/photos?angle=${angle}`, file, onProgress),
+  removePhoto: (id: string, kind: 'handover' | 'return', photoId: string) => api<RentalDetail>(`/rentals/${id}/inspections/${kind}/photos/${photoId}`, { method: 'DELETE' }),
+  deliver: (id: string, body: unknown) => api<RentalDetail>(`/rentals/${id}/deliver`, { method: 'POST', body }),
+  extend: (id: string, body: unknown) => api<RentalDetail>(`/rentals/${id}/extend`, { method: 'POST', body }),
+  returnVehicle: (id: string, body: unknown) => api<RentalDetail>(`/rentals/${id}/return`, { method: 'POST', body }),
+  close: (id: string, body: unknown) => api<RentalDetail>(`/rentals/${id}/close`, { method: 'POST', body }),
+  forCustomer: (id: string) => api<{ items: RentalListItem[] }>(`/customers/${id}/rentals`),
+  forAccount: (id: string) => api<{ items: RentalListItem[] }>(`/corporate-accounts/${id}/rentals`),
+  forVehicle: (id: string) => api<{ items: RentalListItem[] }>(`/vehicles/${id}/rentals`),
 }
 
 /** Customer documents (M2). Numbers are sent in bodies only and come back masked; the full number only from reveal. */

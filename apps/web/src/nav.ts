@@ -67,7 +67,7 @@ export const NAV: NavGroup[] = [
     label: 'Operasyon',
     items: [
       { slug: 'rezervasyonlar', label: 'Rezervasyonlar', icon: CalendarCheck, permission: 'reservations.read', built: true },
-      { slug: 'kiralamalar', label: 'Kiralamalar', icon: Key },
+      { slug: 'kiralamalar', label: 'Kiralamalar', icon: Key, permission: 'rentals.read', built: true },
       { slug: 'takvim', label: 'Takvim', icon: CalendarBlank },
       { slug: 'gorevler', label: 'Görevler', icon: ClipboardText },
       { slug: 'araclar', label: 'Araçlar', icon: CarProfile, permission: 'vehicles.read', built: true },
@@ -156,6 +156,9 @@ export const PERMISSION_LABELS: Record<Permission, string> = {
   'reservations.read': 'Rezervasyonları görüntüleme',
   'reservations.manage': 'Rezervasyon oluşturma, düzenleme ve iptal',
   'reservations.confirm': 'Rezervasyon onaylama',
+  'rentals.read': 'Kiralamaları görüntüleme',
+  'rentals.manage': 'Kiralama hazırlama, düzenleme, uzatma, iptal ve belge kararı',
+  'rentals.handover': 'Araç teslimi, iadesi, kontrolü ve kapanışı',
   'branches.read': 'Şubeleri görüntüleme',
   'branches.manage': 'Şube ülkesini yönetme',
   'settings.documents.manage': 'Müşteri belge gereksinimlerini yönetme',

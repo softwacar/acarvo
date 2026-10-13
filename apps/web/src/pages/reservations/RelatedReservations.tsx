@@ -31,8 +31,8 @@ export function RelatedReservations({ kind, id }: { kind: 'customer' | 'account'
       <p className="mt-3 flex items-start gap-1.5 border-t border-line-soft pt-3 text-[12.5px] text-ink-2">
         <Info size={14} className="mt-[3px] shrink-0 text-ink-3" />
         {kind === 'vehicle'
-          ? 'Bakım, transfer ve kiralama blokları ilgili modüller geliştirildiğinde burada görünecek.'
-          : 'Yetki alanınızdaki şubelerin rezervasyonları gösterilir. Kiralama geçmişi Kiralamalar modülüyle gelecek.'}
+          ? 'Kiralamalar ayrı listede. Bakım ve transfer blokları ilgili modüller geliştirildiğinde görünecek.'
+          : 'Yetki alanınızdaki şubelerin rezervasyonları gösterilir. Kiralamalar ayrı listede.'}
       </p>
     </section>
   )

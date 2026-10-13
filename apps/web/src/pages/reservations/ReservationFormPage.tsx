@@ -74,7 +74,7 @@ function stateFrom(r: ReservationDetail): FormState {
   }
 }
 
-function Section({ n, title, hint, children, id }: { n: number; title: string; hint?: ReactNode; children: ReactNode; id?: string }) {
+export function Section({ n, title, hint, children, id }: { n: number; title: string; hint?: ReactNode; children: ReactNode; id?: string }) {
   return (
     <section aria-labelledby={id} className="rounded-xl border border-line bg-surface p-5">
       <h2 id={id} className="flex items-center gap-2.5 text-[15px] font-semibold tracking-[-0.01em]">
@@ -89,7 +89,7 @@ function Section({ n, title, hint, children, id }: { n: number; title: string; h
   )
 }
 
-function useDebounced<T>(value: T, ms: number) {
+export function useDebounced<T>(value: T, ms: number) {
   const [v, setV] = useState(value)
   useEffect(() => {
     const t = setTimeout(() => setV(value), ms)
@@ -99,7 +99,7 @@ function useDebounced<T>(value: T, ms: number) {
 }
 
 /** Search the company's customers (body request: names never reach a URL) and pick one. */
-function PersonSearch({ id, label, onPick, exclude = [], allowCreate }: { id: string; label: string; onPick: (p: Person) => void; exclude?: string[]; allowCreate?: boolean }) {
+export function PersonSearch({ id, label, onPick, exclude = [], allowCreate }: { id: string; label: string; onPick: (p: Person) => void; exclude?: string[]; allowCreate?: boolean }) {
   const session = useSession()
   const [text, setText] = useState('')
   const q = useDebounced(text.trim(), 250)
@@ -155,7 +155,7 @@ function PersonSearch({ id, label, onPick, exclude = [], allowCreate }: { id: st
   )
 }
 
-function Chip({ title, sub, onClear, clearLabel }: { title: string; sub?: string; onClear?: () => void; clearLabel: string }) {
+export function Chip({ title, sub, onClear, clearLabel }: { title: string; sub?: string; onClear?: () => void; clearLabel: string }) {
   return (
     <div className="flex items-start justify-between gap-3 rounded-lg border border-blue/35 bg-blue-soft/25 px-3.5 py-2.5">
       <div className="min-w-0">
@@ -171,7 +171,7 @@ function Chip({ title, sub, onClear, clearLabel }: { title: string; sub?: string
   )
 }
 
-function AccountSearch({ onPick }: { onPick: (a: Account) => void }) {
+export function AccountSearch({ onPick }: { onPick: (a: Account) => void }) {
   const session = useSession()
   const [text, setText] = useState('')
   const q = useDebounced(text.trim(), 250)
@@ -212,7 +212,7 @@ function AccountSearch({ onPick }: { onPick: (a: Account) => void }) {
 }
 
 /** Wall-time check in the branch's zone (R4): never happened → error; happened twice → explicit choice. */
-function TimeField({ id, label, value, onChange, branch, choice, onChoice, error }: { id: string; label: string; value: string; onChange: (v: string) => void; branch?: ReservationBranch; choice?: 'earlier' | 'later'; onChoice: (c?: 'earlier' | 'later') => void; error?: string }) {
+export function TimeField({ id, label, value, onChange, branch, choice, onChoice, error }: { id: string; label: string; value: string; onChange: (v: string) => void; branch?: ReservationBranch; choice?: 'earlier' | 'later'; onChoice: (c?: 'earlier' | 'later') => void; error?: string }) {
   const res = branch && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(value) ? resolveWallTime(value, branch.timeZone) : null
   const own = res?.kind === 'nonexistent' ? `${formatLocal(value)} ${branch!.name} saatinde yaşanmadı: yaz saatine geçişte saatler ileri alındı. Gerçek saati girin.` : undefined
   const shownError = error ?? own
@@ -239,7 +239,7 @@ function TimeField({ id, label, value, onChange, branch, choice, onChoice, error
   )
 }
 
-function VehicleOption({ v, selected, onSelect, zone }: { v: AvailabilityVehicle; selected: boolean; onSelect: () => void; zone?: string }) {
+export function VehicleOption({ v, selected, onSelect, zone }: { v: AvailabilityVehicle; selected: boolean; onSelect: () => void; zone?: string }) {
   void zone
   const disabled = !v.available
   return (
@@ -257,10 +257,10 @@ function VehicleOption({ v, selected, onSelect, zone }: { v: AvailabilityVehicle
         {v.status !== 'active' ? (
           <span className="block text-[12.5px] font-medium text-alert">Hizmet dışı</span>
         ) : v.conflicts.length ? (
-          <span className="block text-[12.5px] font-medium text-alert">Dolu: {v.conflicts.map((c) => c.reservationNo).join(', ')}</span>
+          <span className="block text-[12.5px] font-medium text-alert">Dolu: {v.conflicts.map((c) => (c.endsAt ? c.refNo : `${c.refNo} (iade gecikti)`)).join(', ')}</span>
         ) : (
           <span className="inline-flex items-center gap-1 text-[12.5px] font-medium text-ok">
-            <CheckCircle size={13} weight="fill" /> Seçili dönemde onaylı rezervasyonu yok
+            <CheckCircle size={13} weight="fill" /> Seçili dönemde onaylı rezervasyonu veya kiralaması yok
           </span>
         )}
       </span>
@@ -624,11 +624,11 @@ function ReservationForm({ mode, existing }: { mode: 'create' | 'edit'; existing
                     ))}
                     <p className="flex items-start gap-1.5 text-[12.5px] text-ink-2">
                       <ShieldCheck size={14} className="mt-[2px] shrink-0 text-ink-3" />
-                      Uygunluk yalnız araç durumu ve onaylı rezervasyonlara göre denetlendi. Henüz denetlenemeyen: {avail.data.notChecked.map((k) => NOT_CHECKED_LABELS[k]).join(', ')}.
+                      Uygunluk araç durumu, onaylı rezervasyonlar ve kiralamalara göre denetlendi. Henüz denetlenemeyen: {avail.data.notChecked.map((k) => NOT_CHECKED_LABELS[k]).join(', ')}.
                     </p>
                     <p className="flex items-start gap-1.5 text-[12.5px] text-ink-2">
                       <Info size={14} className="mt-[2px] shrink-0 text-ink-3" />
-                      Rezervasyonlar arasında hazırlık süresi bırakılmaz: bir rezervasyonun bittiği anda başlayan rezervasyon kabul edilir. Bu, aracın temizlenmiş, kontrol edilmiş veya teslime hazır olduğu anlamına gelmez; hazırlık, temizlik, hasar ve teslim kontrolleri Teslim/İade modülüyle gelecek.
+                      Rezervasyonlar arasında hazırlık süresi bırakılmaz: bir rezervasyonun bittiği anda başlayan rezervasyon kabul edilir. Bu, aracın temizlenmiş, kontrol edilmiş veya teslime hazır olduğu anlamına gelmez; temizlik, hasar ve teslim kontrolleri kiralamanın teslim masasında yapılır ve önceki iade kontrolü bitmemiş araç teslim edilemez.
                     </p>
                   </>
                 )}

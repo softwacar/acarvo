@@ -213,9 +213,9 @@ test.describe('product decisions and time zones (integration review)', () => {
     page.once('dialog', (d) => void d.accept())
     await openReservation(page, 'R-000003')
     await expect(page.getByText('Onay, araç ve zaman ayırmasıdır.', { exact: false })).toBeVisible()
-    await expect(page.getByText('ödeme alınmadı, sözleşme oluşturulmadı ve kiralama başlamadı', { exact: false })).toBeVisible()
+    await expect(page.getByText('fiyat hesaplanmadı; ödeme alınmadı ve sözleşme oluşturulmadı', { exact: false })).toBeVisible()
     await page.getByRole('tab', { name: 'Araç' }).click()
-    await expect(page.getByText('Teslim/İade modülüyle gelecek', { exact: false })).toBeVisible()
+    await expect(page.getByText('önceki iade kontrolü bitmemiş araç teslim edilemez', { exact: false })).toBeVisible()
   })
 
   test('a browser in another time zone still shows the branch’s wall times', async ({ browser }) => {
