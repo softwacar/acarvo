@@ -246,6 +246,36 @@ describe('create, numbers and duplicates', () => {
   })
 })
 
+describe('duplicate decisions are traceable (product decision of 13.10.2026)', () => {
+  it('a tax id or contact shared with another account is saved only after an explicit decision, recorded in the history without the value', async () => {
+    const without = await adnan.post(`/api/corporate-accounts/${ids.yeni}/tax-ids`, { country: 'BA', scheme: 'PDV', value: 'TEST-PDV-200502' })
+    expect(without.json().error.code).toBe('POSSIBLE_DUPLICATE')
+    expect(without.json().error.details.matches).toEqual(expect.arrayContaining([expect.objectContaining({ accountNo: 'K-00002', strength: 'strong', reasons: ['tax_id'] })]))
+    expect((await adnan.post(`/api/corporate-accounts/${ids.yeni}/tax-ids`, { country: 'BA', scheme: 'PDV', value: 'TEST-PDV-200502', duplicateAcknowledged: true })).statusCode).toBe(201)
+    expect((await adnan.post(`/api/corporate-accounts/${ids.yeni}/channels`, { kind: 'phone', value: '+387 33 000 501', duplicateAcknowledged: true })).statusCode).toBe(201)
+    const entries = (
+      await asOwner(data.companies.drina, `select action, summary from audit_log where action in ('corporate.tax_id.add', 'corporate.channel.add') and entity_id is not null and summary->>'accountId' = $1 order by created_at`, [ids.yeni])
+    ).rows as { action: string; summary: Record<string, unknown> }[]
+    expect(entries.map((e) => [e.action, e.summary.acknowledgedDuplicates])).toEqual([
+      ['corporate.tax_id.add', expect.arrayContaining(['K-00002'])],
+      ['corporate.channel.add', ['K-00001']],
+    ])
+    expect(JSON.stringify(entries)).not.toMatch(/TEST-PDV|000 ?501|\+387/)
+    // Changing a value to one used elsewhere needs the decision too, and it is recorded.
+    const a = await account(adnan, ids.yeni)
+    const own = a.taxIds.find((t) => t.value === 'test pdv 700 1')!
+    const upd = await adnan.put(`/api/corporate-accounts/${ids.yeni}/tax-ids/${own.id}`, { country: 'BA', scheme: 'JIB', value: 'TEST-JIB-4200501', version: own.version })
+    expect(upd.json().error.code).toBe('POSSIBLE_DUPLICATE')
+    expect((await adnan.put(`/api/corporate-accounts/${ids.yeni}/tax-ids/${own.id}`, { country: 'BA', scheme: 'JIB', value: 'TEST-JIB-4200501', version: own.version, duplicateAcknowledged: true })).statusCode).toBe(200)
+    const last = (await asOwner(data.companies.drina, `select summary from audit_log where action = 'corporate.tax_id.update' order by created_at desc limit 1`)).rows[0].summary
+    expect(last.acknowledgedDuplicates).toEqual(['K-00001'])
+    // Another company's same value is never compared: no decision is asked in Neretva.
+    expect((await lejla.post(`/api/corporate-accounts/${ids.neretva}/tax-ids`, { country: 'BA', scheme: 'JIB', value: 'TEST-JIB-4200501' })).statusCode).toBe(201)
+    // Nothing was merged: both accounts still exist with their own records.
+    expect((await account(adnan, ids.primjer)).taxIds.map((t) => t.value)).toContain('TEST-PDV-200502')
+  })
+})
+
 describe('edit, archive and restore', () => {
   it('version conflicts answer 409 with the current record; only company facts keep old and new values', async () => {
     const a = await account(adnan, ids.primjer)

@@ -346,8 +346,9 @@ export async function corporateRoutes(app: FastifyInstance) {
       const body = req.body as { duplicateAcknowledged?: unknown }
       const acc = await lockAccount(tx, id)
       const v = channelValues(input.kind, input.value, await companyCountry(tx, access))
+      let acknowledged: string[] = []
       if (input.kind === 'email' || input.kind === 'phone') {
-        await requireDuplicateDecision(
+        acknowledged = await requireDuplicateDecision(
           tx,
           { legalNameNormalized: null, country: null, registrationNormalized: null, taxValueNormalized: null, email: input.kind === 'email' ? v.valueNormalized : null, phoneE164: input.kind === 'phone' ? v.valueNormalized : null, excludeId: id },
           body?.duplicateAcknowledged === true,
@@ -360,7 +361,7 @@ export async function corporateRoutes(app: FastifyInstance) {
       ).rows[0] as Row
       if (input.isPrimary) await makePrimary(tx, 'corporate_contact_channels', id, input.kind, r.id as string)
       else await ensurePrimary(tx, 'corporate_contact_channels', id, input.kind)
-      await audit(tx, { companyId: access.companyId, actorUserId: userId, action: 'corporate.channel.add', entity: 'corporate_channel', entityId: r.id as string, summary: { accountId: id, accountNo: acc.accountNo, kind: input.kind } })
+      await audit(tx, { companyId: access.companyId, actorUserId: userId, action: 'corporate.channel.add', entity: 'corporate_channel', entityId: r.id as string, summary: { accountId: id, accountNo: acc.accountNo, kind: input.kind, ...(acknowledged.length ? { acknowledgedDuplicates: acknowledged } : {}) } })
       return getAccount(tx, id)
     })
     return reply.code(201).send(out)
@@ -375,9 +376,10 @@ export async function corporateRoutes(app: FastifyInstance) {
       const v = channelValues(input.kind, input.value, await companyCountry(tx, access))
       const after = { kind: input.kind, value: v.value, label: input.label ?? null }
       const fields = changed(cur, after, { kind: 'kind', value: 'value', label: 'label' })
+      let acknowledged: string[] = []
       if ((input.kind === 'email' || input.kind === 'phone') && v.valueNormalized !== cur.value_normalized) {
         const body = req.body as { duplicateAcknowledged?: unknown }
-        await requireDuplicateDecision(
+        acknowledged = await requireDuplicateDecision(
           tx,
           { legalNameNormalized: null, country: null, registrationNormalized: null, taxValueNormalized: null, email: input.kind === 'email' ? v.valueNormalized : null, phoneE164: input.kind === 'phone' ? v.valueNormalized : null, excludeId: id },
           body?.duplicateAcknowledged === true,
@@ -396,7 +398,7 @@ export async function corporateRoutes(app: FastifyInstance) {
       if (kindChanged) await ensurePrimary(tx, 'corporate_contact_channels', id, cur.kind as string)
       await ensurePrimary(tx, 'corporate_contact_channels', id, input.kind)
       if (fields.length) {
-        await audit(tx, { companyId: access.companyId, actorUserId: userId, action: 'corporate.channel.update', entity: 'corporate_channel', entityId: sid, summary: { accountId: id, accountNo: acc.accountNo, kind: input.kind, fields } })
+        await audit(tx, { companyId: access.companyId, actorUserId: userId, action: 'corporate.channel.update', entity: 'corporate_channel', entityId: sid, summary: { accountId: id, accountNo: acc.accountNo, kind: input.kind, fields, ...(acknowledged.length ? { acknowledgedDuplicates: acknowledged } : {}) } })
       }
       return getAccount(tx, id)
     })
@@ -428,7 +430,7 @@ export async function corporateRoutes(app: FastifyInstance) {
       const normalized = normalizeTaxValue(input.value)
       const same = (await tx.execute(sql`select 1 from corporate_tax_ids where account_id = ${id} and country = ${input.country} and scheme = ${input.scheme} and value_normalized = ${normalized} and removed_at is null`)).rows.length
       if (same) throw new AppError(409, 'TAX_ID_EXISTS', 'Bu vergi kimliği bu hesapta zaten kayıtlı.', { value: 'Bu hesapta zaten kayıtlı' })
-      await requireDuplicateDecision(
+      const acknowledged = await requireDuplicateDecision(
         tx,
         { legalNameNormalized: null, country: null, registrationNormalized: null, taxValueNormalized: normalized, email: null, phoneE164: null, excludeId: id },
         body?.duplicateAcknowledged === true,
@@ -446,7 +448,7 @@ export async function corporateRoutes(app: FastifyInstance) {
         action: 'corporate.tax_id.add',
         entity: 'corporate_tax_id',
         entityId: r.id as string,
-        summary: { accountId: id, accountNo: acc.accountNo, country: input.country, scheme: input.scheme, validity: input.validity, warnings: taxIdWarnings(input.country, input.scheme, input.value) },
+        summary: { accountId: id, accountNo: acc.accountNo, country: input.country, scheme: input.scheme, validity: input.validity, warnings: taxIdWarnings(input.country, input.scheme, input.value), ...(acknowledged.length ? { acknowledgedDuplicates: acknowledged } : {}) },
       })
       return getAccount(tx, id)
     })
@@ -461,9 +463,10 @@ export async function corporateRoutes(app: FastifyInstance) {
       const cur = await lockSub(tx, 'corporate_tax_ids', id, sid, input.version)
       const normalized = normalizeTaxValue(input.value)
       const fields = changed(cur, { country: input.country, scheme: input.scheme, value: input.value, validity: input.validity, note: input.note ?? null }, { country: 'country', scheme: 'scheme', value: 'value', validity: 'validity', note: 'note' })
+      let acknowledged: string[] = []
       if (normalized !== cur.value_normalized) {
         const body = req.body as { duplicateAcknowledged?: unknown }
-        await requireDuplicateDecision(tx, { legalNameNormalized: null, country: null, registrationNormalized: null, taxValueNormalized: normalized, email: null, phoneE164: null, excludeId: id }, body?.duplicateAcknowledged === true)
+        acknowledged = await requireDuplicateDecision(tx, { legalNameNormalized: null, country: null, registrationNormalized: null, taxValueNormalized: normalized, email: null, phoneE164: null, excludeId: id }, body?.duplicateAcknowledged === true)
       }
       const userId = req.auth!.user.id
       if (fields.length) {
@@ -487,7 +490,7 @@ export async function corporateRoutes(app: FastifyInstance) {
           action: 'corporate.tax_id.update',
           entity: 'corporate_tax_id',
           entityId: sid,
-          summary: { accountId: id, accountNo: acc.accountNo, country: input.country, scheme: input.scheme, validity: input.validity, fields },
+          summary: { accountId: id, accountNo: acc.accountNo, country: input.country, scheme: input.scheme, validity: input.validity, fields, ...(acknowledged.length ? { acknowledgedDuplicates: acknowledged } : {}) },
         })
       }
       return getAccount(tx, id)
