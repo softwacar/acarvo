@@ -103,7 +103,7 @@ Fiyat ve sözleşme modülü araç ayırma koruması (`vehicle_allocation_lock`,
 | `818c6a1` | Plan, para birimi ve yuvarlama, hesaplama motoru, şemalar, yazı tipleri, motor testleri |
 | `267828b` | Veri modeli 0031/0032, yetkiler (preset geçmişi v9) |
 | `3408a0b` | API: fiyat listeleri, önizleme, teklifler, şablonlar, sözleşmeler, PDF, 0033, teslim kapısı ayrıntıları, API testleri |
-| (son commit) | Arayüz, sürücü sayısı uyumu, tarayıcı testleri, performans testi, ekran görüntüleri, bu rapor |
+| `70e304f` | Arayüz, sürücü sayısı uyumu, tarayıcı testleri, performans testi, ekran görüntüleri, bu rapor |
 
 ## 9. Testler (yalnız `acarvo_test`, sentetik veri)
 
