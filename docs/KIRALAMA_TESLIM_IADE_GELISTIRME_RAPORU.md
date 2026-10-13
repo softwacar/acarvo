@@ -1,6 +1,6 @@
 # ACARVO — Kiralama, Teslim ve İade V1 Geliştirme Raporu
 
-- **Durum:** Test ortamında tamamlandı. Main'e birleştirilmedi, ana veritabanına migration uygulanmadı, GitHub'a push yapılmadı.
+- **Durum:** Son kontrollerden ve ürün kararlarından (K1–K3) sonra main'e ileri sarma ile birleştirildi; ana veritabanı 27 → 31 migration (doğrulanmış yedekle). GitHub'a push yapılmadı. Ayrıntı: en alttaki "Son kontrol ve main entegrasyonu" bölümü; K1 bölüm 2'deki ilk tanımın yerini alır.
 - **Dal:** `kiralama-k1` · klasör `C:\Users\soena\Desktop\acarvo-k1` · başlangıç `main` `0013023`
 - **Plan:** `docs/KIRALAMA_TESLIM_IADE_PLANI.md` (spec kuralları, K1–K9 ürün kararları, veri modeli, ortak araç tahsisi)
 
@@ -283,3 +283,161 @@ Hiçbirinde yatay taşma yok. Yeniden üretmek için: `SCREENSHOTS=1 npx playwri
 4. **Planlanmamış şubeye iade:** Yalnız şube kapsamı olan bir kullanıcı, kapsamı dışındaki bir kiralamayı göremez. Planlanmamış bir şubeye iadeyi şirket genelinde yetkili kullanıcı veya önce yapılacak bir "iade şubesi değişikliği" çözer.
 5. **Telefonda teslim masası:** Kapı listesi formun altında kalıyor. İleride yapışkan bir özet çubuğu düşünülebilir.
 6. **Rezervasyon müsaitlik yanıtının biçimi değişti.** Web güncellendi; harici bir istemci yok.
+
+
+---
+
+## Son kontrol ve main entegrasyonu (13.10.2026)
+
+### Ürün kararları (onaylandı) ve uygulanma
+
+| Karar | Uygulama |
+|---|---|
+| **K1 — Dış sözleşme ve fiyat** | Şirket bazlı "Kiralama çalışma modu" (`company_rental_settings`). **Varsayılan kapalı**; satır yoksa da kapalı. Ayrıntılar aşağıda |
+| **K2 — Geciken araç** | Korundu: fiilen iade edilmeyen araç, planlanan iade geçse bile dolu sayılıyor. Uyumsuz yeni onaylı rezervasyon ve kiralama reddediliyor; hata mesajında engelleyen kiralama numarası ve "iade gecikti" yazıyor. Bekleyen rezervasyon oluşturulabiliyor, ama yeni bir uyarı (`vehicle_held_by_overdue_rental`) uygunluğun kesin olmadığını söylüyor. Uyarı yalnız aynı şirketin kaydını gösteriyor (RLS). Gerçek iadeden sonra uygunluk yeniden hesaplanıyor; testle doğrulandı: iadeden sonra aynı rezervasyon onaylanabildi |
+| **K3 — Şube ülkesi** | Ülke yoksa teslim engelli: API kapısı ve yeni veritabanı kısıtı `rentals_branch_country`. Ülke tahmin edilmiyor, otomatik atanmıyor. Yerli/yabancı yalnız ikamet ülkesinden öneriliyor; uyruk kullanılmıyor; kararı personel veriyor |
+
+**K1 ayrıntıları**
+- **Kim açabilir:** Yalnız yeni `settings.rentals.manage` yetkisi; yalnız Sahip hazır rolünde (preset geçmişi v8). Yönetici, Operasyon ve özel roller almadı.
+- **Görünürlük:** Ayar Ayarlar sayfasında. Operasyon modu görüyor ama değiştiremiyor.
+- **Değişiklik kaydı:** Açma onay penceresiyle yapılıyor. Her değişiklik sürüm kontrollü ve işlem geçmişine yazılıyor (`settings.rental_mode_update`: eski → yeni).
+- **Şirket ayrımı:** RLS ile; şirketler birbirinin ayarını göremiyor.
+- **Mod kapalıyken:** Hiçbir teslim tamamlanamıyor. Teslim masasında ve Kiralama 360°'ta neden açıkça yazıyor.
+- **Mod açıkken teslim personeli şunları yapıyor:**
+  1. Sözleşmenin ACARVO dışında düzenlendiğini ve işlemin dış süreçte tamamlandığını kontrol ettiğini beyan ediyor.
+  2. Fiyatın ACARVO dışında belirlendiğini ve taraflarla dış süreçte ele alındığını ayrıca beyan ediyor.
+  3. Dış sözleşme veya işlem referansını giriyor: 3–40 karakter; yalnız harf, rakam, boşluk ve `. / _ -`; ekranda "ad, telefon, kimlik numarası yazmayın" uyarısı var.
+- **Kayıt:** Beyanlar kullanıcı ve zamanla kiralamaya yazılıyor (`external_terms_ack_*`, `external_pricing_ack_*`, `external_reference`). Referans işlem geçmişine kopyalanmıyor; geçmişte yalnız "kaydedildi" bilgisi var.
+- **Gösterim:** Ekranlar beyanları "personel beyanı" olarak gösteriyor. "İmzalandı / ödendi / fiyat kesinleşti / hukuken uygun" gibi bir sonuç üretilmiyor.
+
+**Veritabanı düzeyinde zorunlu** (0030; 0028'deki koruma fonksiyonları `CREATE OR REPLACE` ile güncellendi, 0028 dosyası değişmedi). Teslime geçiş şunlar olmadan reddediliyor:
+- şirket modunun açık olması;
+- iki beyan ve referans;
+- şube ülkesi;
+- ana sürücü;
+- her sürücü için son plan değişikliğinden sonra verilmiş "uygun" belge kararı;
+- tam doldurulmuş kesinleşmiş teslim kontrolü.
+
+Ayrıca kontrol listesi yalnız tanımlı maddeleri ve yanıtları kabul ediyor.
+
+### Son güvenlik incelemesi
+
+**Kritik veya yüksek bulgu yok.** İnceleme sırasında, API'de zaten olan üç kapı veritabanına da eklendi; regresyon testleri yazıldı:
+- belge kararı;
+- kontrol listesinin tamlığı;
+- şube ülkesi.
+
+**A) Rezervasyon/kiralama çakışması**
+- Rezervasyon onayı, kiralama oluşturma, düzenleme, erken teslim ve uzatma tek kilit ve tek `vehicle_busy` tanımını kullanıyor (veritabanı tetikleyicisi). Doğrudan kiralama da aynı korumadan geçiyor.
+- Dönüşüm atomik ve rezervasyon başına tek kiralama (benzersiz kısıt).
+- Uzatma çakışırsa uygulanmıyor.
+- Geç iade aracı otomatik serbest bırakmıyor.
+- Eşzamanlı 3'lü oluşturma, dönüşüm, teslim ve iade denemelerinin her birinde yalnız biri başarılı.
+- Hata hâlinde işlem bütünüyle geri alınıyor: yarım kiralama veya teslim kalmıyor.
+- PostgreSQL düzeyinde testlerle doğrulandı.
+
+**B) Teslim ve iade**
+- Eksik belge kararı ve eksik kontrol listesi API'de ve veritabanında engelleniyor.
+- Km kayıtları kaynağına bağlı olarak tek işlemde yazılıyor:
+  - geçmişle çelişen km reddediliyor;
+  - iade km'si teslim km'sinden düşükse reddediliyor;
+  - büyük artış için gerekçe isteniyor.
+- Yakıt beş sabit değerle saklanıyor.
+- Hasar işaretleri silinmiyor; kaldırma bir işarettir ve kesinleşen kontrol değişmiyor.
+- İade iki kez tamamlanamıyor. Tekrar gönderilen istek ilk sonucu döndürüyor.
+
+**C) Fotoğraf ve dosya**
+- Özel `rentals/` önekinde, URL ile erişilemiyor.
+- Şirket ve şube denetimiyle sunuluyor: `no-store`, `inline`, `vary: Cookie`.
+- İçerik doğrulanıyor; yeniden kodlandığı için EXIF ve konum bilgisi siliniyor.
+- Üretimde tarayıcı yoksa yükleme kapalı ("fail-closed"). Fotoğraf yoksa teslim veya kapanış tamamlanamıyor (veritabanında 4–5 fotoğraf kapısı).
+
+**D) Şirket / şube / RBAC**
+- Başka şirketin müşterisi, aracı, rezervasyonu, kurumsal hesabı ve sürücüsü kullanılamıyor.
+- 8 kiralama tablosunda zorunlu RLS.
+- Şube kapsamı bütün mutasyon uçlarında var. İade ve iade kontrolü taslağı, kiralamayı görme kapsamıyla sınırlı; iade kaydı gerçek iade şubesinin yetkisini istiyor.
+- Özel roller değişmedi. Operasyon'a belge görüntüleme veya numara açma yetkisi verilmedi; belge kararı `customers.documents.read` istiyor.
+
+**E) Kişisel veri ve denetim**
+- Belge numaraları kayıtlara, işlem geçmişine ve yanıtlara girmiyor.
+- Arama metni URL'de yok.
+- İşlemi yapan personel ve zaman kayıtlı.
+- Fiziksel silme yetkisi yok; olaylar ve belge kararları yalnız ekleniyor.
+
+### Migration tutarlılığı
+- Test veritabanında 31 kayıt var. Özetler dosyalarla aynı (`safe-migrate --verify --test`: sorun yok).
+- Dört dosya dolu ve LF satır sonlu:
+
+  | Dosya | Boyut |
+  |---|---|
+  | 0027 | 25.974 B |
+  | 0028 | 27.077 B |
+  | 0029 | 1.509 B |
+  | 0030 | 12.975 B |
+
+- Tek `DROP` ifadeleri, hemen yeniden eklenen genişletilmiş izin listesi kısıtları. `DELETE`, `UPDATE` veya `TRUNCATE` yok.
+- Mevcut migration dosyalarının hiçbiri değişmedi.
+
+### Git
+- Birleştirmeden önce iki çalışma ağacı temizdi.
+- Main, yalnız ileri sarma ile `0013023 → 295afb1`; bu rapor da aynı yolla eklendi.
+- Push yapılmadı. `kiralama-k1` dalı ve `acarvo-k1` klasörü korunuyor.
+
+### Ana veritabanı geçişi (27 → 31)
+**Öncesi**
+- `--verify`: yalnız 4 bekleyen (0027–0030). Dry-run aynı listeyi verdi.
+- Salt okunur parmak izleri alındı: araç, km, konum, fotoğraf, dosya, belgeler, müşteriler, kurumsal, rezervasyon, roller, şubeler, sayaçlar, kullanıcılar ve şirketler.
+- Rezervasyon entegrasyonundan beri tek değişiklik sizin işlemleriniz: bugün 14:38'de giriş ve 14:39'da bir rezervasyon oluşturma. Bu gerçek veri korundu.
+
+**Doğrulanmış yedek:** `C:\Users\soena\Desktop\acarvo\backups\2026-10-13-18-29-16`
+
+**Uygulama ve sonrası**
+- `safe-migrate` durmadan geçti. `--verify`: 31 migration, 47 tablonun 43'ünde zorunlu RLS, sorun yok.
+- Korunan veriler birebir aynı:
+  - araçlar, km ve konum geçmişi, fotoğraflar, dosyalar, araç belgeleri;
+  - müşteriler, müşteri belgeleri ve politikalar;
+  - kurumsal hesaplar;
+  - rezervasyonlar (sizin rezervasyonunuz dahil);
+  - sayaçlar, şubeler, kullanıcılar, şirketler.
+- Beklenen eklemeler:
+  - roller: üç hazır role `rentals.*`, Sahip'e ayrıca `settings.rentals.manage`; silinen yetki 0;
+  - şirket başına 3 rol yükseltme denetim kaydı;
+  - 8 yeni tablo, 32 yeni politika, 22 yeni yetki.
+- Mevcut politikaların ve yetkilerin hiçbiri değişmedi. Veritabanı rollerinin nitelikleri aynı.
+- Tetikleyiciler (29) ve kısıtlar (781) test veritabanıyla birebir aynı. Fonksiyonlarda tek fark `customer_documents_guard`'ın CRLF yazımı; M2'den bilinen, zararsız.
+- Kiralama, teslim veya iade kaydı eklenmedi; tablolar boş.
+
+### Main'de testler (yalnız `acarvo_test`)
+
+| Kontrol | Sonuç |
+|---|---|
+| API | **399/399** (8 yeni entegrasyon testi) |
+| Tarayıcı | **106 geçti**, 24 isteğe bağlı atlandı (2 yeni K1 testi) |
+| TypeScript, üretim derlemesi | Hatasız |
+| RLS denetimi | Sorun yok |
+| Ekran görüntüleri | 1440/768/390: Ayarlar, liste, yeni, 360°, teslim masası, iade, kapanış, hasar karşılaştırması, geciken; yatay taşma yok |
+
+Aralıklı Vitest runner sorunu bu entegrasyonda görülmedi (4 tam çalıştırma); konu açık.
+
+### Çalışan uygulama
+- Main sunucuları main kodundan yeniden başlatıldı: API 3001 (sağlık: ok), web 5173.
+- **Kiralamalar:** http://localhost:5173/kiralamalar
+- **Ayarlar (kiralama modu):** http://localhost:5173/ayarlar
+- Oturumsuz kiralama ve ayar istekleri reddediliyor (403 / 401).
+- Ekranların içi sizin parolanızla açılmadı (parolanızı bilmiyorum). Aynı main kodu test veritabanında tarayıcı testleriyle doğrulandı.
+
+### Gerçek operasyon öncesi eksik koşullar
+1. **Şube ülkeleri:** Ana veritabanındaki 4 şubenin hiçbirinde ülke yok; teslim bu yüzden engelli (doğrulandı). Yetkili kişi Şubeler ekranından gerçek ülkeyi girmeli.
+2. **Kiralama çalışma modu:** İki şirkette de kapalı (varsayılan). Dış süreçle çalışılacaksa şirket sahibi Ayarlar'dan açmalı.
+3. **Belge kuralları:** Ülke belge kuralları ana veritabanında etkin değil. Karar bu yüzden "kural tanımsız, personel kontrolü" olarak kaydedilir; hangi belgelerin zorunlu olduğu hukuk danışmanıyla belirlenmeli.
+4. **M2 anahtarları:** Gerçek şifreleme anahtarları yok; belge numarası ve belge dosyası işlemleri güvenli biçimde kapalı.
+5. **Dosya taraması:** Üretim ortamında ClamAV yoksa fotoğraf yüklemesi, dolayısıyla teslim, kapalı kalır.
+6. **Eksik modüller:** Sözleşme, fiyat, ödeme, depozito ve hasar dosyası modülleri yok. Ekranlar bunu her yerde açıkça söylüyor.
+
+### Açık riskler
+- **K2'nin katılığı:** Uzun gecikmede aracın ileri tarihli onayları bekler.
+- **Şube yetkisi** veritabanında değil API'de (mevcut mimari).
+- **Planlanmamış şubeye iade:** Yalnız kendi şubesine yetkili kullanıcı, kapsamı dışındaki kiralamayı göremez.
+- **Telefonda teslim masası** formun altında kalıyor.
+- **Dış referans alanı:** Biçimi sınırlı, ama personel yine de anlamlı bir ad yazabilir; ekrandaki uyarı ve eğitim gerekli.
+- **Aralıklı Vitest runner sorunu.**
