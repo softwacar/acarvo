@@ -522,12 +522,12 @@ export const companySequences = pgTable(
   'company_sequences',
   {
     companyId: uuid('company_id').notNull().references(() => companies.id),
-    kind: text('kind', { enum: ['customer', 'corporate_account', 'reservation'] }).notNull(),
+    kind: text('kind', { enum: ['customer', 'corporate_account', 'reservation', 'rental'] }).notNull(),
     nextValue: bigint('next_value', { mode: 'number' }).notNull(),
   },
   (t) => [
     primaryKey({ columns: [t.companyId, t.kind] }),
-    check('company_sequences_kind_check', sql`${t.kind} in ('customer', 'corporate_account', 'reservation')`),
+    check('company_sequences_kind_check', sql`${t.kind} in ('customer', 'corporate_account', 'reservation', 'rental')`),
     check('company_sequences_next_check', sql`${t.nextValue} >= 1`),
   ],
 )
@@ -1122,5 +1122,294 @@ export const reservationStatusEvents = pgTable(
     foreignKey({ columns: [t.companyId, t.reservationId], foreignColumns: [reservations.companyId, reservations.id] }),
     index('reservation_status_events_reservation_idx').on(t.companyId, t.reservationId, t.at),
     check('reservation_status_events_to_check', sql`${t.toStatus} in ('pending', 'confirmed', 'converted', 'cancelled', 'no_show')`),
+  ],
+)
+
+// ---------------------------------------------------------------------------
+// Rentals, handover and return V1 — docs/KIRALAMA_TESLIM_IADE_PLANI.md (spec §10, §59B, §59L, §59CY, §83.4).
+// Every row belongs to one company (forced RLS, composite keys). Nothing is deleted: rentals are cancelled or closed,
+// drivers and draft photos and marks removed by a mark; final inspections, document checks and events never change.
+// No price, payment, deposit or contract is stored here: those modules do not exist yet (K1).
+
+export const RENTAL_STATUS_VALUES = ['prepared', 'delivered', 'returned', 'closed', 'cancelled'] as const
+
+export const rentals = pgTable(
+  'rentals',
+  {
+    id: id(),
+    companyId: uuid('company_id').notNull().references(() => companies.id),
+    rentalNo: text('rental_no').notNull(),
+    status: text('status', { enum: RENTAL_STATUS_VALUES }).notNull().default('prepared'),
+    origin: text('origin', { enum: ['reservation', 'direct'] }).notNull(),
+    reservationId: uuid('reservation_id'),
+    customerId: uuid('customer_id').notNull(),
+    corporateAccountId: uuid('corporate_account_id'),
+    vehicleClassId: uuid('vehicle_class_id').notNull(),
+    vehicleId: uuid('vehicle_id').notNull(),
+    pickupBranchId: uuid('pickup_branch_id').notNull(),
+    returnBranchId: uuid('return_branch_id').notNull(),
+    plannedPickupAt: timestamp('planned_pickup_at', { withTimezone: true }).notNull(),
+    plannedReturnAt: timestamp('planned_return_at', { withTimezone: true }).notNull(),
+    pickupTimezone: text('pickup_timezone').notNull(),
+    returnTimezone: text('return_timezone').notNull(),
+    deliveredAt: timestamp('delivered_at', { withTimezone: true }),
+    deliveredBy: uuid('delivered_by').references(() => users.id),
+    /** K1: staff stated that contract and price are handled outside ACARVO for this handover. */
+    externalTermsAckAt: timestamp('external_terms_ack_at', { withTimezone: true }),
+    externalTermsAckBy: uuid('external_terms_ack_by').references(() => users.id),
+    returnedAt: timestamp('returned_at', { withTimezone: true }),
+    returnedBy: uuid('returned_by').references(() => users.id),
+    actualReturnBranchId: uuid('actual_return_branch_id'),
+    actualReturnTimezone: text('actual_return_timezone'),
+    closedAt: timestamp('closed_at', { withTimezone: true }),
+    closedBy: uuid('closed_by').references(() => users.id),
+    cancelReason: text('cancel_reason'),
+    cancelNote: text('cancel_note'),
+    cancelledAt: timestamp('cancelled_at', { withTimezone: true }),
+    cancelledBy: uuid('cancelled_by').references(() => users.id),
+    note: text('note'),
+    clientRequestId: uuid('client_request_id'),
+    version: integer('version').notNull().default(1),
+    createdAt: createdAt(),
+    createdBy: uuid('created_by').references(() => users.id),
+    updatedAt: updatedAt(),
+    updatedBy: uuid('updated_by').references(() => users.id),
+  },
+  (t) => [
+    unique('rentals_company_id_key').on(t.companyId, t.id),
+    unique('rentals_company_no_key').on(t.companyId, t.rentalNo),
+    uniqueIndex('rentals_reservation_key').on(t.companyId, t.reservationId).where(sql`${t.reservationId} is not null`),
+    uniqueIndex('rentals_request_key').on(t.companyId, t.clientRequestId).where(sql`${t.clientRequestId} is not null`),
+    index('rentals_company_status_pickup_idx').on(t.companyId, t.status, t.plannedPickupAt),
+    index('rentals_company_pickup_idx').on(t.companyId, t.plannedPickupAt),
+    index('rentals_company_return_idx').on(t.companyId, t.plannedReturnAt),
+    index('rentals_company_vehicle_idx').on(t.companyId, t.vehicleId, t.plannedPickupAt),
+    index('rentals_company_customer_idx').on(t.companyId, t.customerId),
+    index('rentals_company_account_idx').on(t.companyId, t.corporateAccountId),
+    index('rentals_company_created_idx').on(t.companyId, t.createdAt),
+    foreignKey({ columns: [t.companyId, t.reservationId], foreignColumns: [reservations.companyId, reservations.id] }),
+    foreignKey({ columns: [t.companyId, t.customerId], foreignColumns: [customers.companyId, customers.id] }),
+    foreignKey({ columns: [t.companyId, t.corporateAccountId], foreignColumns: [corporateAccounts.companyId, corporateAccounts.id] }),
+    foreignKey({ columns: [t.companyId, t.vehicleClassId], foreignColumns: [vehicleClasses.companyId, vehicleClasses.id] }),
+    foreignKey({ columns: [t.companyId, t.vehicleId], foreignColumns: [vehicles.companyId, vehicles.id] }),
+    foreignKey({ columns: [t.companyId, t.pickupBranchId], foreignColumns: [branches.companyId, branches.id] }),
+    foreignKey({ columns: [t.companyId, t.returnBranchId], foreignColumns: [branches.companyId, branches.id] }),
+    foreignKey({ columns: [t.companyId, t.actualReturnBranchId], foreignColumns: [branches.companyId, branches.id] }),
+    check('rentals_no_check', sql`${t.rentalNo} ~ '^K-[0-9]{6,}$'`),
+    check('rentals_status_check', sql`${t.status} in ('prepared', 'delivered', 'returned', 'closed', 'cancelled')`),
+    check('rentals_origin_check', sql`(${t.origin} = 'reservation') = (${t.reservationId} is not null)`),
+    check('rentals_period_check', sql`${t.plannedReturnAt} > ${t.plannedPickupAt}`),
+    check('rentals_delivered_check', sql`(${t.status} in ('delivered', 'returned', 'closed')) = (${t.deliveredAt} is not null and ${t.deliveredBy} is not null)`),
+    check('rentals_returned_check', sql`(${t.status} in ('returned', 'closed')) = (${t.returnedAt} is not null and ${t.actualReturnBranchId} is not null and ${t.actualReturnTimezone} is not null)`),
+    check('rentals_return_after_delivery_check', sql`${t.returnedAt} is null or ${t.returnedAt} > ${t.deliveredAt}`),
+    check('rentals_closed_check', sql`(${t.status} = 'closed') = (${t.closedAt} is not null)`),
+    check('rentals_cancel_check', sql`(${t.status} = 'cancelled') = (${t.cancelledAt} is not null and ${t.cancelReason} is not null)`),
+    check('rentals_cancel_reason_check', sql`${t.cancelReason} is null or ${t.cancelReason} in ('customer_request', 'vehicle_problem', 'documents_missing', 'entry_error', 'other')`),
+    check('rentals_version_check', sql`${t.version} >= 1`),
+  ],
+)
+
+export const rentalDrivers = pgTable(
+  'rental_drivers',
+  {
+    id: id(),
+    companyId: uuid('company_id').notNull().references(() => companies.id),
+    rentalId: uuid('rental_id').notNull(),
+    customerId: uuid('customer_id').notNull(),
+    isPrimary: boolean('is_primary').notNull().default(false),
+    removedAt: timestamp('removed_at', { withTimezone: true }),
+    removedBy: uuid('removed_by').references(() => users.id),
+    createdAt: createdAt(),
+    createdBy: uuid('created_by').references(() => users.id),
+  },
+  (t) => [
+    foreignKey({ columns: [t.companyId, t.rentalId], foreignColumns: [rentals.companyId, rentals.id] }),
+    foreignKey({ columns: [t.companyId, t.customerId], foreignColumns: [customers.companyId, customers.id] }),
+    index('rental_drivers_rental_idx').on(t.companyId, t.rentalId),
+    index('rental_drivers_customer_idx').on(t.companyId, t.customerId),
+    uniqueIndex('rental_drivers_active_key').on(t.companyId, t.rentalId, t.customerId).where(sql`${t.removedAt} is null`),
+    uniqueIndex('rental_drivers_primary_key').on(t.companyId, t.rentalId).where(sql`${t.isPrimary} and ${t.removedAt} is null`),
+  ],
+)
+
+/** Append-only lifecycle and operation events; the request id makes a resent request return the first result. */
+export const rentalEvents = pgTable(
+  'rental_events',
+  {
+    id: id(),
+    companyId: uuid('company_id').notNull().references(() => companies.id),
+    rentalId: uuid('rental_id').notNull(),
+    kind: text('kind').notNull(),
+    fromStatus: text('from_status'),
+    toStatus: text('to_status').notNull(),
+    reason: text('reason'),
+    /** Numbers, times and codes only: no names, contacts, document numbers or free text. */
+    data: jsonb('data').$type<Record<string, unknown>>(),
+    clientRequestId: uuid('client_request_id'),
+    actorUserId: uuid('actor_user_id').references(() => users.id),
+    at: timestamp('at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    unique('rental_events_company_id_key').on(t.companyId, t.id),
+    foreignKey({ columns: [t.companyId, t.rentalId], foreignColumns: [rentals.companyId, rentals.id] }),
+    index('rental_events_rental_idx').on(t.companyId, t.rentalId, t.at),
+    uniqueIndex('rental_events_request_key').on(t.companyId, t.clientRequestId).where(sql`${t.clientRequestId} is not null`),
+    check('rental_events_kind_check', sql`${t.kind} in ('created', 'updated', 'document_check', 'delivered', 'extended', 'returned', 'closed', 'cancelled')`),
+    check('rental_events_to_check', sql`${t.toStatus} in ('prepared', 'delivered', 'returned', 'closed', 'cancelled')`),
+  ],
+)
+
+/**
+ * The applied document decision of one driver (spec §10.3 "Kiralama Dosyası"): staff's local/foreign choice, the
+ * reference country (pickup branch), the policy and version if one was active, the document record ids considered
+ * and staff's decision. Immutable; a new decision is a new row and the latest one counts.
+ */
+export const rentalDocumentChecks = pgTable(
+  'rental_document_checks',
+  {
+    id: id(),
+    companyId: uuid('company_id').notNull().references(() => companies.id),
+    rentalId: uuid('rental_id').notNull(),
+    customerId: uuid('customer_id').notNull(),
+    driverRole: text('driver_role', { enum: ['primary', 'additional'] }).notNull(),
+    residencyClass: text('residency_class', { enum: ['local', 'foreign'] }).notNull(),
+    referenceCountry: text('reference_country'),
+    ruleStatus: text('rule_status', { enum: ['policy_applied', 'no_policy', 'branch_country_missing'] }).notNull(),
+    policyId: uuid('policy_id'),
+    policyVersion: integer('policy_version'),
+    /** Items of the applied policy: each is "any one of these types". Empty when no policy applied. */
+    requiredItems: jsonb('required_items').$type<{ acceptedTypes: string[] }[]>().notNull().default(sql`'[]'::jsonb`),
+    /** Customer document record ids (immutable versions) that were valid for the period. Never numbers. */
+    documentIds: uuid('document_ids').array().notNull().default(sql`'{}'::uuid[]`),
+    decision: text('decision', { enum: ['eligible', 'not_eligible'] }).notNull(),
+    note: text('note'),
+    checkedBy: uuid('checked_by').references(() => users.id),
+    checkedAt: timestamp('checked_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    foreignKey({ columns: [t.companyId, t.rentalId], foreignColumns: [rentals.companyId, rentals.id] }),
+    foreignKey({ columns: [t.companyId, t.customerId], foreignColumns: [customers.companyId, customers.id] }),
+    foreignKey({ columns: [t.companyId, t.policyId], foreignColumns: [documentRequirementPolicies.companyId, documentRequirementPolicies.id] }),
+    index('rental_document_checks_rental_idx').on(t.companyId, t.rentalId, t.checkedAt),
+    check('rental_document_checks_country_check', sql`${t.referenceCountry} is null or ${t.referenceCountry} ~ '^[A-Z]{2}$'`),
+    check('rental_document_checks_rule_check', sql`(${t.ruleStatus} = 'policy_applied') = (${t.policyId} is not null and ${t.policyVersion} is not null)`),
+    check('rental_document_checks_country_rule_check', sql`(${t.ruleStatus} = 'branch_country_missing') = (${t.referenceCountry} is null)`),
+    check('rental_document_checks_note_check', sql`${t.note} is null or char_length(${t.note}) <= 500`),
+  ],
+)
+
+export const rentalInspections = pgTable(
+  'rental_inspections',
+  {
+    id: id(),
+    companyId: uuid('company_id').notNull().references(() => companies.id),
+    rentalId: uuid('rental_id').notNull(),
+    vehicleId: uuid('vehicle_id').notNull(),
+    kind: text('kind', { enum: ['handover', 'return'] }).notNull(),
+    state: text('state', { enum: ['draft', 'final'] }).notNull().default('draft'),
+    km: integer('km'),
+    fuel: text('fuel'),
+    cleanliness: text('cleanliness'),
+    condition: text('condition'),
+    /** Each item answered explicitly ('ok' | 'missing' | 'not_applicable'); unanswered items are absent, never "ok". */
+    checklist: jsonb('checklist').$type<Record<string, string>>().notNull().default(sql`'{}'::jsonb`),
+    notes: text('notes'),
+    /** The driver who received (handover) or brought back (return) the vehicle. */
+    counterpartCustomerId: uuid('counterpart_customer_id'),
+    occurredAt: timestamp('occurred_at', { withTimezone: true }),
+    branchId: uuid('branch_id'),
+    performedBy: uuid('performed_by').references(() => users.id),
+    odometerReadingId: uuid('odometer_reading_id'),
+    locationEventId: uuid('location_event_id'),
+    /** Return only: staff saw the new damage findings (no damage case, liability or charge is created). */
+    findingsAcknowledgedAt: timestamp('findings_acknowledged_at', { withTimezone: true }),
+    findingsAcknowledgedBy: uuid('findings_acknowledged_by').references(() => users.id),
+    finalizedAt: timestamp('finalized_at', { withTimezone: true }),
+    finalizedBy: uuid('finalized_by').references(() => users.id),
+    version: integer('version').notNull().default(1),
+    createdAt: createdAt(),
+    createdBy: uuid('created_by').references(() => users.id),
+    updatedAt: updatedAt(),
+    updatedBy: uuid('updated_by').references(() => users.id),
+  },
+  (t) => [
+    unique('rental_inspections_company_id_key').on(t.companyId, t.id),
+    unique('rental_inspections_kind_key').on(t.companyId, t.rentalId, t.kind),
+    index('rental_inspections_vehicle_idx').on(t.companyId, t.vehicleId, t.occurredAt),
+    foreignKey({ columns: [t.companyId, t.rentalId], foreignColumns: [rentals.companyId, rentals.id] }),
+    foreignKey({ columns: [t.companyId, t.vehicleId], foreignColumns: [vehicles.companyId, vehicles.id] }),
+    foreignKey({ columns: [t.companyId, t.counterpartCustomerId], foreignColumns: [customers.companyId, customers.id] }),
+    foreignKey({ columns: [t.companyId, t.branchId], foreignColumns: [branches.companyId, branches.id] }),
+    foreignKey({ columns: [t.companyId, t.odometerReadingId], foreignColumns: [odometerReadings.companyId, odometerReadings.id] }),
+    foreignKey({ columns: [t.companyId, t.locationEventId], foreignColumns: [vehicleLocationEvents.companyId, vehicleLocationEvents.id] }),
+    check('rental_inspections_kind_check', sql`${t.kind} in ('handover', 'return')`),
+    check('rental_inspections_state_check', sql`${t.state} in ('draft', 'final')`),
+    check('rental_inspections_km_check', sql`${t.km} is null or ${t.km} between 0 and 3000000`),
+    check('rental_inspections_fuel_check', sql`${t.fuel} is null or ${t.fuel} in ('empty', 'quarter', 'half', 'three_quarters', 'full')`),
+    check('rental_inspections_cleanliness_check', sql`${t.cleanliness} is null or ${t.cleanliness} in ('clean', 'acceptable', 'dirty')`),
+    check('rental_inspections_condition_check', sql`${t.condition} is null or ${t.condition} in ('good', 'minor_issues', 'needs_attention')`),
+    check('rental_inspections_notes_check', sql`${t.notes} is null or char_length(${t.notes}) <= 2000`),
+    check(
+      'rental_inspections_final_check',
+      sql`${t.state} = 'draft' or (${t.finalizedAt} is not null and ${t.km} is not null and ${t.fuel} is not null and ${t.occurredAt} is not null and ${t.branchId} is not null and ${t.performedBy} is not null)`,
+    ),
+    check('rental_inspections_version_check', sql`${t.version} >= 1`),
+  ],
+)
+
+export const rentalInspectionPhotos = pgTable(
+  'rental_inspection_photos',
+  {
+    id: id(),
+    companyId: uuid('company_id').notNull().references(() => companies.id),
+    inspectionId: uuid('inspection_id').notNull(),
+    fileId: uuid('file_id').notNull(),
+    angle: text('angle', { enum: ['front', 'rear', 'left', 'right', 'interior', 'other'] }).notNull(),
+    removedAt: timestamp('removed_at', { withTimezone: true }),
+    removedBy: uuid('removed_by').references(() => users.id),
+    createdAt: createdAt(),
+    createdBy: uuid('created_by').references(() => users.id),
+  },
+  (t) => [
+    unique('rental_inspection_photos_company_id_key').on(t.companyId, t.id),
+    unique('rental_inspection_photos_file_key').on(t.fileId),
+    index('rental_inspection_photos_inspection_idx').on(t.companyId, t.inspectionId),
+    foreignKey({ columns: [t.companyId, t.inspectionId], foreignColumns: [rentalInspections.companyId, rentalInspections.id] }),
+    foreignKey({ columns: [t.companyId, t.fileId], foreignColumns: [files.companyId, files.id] }),
+    check('rental_inspection_photos_angle_check', sql`${t.angle} in ('front', 'rear', 'left', 'right', 'interior', 'other')`),
+  ],
+)
+
+/** A mark on the body outline (spec §83.4). Not a damage case and not a charge. */
+export const rentalDamageMarks = pgTable(
+  'rental_damage_marks',
+  {
+    id: id(),
+    companyId: uuid('company_id').notNull().references(() => companies.id),
+    inspectionId: uuid('inspection_id').notNull(),
+    view: text('view', { enum: ['front', 'rear', 'left', 'right', 'top'] }).notNull(),
+    /** Position on the outline in thousandths of its width and height. */
+    xPermille: integer('x_permille').notNull(),
+    yPermille: integer('y_permille').notNull(),
+    category: text('category', { enum: ['scratch', 'dent', 'crack', 'stain', 'missing_part', 'other'] }).notNull(),
+    note: text('note'),
+    photoId: uuid('photo_id'),
+    /** Return marks only: the handover mark this one is the same damage as. Null on a return mark = new finding. */
+    existingMarkId: uuid('existing_mark_id'),
+    removedAt: timestamp('removed_at', { withTimezone: true }),
+    removedBy: uuid('removed_by').references(() => users.id),
+    createdAt: createdAt(),
+    createdBy: uuid('created_by').references(() => users.id),
+  },
+  (t) => [
+    unique('rental_damage_marks_company_id_key').on(t.companyId, t.id),
+    index('rental_damage_marks_inspection_idx').on(t.companyId, t.inspectionId),
+    foreignKey({ columns: [t.companyId, t.inspectionId], foreignColumns: [rentalInspections.companyId, rentalInspections.id] }),
+    foreignKey({ columns: [t.companyId, t.photoId], foreignColumns: [rentalInspectionPhotos.companyId, rentalInspectionPhotos.id] }),
+    foreignKey({ columns: [t.companyId, t.existingMarkId], foreignColumns: [t.companyId, t.id] }),
+    check('rental_damage_marks_view_check', sql`${t.view} in ('front', 'rear', 'left', 'right', 'top')`),
+    check('rental_damage_marks_position_check', sql`${t.xPermille} between 0 and 1000 and ${t.yPermille} between 0 and 1000`),
+    check('rental_damage_marks_category_check', sql`${t.category} in ('scratch', 'dent', 'crack', 'stain', 'missing_part', 'other')`),
+    check('rental_damage_marks_note_check', sql`${t.note} is null or char_length(${t.note}) <= 300`),
   ],
 )
