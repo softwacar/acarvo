@@ -1,7 +1,7 @@
 # ACARVO — Rezervasyon Yönetimi V1: geliştirme raporu
 
 **Dal / klasör:** `rezervasyon-r1` / `C:\Users\soena\Desktop\acarvo-r1`. Başlangıç `main` `2b7c9fc`.
-**Durum:** Rezervasyon V1 tamamlandı ve yalnız test veritabanında (`acarvo_test`) çalışıyor. Main'e birleştirilmedi, ana veritabanına uygulanmadı, push yapılmadı.
+**Durum (13.10.2026):** Rezervasyon V1 main'e birleştirildi ve ana veritabanına uygulandı (27 migration). Ayrıntılar en alttaki "Son kontrol ve main entegrasyonu" bölümünde. Push yapılmadı.
 **Plan:** `docs/REZERVASYON_YONETIMI_PLANI.md` (kurallar ve R1–R14 kararları).
 
 ## Özet
@@ -225,3 +225,116 @@ Her liste isteği tek sorgu; satır başına ayrı sorgu (N+1) yok. Kullanılan 
 - Teslim, iade, sözleşme, araç değişimi, uzatma.
 - Fiyat dökümü, fiyat anlık görüntüsü, ekstralar, kaparo ve kurumsal kredi kullanımı (Fiyatlandırma ve Finans).
 - Gelmedi ve iptal ücreti politikaları.
+
+---
+
+## Son kontrol ve main entegrasyonu (13.10.2026)
+
+### Ürün kararları (onaylandı) ve uygulanma durumu
+
+| Karar | Durum |
+|---|---|
+| A — Yalnız sınıfla bekleyen rezervasyon | Bekleyen oluşturulabilir. Belirli araç atanmadan onay verilmez (API 409 `VEHICLE_REQUIRED`, veritabanı kısıtı `reservations_confirmed_vehicle_check`). Sınıf sayısı "Bilgi … Kesin kapasite değildir" etiketiyle gösterilir. Önceden uygulanmıştı; değişiklik yok |
+| B — Operasyon onaylayabilir | `reservations.confirm` Operasyon'da var. Onay uç noktası ayrıca alış şubesi yetkisini, sürümü ve aracı denetler. Şirket sınırı RLS ile korunur |
+| C — Şube erişimi | Değişmedi: kullanıcı alış veya iade şubesi kapsamındaki rezervasyonları görür; yalnız kendi şubesinden başlatır ve değiştirir |
+| D — Hazırlık süresi yok | Değişmedi. Form ve 360° Araç sekmesine yeni metin eklendi: "Rezervasyonlar arasında hazırlık süresi bırakılmaz … Bu, aracın temizlenmiş, kontrol edilmiş veya teslime hazır olduğu anlamına gelmez; hazırlık, temizlik, hasar ve teslim kontrolleri Teslim/İade modülüyle gelecek." |
+| E — Fiyatlandırma | Fiyat "Hesaplanmadı". 360°'a yeni metin eklendi: "Onay, araç ve zaman ayırmasıdır. Bu rezervasyon için fiyat hesaplanmadı; ödeme alınmadı, sözleşme oluşturulmadı ve kiralama başlamadı." Onay kutusunda: "Fiyat, ödeme, sözleşme veya kiralama oluşturulmaz." Yanıltıcı ifade taraması temiz |
+
+### Git ve migration ön kontrolü
+- Birleştirmeden önce iki çalışma alanı da temizdi; `main` (`2b7c9fc`), `rezervasyon-r1`'in atasıydı.
+- **Dosyalar:** Dal yalnız 3 yeni migration dosyası ekliyor (0024, 0025, 0026). Mevcut migration dosyalarından hiçbiri değişmedi; günlük dosyasında yalnız ekleme var.
+- **Boş şablon kontrolü:** Üç dosya da dolu (563, 10.874 ve 6.325 karakter), LF satır sonlu, boş şablon yok. M3'teki olay tekrarlanmadı.
+- **Test veritabanı:** 27 kaydın tamamı dosya özetleri ve günlük zamanlarıyla uyumlu. 0009 ve 0017, bilinen CRLF biçimi; içerik aynı.
+- **Ana veritabanı:** bekleyen yalnız 0024, 0025, 0026.
+
+### Son güvenlik incelemesi
+**Kritik veya yüksek bulgu yok.** Yeni regresyon testleriyle doğrulananlar:
+
+**Çifte rezervasyon** (koruma API'de ve veritabanı tetikleyicisinde; yalnız ön yüzde değil):
+- Aynı araçta çakışan onaylı rezervasyon reddedilir.
+- Aynı anda 3 kişinin onayı: yalnız biri başarılı olur.
+- Tarih değiştirme ve onaylı rezervasyonda araç değiştirme aynı denetimden geçer; eski araç serbest kalır.
+- İptal aracı serbest bırakır.
+- Bekleyen rezervasyon aracı tutmaz.
+- **Atlatma denemeleri:** istek gövdesine eklenen "durum" alanı yok sayılır. Doğrudan veritabanı güncellemesiyle bekleyeni çakışan onaylıya çevirmek de reddedilir.
+- **Veritabanında [başlangıç, bitiş) sınırları:** birbirine değen aralıklar geçer, 1 dakikalık çakışma geçmez.
+
+**Tarih ve saat:**
+- Alış ve iade saatleri kendi şube saat dilimiyle saklanır ve gösterilir.
+- Var olmayan saat reddedilir; iki kez yaşanan saatte seçim istenir.
+- Bilgisayarı başka saat diliminde (New York) olan kullanıcı da şube saatini görür (yeni tarayıcı testi).
+
+**Şirket ve şube izolasyonu:**
+- Başka şirketin müşterisi, aracı, kurumsal hesabı, rezervasyonu yapan kişisi ve sürücüsü kullanılamaz (404); kayıt oluşmaz.
+- Başka şirketin rezervasyonu gerçek kimlikle de açılamaz.
+- Yetkisiz durum geçişleri engellenir.
+- **Not:** Şube yetkisi, M1–M3'teki gibi API'de uygulanır; veritabanı şirket izolasyonunu ve durum kurallarını uygular.
+
+**Kişisel veriler:**
+- Arama metni URL'de yok; günlükte ve işlem geçmişinde ad, iletişim bilgisi ve not yok.
+- Rezervasyon yanıtlarında belge numarası, maskeli numara ve dosya yok.
+
+**Operasyonel sınırlar:**
+- Hizmet dışı araç onaylanamaz.
+- Bakım, transfer, kiralama, dış kaynak ve aracın ileri tarihteki konumu "Henüz denetlenemeyen" olarak listelenir.
+- Belge kontrolü "doğrulandı" diye gösterilmez; yalnız kayıt sayıları görünür.
+
+### API testlerindeki aralıklı sorun (açık tutuluyor)
+- **Önceki kayıt:** "Vitest failed to find the runner". M3 entegrasyonundan sonraki ilk çalıştırmada görüldü ve rezervasyon sprintinde bir kez yeniden üretildi; bu ilk başarısızlıklar rapordan silinmedi.
+- **Bu entegrasyonda:**
+  - rezervasyon dalında önbellek (`node_modules/.vite*`) silinerek soğuk başlangıç: 361/361;
+  - hemen tekrar: 361/361;
+  - main'de birleştirmeden sonraki ilk çalıştırma: 361/361, runner hatası yok.
+- Çıktılar oturumun not klasöründe saklandı.
+- **Değerlendirme:** Hata test altyapısından (Vitest modül yükleme) geliyor; uygulama koduyla ilgili değil. Tekrarlamadığı için entegrasyonu engellemedi. Kök neden doğrulanmadı; yapısal değişiklik yapılmadı.
+
+### Main'e birleştirme
+- Yalnız ileri sarma ile birleştirildi: `2b7c9fc → 0cc4ca5`; bu rapor da aynı yolla eklendi.
+- Push yapılmadı. `rezervasyon-r1` dalı ve `acarvo-r1` klasörü korunuyor.
+
+### Ana veritabanı geçişi (24 → 27)
+- **Öncesi:**
+  - `--verify`: yalnız 3 bekleyen migration;
+  - önizleme: 0024, 0025, 0026;
+  - SQL: mevcut tablolarda yalnız iki izin listesi genişliyor (`user_sensitive_actions` türleri, `company_sequences` türleri); gerisi yeni tablolar ve yeni tablolara ait kurallar;
+  - parmak izleri salt okunur alındı. M3 geçişinden bu yana veri değişmemişti.
+- **Doğrulanmış yedek:** `C:\Users\soena\Desktop\acarvo\backups\2026-10-13-03-09-02`.
+- **Uygulama:** safe-migrate durmadan geçti; `--verify`: "sorun yok" (39 tablo, 35'inde zorunlu RLS).
+- **Migration kayıtları:** 27 kayıt; son üçünün özetleri dosyalarla ve test veritabanı kayıtlarıyla aynı.
+- **Kurulan koruma test veritabanıyla birebir aynı:**
+
+  | Nesne | Sayı |
+  |---|---|
+  | Kısıt (10'u şirket bileşik yabancı anahtarı) | 64 |
+  | Tetikleyici ve tetikleyici fonksiyonu (çakışma koruması dahil) | 3 + 3 |
+  | Politika | 12 |
+  | Zorunlu RLS'li tablo | 3 |
+  | Uygulama yetkisi | 8 |
+  | Genişletilmiş izin listesi | 2 |
+
+- **Mevcut veri:** müşteri kaydı (Drina, 1) içerik özetiyle aynı; şubeler, sayaçlar, araçlar, fotoğraflar, dosyalar, araç belgeleri, km ve konum kayıtları, kullanıcılar, şirketler ve M1/M2/M3 verileri değişmedi.
+- **Beklenen değişiklikler:** her şirkette 3 hazır role `reservations.read`, `.manage`, `.confirm` eklendi (hiç yetki silinmedi); 3 "rol yükseltme" geçmiş kaydı düştü; 3 yeni tablo, 12 politika, 8 yetki ve 16 indeks eklendi.
+- **Örnek veri:** ana veritabanına rezervasyon eklenmedi; rezervasyon tabloları boş.
+
+### Birleştirmeden sonra main'de testler (yalnız `acarvo_test`)
+
+| Kontrol | Sonuç |
+|---|---|
+| API | 361/361 (ilk çalıştırma) |
+| Tarayıcı | 96 geçti, 21 isteğe bağlı atlandı |
+| TypeScript ve üretim derlemesi | Hatasız |
+
+### Çalışan uygulama
+- Main sunucuları main klasöründen (dal `main`, `0cc4ca5`) çalışıyor: API 3001, web 5173.
+- Geçiş sırasında, birleştirmeyle yeni kodu yüklemiş olan eski API süreci durduruldu; geçişten sonra yeniden başlatıldı.
+- **Sağlık:** `{"status":"ok","database":"connected"}`.
+- **Sayfalar:** `/rezervasyonlar`, `/rezervasyonlar/yeni`, `/rezervasyonlar/:id`, `/musteriler`, `/kurumsal-hesaplar` ve `/araclar` 200 dönüyor.
+- **Oturumsuz API istekleri:** reddediliyor (403 / 401).
+- **Sınır:** Ana uygulamaya kendi parolanızla girerek ekranların içi kontrol edilmedi; parolanız benim tarafımdan bilinmiyor. Aynı main kodunun bu ekranları (liste, yeni rezervasyon, 360°, Müşteri / Kurumsal / Araç 360° rezervasyon sekmeleri) test veritabanında tarayıcı testleriyle doğrulandı. Ana veritabanında rezervasyon olmadığı için listeler boş açılır; bu beklenen durum.
+
+### Açık riskler
+1. Aralıklı "Vitest failed to find the runner" sorunu (yukarıda).
+2. Şube yetkisi veritabanında değil API'de uygulanıyor (mevcut mimari).
+3. Sınıf kapasitesi, bakım, transfer ve kiralama blokları ilgili modüller gelene kadar denetlenemiyor; ekranda açıkça yazıyor.
+4. Hazırlık süresi yok (karar D); fiziksel hazırlık Teslim/İade modülüne kaldı.
+5. Gerçek şifreleme anahtarları henüz kurulmadı (M2); belge numarası ve dosya işlemleri kapalı.
