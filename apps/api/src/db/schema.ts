@@ -1,5 +1,6 @@
 import { sql } from 'drizzle-orm'
 import {
+  type AnyPgColumn,
   bigint,
   boolean,
   check,
@@ -522,12 +523,12 @@ export const companySequences = pgTable(
   'company_sequences',
   {
     companyId: uuid('company_id').notNull().references(() => companies.id),
-    kind: text('kind', { enum: ['customer', 'corporate_account', 'reservation', 'rental'] }).notNull(),
+    kind: text('kind', { enum: ['customer', 'corporate_account', 'reservation', 'rental', 'price_quote', 'contract'] }).notNull(),
     nextValue: bigint('next_value', { mode: 'number' }).notNull(),
   },
   (t) => [
     primaryKey({ columns: [t.companyId, t.kind] }),
-    check('company_sequences_kind_check', sql`${t.kind} in ('customer', 'corporate_account', 'reservation', 'rental')`),
+    check('company_sequences_kind_check', sql`${t.kind} in ('customer', 'corporate_account', 'reservation', 'rental', 'price_quote', 'contract')`),
     check('company_sequences_next_check', sql`${t.nextValue} >= 1`),
   ],
 )
@@ -1428,5 +1429,365 @@ export const rentalDamageMarks = pgTable(
     check('rental_damage_marks_position_check', sql`${t.xPermille} between 0 and 1000 and ${t.yPermille} between 0 and 1000`),
     check('rental_damage_marks_category_check', sql`${t.category} in ('scratch', 'dent', 'crack', 'stain', 'missing_part', 'other')`),
     check('rental_damage_marks_note_check', sql`${t.note} is null or char_length(${t.note}) <= 300`),
+  ],
+)
+
+// ---------------------------------------------------------------------------
+// Pricing and contracts V1 — docs/FIYATLANDIRMA_SOZLESME_PLANI.md. Every row belongs to one company (forced RLS,
+// composite keys). A price list's calculation rules live in immutable revisions: each save writes a new revision with
+// its own rates, seasons, extras and discounts, so quotes that pinned an older revision never change. Nothing is
+// deleted. No payment, debt, deposit or invoice is stored here (Finance does not exist yet).
+
+export const priceLists = pgTable(
+  'price_lists',
+  {
+    id: id(),
+    companyId: uuid('company_id').notNull().references(() => companies.id),
+    name: text('name').notNull(),
+    /** ISO 4217; fixed for the list's life (quotes of one list share one transaction currency). */
+    currency: text('currency').notNull(),
+    status: text('status', { enum: ['draft', 'active', 'archived'] }).notNull().default('draft'),
+    /** Null = every branch of the company. */
+    branchId: uuid('branch_id'),
+    validFrom: date('valid_from'),
+    validUntil: date('valid_until'),
+    priority: integer('priority').notNull().default(0),
+    currentRevision: integer('current_revision').notNull().default(1),
+    version: integer('version').notNull().default(1),
+    createdAt: createdAt(),
+    createdBy: uuid('created_by').references(() => users.id),
+    updatedAt: updatedAt(),
+    updatedBy: uuid('updated_by').references(() => users.id),
+  },
+  (t) => [
+    unique('price_lists_company_id_key').on(t.companyId, t.id),
+    index('price_lists_company_status_idx').on(t.companyId, t.status, t.priority),
+    foreignKey({ columns: [t.companyId, t.branchId], foreignColumns: [branches.companyId, branches.id] }),
+    check('price_lists_currency_check', sql`${t.currency} ~ '^[A-Z]{3}$'`),
+    check('price_lists_status_check', sql`${t.status} in ('draft', 'active', 'archived')`),
+    check('price_lists_valid_check', sql`${t.validFrom} is null or ${t.validUntil} is null or ${t.validUntil} >= ${t.validFrom}`),
+    check('price_lists_priority_check', sql`${t.priority} between 0 and 1000`),
+    check('price_lists_name_check', sql`char_length(${t.name}) between 1 and 80`),
+    check('price_lists_version_check', sql`${t.version} >= 1 and ${t.currentRevision} >= 1`),
+  ],
+)
+
+export const priceListRevisions = pgTable(
+  'price_list_revisions',
+  {
+    id: id(),
+    companyId: uuid('company_id').notNull().references(() => companies.id),
+    priceListId: uuid('price_list_id').notNull(),
+    revision: integer('revision').notNull(),
+    dayMethod: text('day_method', { enum: ['rolling_24h', 'calendar_day'] }).notNull(),
+    graceMinutes: integer('grace_minutes').notNull(),
+    minDays: integer('min_days').notNull(),
+    taxMode: text('tax_mode', { enum: ['not_configured', 'exclusive', 'inclusive'] }).notNull(),
+    taxRateBp: integer('tax_rate_bp'),
+    taxLabel: text('tax_label'),
+    note: text('note'),
+    createdAt: createdAt(),
+    createdBy: uuid('created_by').references(() => users.id),
+  },
+  (t) => [
+    unique('price_list_revisions_key').on(t.companyId, t.priceListId, t.revision),
+    foreignKey({ columns: [t.companyId, t.priceListId], foreignColumns: [priceLists.companyId, priceLists.id] }),
+    check('price_list_revisions_day_method_check', sql`${t.dayMethod} in ('rolling_24h', 'calendar_day')`),
+    check('price_list_revisions_grace_check', sql`${t.graceMinutes} between 0 and 180`),
+    check('price_list_revisions_min_days_check', sql`${t.minDays} between 1 and 30`),
+    check('price_list_revisions_tax_check', sql`${t.taxMode} in ('not_configured', 'exclusive', 'inclusive') and ((${t.taxMode} = 'not_configured') = (${t.taxRateBp} is null))`),
+    check('price_list_revisions_tax_rate_check', sql`${t.taxRateBp} is null or ${t.taxRateBp} between 1 and 10000`),
+    check('price_list_revisions_revision_check', sql`${t.revision} >= 1`),
+  ],
+)
+
+const revisionFk = (t: { companyId: AnyPgColumn; priceListId: AnyPgColumn; revision: AnyPgColumn }) =>
+  foreignKey({ columns: [t.companyId, t.priceListId, t.revision], foreignColumns: [priceListRevisions.companyId, priceListRevisions.priceListId, priceListRevisions.revision] })
+
+export const priceListRates = pgTable(
+  'price_list_rates',
+  {
+    id: id(),
+    companyId: uuid('company_id').notNull().references(() => companies.id),
+    priceListId: uuid('price_list_id').notNull(),
+    revision: integer('revision').notNull(),
+    vehicleClassId: uuid('vehicle_class_id').notNull(),
+    rate1to6Minor: bigint('rate_1_6_minor', { mode: 'number' }).notNull(),
+    rate7to29Minor: bigint('rate_7_29_minor', { mode: 'number' }),
+    rate30plusMinor: bigint('rate_30_plus_minor', { mode: 'number' }),
+  },
+  (t) => [
+    unique('price_list_rates_class_key').on(t.companyId, t.priceListId, t.revision, t.vehicleClassId),
+    revisionFk(t),
+    foreignKey({ columns: [t.companyId, t.vehicleClassId], foreignColumns: [vehicleClasses.companyId, vehicleClasses.id] }),
+    check('price_list_rates_amount_check', sql`${t.rate1to6Minor} between 0 and 10000000000 and coalesce(${t.rate7to29Minor}, 0) between 0 and 10000000000 and coalesce(${t.rate30plusMinor}, 0) between 0 and 10000000000`),
+  ],
+)
+
+export const priceListSeasons = pgTable(
+  'price_list_seasons',
+  {
+    id: id(),
+    companyId: uuid('company_id').notNull().references(() => companies.id),
+    priceListId: uuid('price_list_id').notNull(),
+    revision: integer('revision').notNull(),
+    name: text('name').notNull(),
+    startDate: date('start_date').notNull(),
+    endDate: date('end_date').notNull(),
+    vehicleClassId: uuid('vehicle_class_id'),
+    percentBp: integer('percent_bp').notNull(),
+    priority: integer('priority').notNull(),
+    active: boolean('active').notNull(),
+  },
+  (t) => [
+    index('price_list_seasons_list_idx').on(t.companyId, t.priceListId, t.revision),
+    revisionFk(t),
+    foreignKey({ columns: [t.companyId, t.vehicleClassId], foreignColumns: [vehicleClasses.companyId, vehicleClasses.id] }),
+    check('price_list_seasons_dates_check', sql`${t.endDate} >= ${t.startDate}`),
+    check('price_list_seasons_percent_check', sql`${t.percentBp} between -9000 and 50000`),
+    check('price_list_seasons_priority_check', sql`${t.priority} between 0 and 1000`),
+  ],
+)
+
+export const priceListExtras = pgTable(
+  'price_list_extras',
+  {
+    id: id(),
+    companyId: uuid('company_id').notNull().references(() => companies.id),
+    priceListId: uuid('price_list_id').notNull(),
+    revision: integer('revision').notNull(),
+    code: text('code').notNull(),
+    name: text('name').notNull(),
+    kind: text('kind', { enum: ['standard', 'additional_driver'] }).notNull(),
+    mode: text('mode', { enum: ['per_day', 'per_rental'] }).notNull(),
+    priceMinor: bigint('price_minor', { mode: 'number' }).notNull(),
+    maxQuantity: integer('max_quantity').notNull(),
+    taxable: boolean('taxable').notNull(),
+    active: boolean('active').notNull(),
+  },
+  (t) => [
+    unique('price_list_extras_code_key').on(t.companyId, t.priceListId, t.revision, t.code),
+    revisionFk(t),
+    check('price_list_extras_kind_check', sql`${t.kind} in ('standard', 'additional_driver') and ${t.mode} in ('per_day', 'per_rental')`),
+    check('price_list_extras_amount_check', sql`${t.priceMinor} between 0 and 10000000000 and ${t.maxQuantity} between 1 and 20`),
+    check('price_list_extras_code_check', sql`${t.code} ~ '^[A-Z0-9_-]{2,20}$'`),
+  ],
+)
+
+export const priceListDiscounts = pgTable(
+  'price_list_discounts',
+  {
+    id: id(),
+    companyId: uuid('company_id').notNull().references(() => companies.id),
+    priceListId: uuid('price_list_id').notNull(),
+    revision: integer('revision').notNull(),
+    name: text('name').notNull(),
+    type: text('type', { enum: ['percent', 'fixed'] }).notNull(),
+    value: bigint('value', { mode: 'number' }).notNull(),
+    minDays: integer('min_days').notNull(),
+    active: boolean('active').notNull(),
+  },
+  (t) => [
+    index('price_list_discounts_list_idx').on(t.companyId, t.priceListId, t.revision),
+    revisionFk(t),
+    check('price_list_discounts_check', sql`${t.type} in ('percent', 'fixed') and ${t.value} >= 1 and (${t.type} <> 'percent' or ${t.value} <= 10000) and ${t.value} <= 10000000000 and ${t.minDays} between 1 and 366`),
+  ],
+)
+
+/** A price quote (spec §67: a preview, never a Charge). Immutable; a new quote supersedes the previous one. */
+export const priceQuotes = pgTable(
+  'price_quotes',
+  {
+    id: id(),
+    companyId: uuid('company_id').notNull().references(() => companies.id),
+    quoteNo: text('quote_no').notNull(),
+    status: text('status', { enum: ['quoted', 'superseded'] }).notNull().default('quoted'),
+    reservationId: uuid('reservation_id'),
+    rentalId: uuid('rental_id'),
+    priceListId: uuid('price_list_id').notNull(),
+    priceListRevision: integer('price_list_revision').notNull(),
+    currency: text('currency').notNull(),
+    vehicleClassId: uuid('vehicle_class_id').notNull(),
+    pickupAt: timestamp('pickup_at', { withTimezone: true }).notNull(),
+    returnAt: timestamp('return_at', { withTimezone: true }).notNull(),
+    pickupTimezone: text('pickup_timezone').notNull(),
+    days: integer('days').notNull(),
+    tier: text('tier').notNull(),
+    dayMethod: text('day_method').notNull(),
+    /** What was asked: extras and quantities, discount, additional drivers. */
+    inputs: jsonb('inputs').$type<Record<string, unknown>>().notNull(),
+    /** The calculation lines with their sources and revision. */
+    lines: jsonb('lines').$type<unknown[]>().notNull(),
+    netMinor: bigint('net_minor', { mode: 'number' }).notNull(),
+    taxMinor: bigint('tax_minor', { mode: 'number' }),
+    grossMinor: bigint('gross_minor', { mode: 'number' }),
+    taxStatus: text('tax_status', { enum: ['complete', 'not_configured'] }).notNull(),
+    engineVersion: text('engine_version').notNull(),
+    calculatedAt: timestamp('calculated_at', { withTimezone: true }).notNull().defaultNow(),
+    clientRequestId: uuid('client_request_id').notNull(),
+    supersededAt: timestamp('superseded_at', { withTimezone: true }),
+    supersededById: uuid('superseded_by_id'),
+    createdAt: createdAt(),
+    createdBy: uuid('created_by').references(() => users.id),
+  },
+  (t) => [
+    unique('price_quotes_company_id_key').on(t.companyId, t.id),
+    unique('price_quotes_company_no_key').on(t.companyId, t.quoteNo),
+    unique('price_quotes_request_key').on(t.companyId, t.clientRequestId),
+    uniqueIndex('price_quotes_reservation_current_key').on(t.companyId, t.reservationId).where(sql`${t.status} = 'quoted' and ${t.reservationId} is not null`),
+    uniqueIndex('price_quotes_rental_current_key').on(t.companyId, t.rentalId).where(sql`${t.status} = 'quoted' and ${t.rentalId} is not null`),
+    index('price_quotes_reservation_idx').on(t.companyId, t.reservationId, t.createdAt),
+    index('price_quotes_rental_idx').on(t.companyId, t.rentalId, t.createdAt),
+    index('price_quotes_list_idx').on(t.companyId, t.priceListId),
+    foreignKey({ columns: [t.companyId, t.reservationId], foreignColumns: [reservations.companyId, reservations.id] }),
+    foreignKey({ columns: [t.companyId, t.rentalId], foreignColumns: [rentals.companyId, rentals.id] }),
+    foreignKey({ columns: [t.companyId, t.priceListId, t.priceListRevision], foreignColumns: [priceListRevisions.companyId, priceListRevisions.priceListId, priceListRevisions.revision] }),
+    foreignKey({ columns: [t.companyId, t.vehicleClassId], foreignColumns: [vehicleClasses.companyId, vehicleClasses.id] }),
+    check('price_quotes_no_check', sql`${t.quoteNo} ~ '^Q-[0-9]{6,}$'`),
+    check('price_quotes_target_check', sql`(${t.reservationId} is null) <> (${t.rentalId} is null)`),
+    check('price_quotes_status_check', sql`${t.status} in ('quoted', 'superseded') and ((${t.status} = 'superseded') = (${t.supersededAt} is not null))`),
+    check('price_quotes_tax_check', sql`${t.taxStatus} in ('complete', 'not_configured') and ((${t.taxStatus} = 'complete') = (${t.taxMinor} is not null and ${t.grossMinor} is not null))`),
+    check('price_quotes_period_check', sql`${t.returnAt} > ${t.pickupAt} and ${t.days} >= 1`),
+    check('price_quotes_currency_check', sql`${t.currency} ~ '^[A-Z]{3}$'`),
+  ],
+)
+
+export const contractTemplates = pgTable(
+  'contract_templates',
+  {
+    id: id(),
+    companyId: uuid('company_id').notNull().references(() => companies.id),
+    name: text('name').notNull(),
+    language: text('language').notNull(),
+    country: text('country'),
+    /** Started from ACARVO's clearly marked sample text (not legal advice). */
+    isSample: boolean('is_sample').notNull().default(false),
+    createdAt: createdAt(),
+    createdBy: uuid('created_by').references(() => users.id),
+  },
+  (t) => [
+    unique('contract_templates_company_id_key').on(t.companyId, t.id),
+    check('contract_templates_language_check', sql`${t.language} in ('tr', 'bs', 'en', 'de', 'hr', 'sr')`),
+    check('contract_templates_country_check', sql`${t.country} is null or ${t.country} ~ '^[A-Z]{2}$'`),
+    check('contract_templates_name_check', sql`char_length(${t.name}) between 1 and 80`),
+  ],
+)
+
+export const contractTemplateVersions = pgTable(
+  'contract_template_versions',
+  {
+    id: id(),
+    companyId: uuid('company_id').notNull().references(() => companies.id),
+    templateId: uuid('template_id').notNull(),
+    versionNo: integer('version_no').notNull(),
+    status: text('status', { enum: ['draft', 'active', 'retired'] }).notNull().default('draft'),
+    body: text('body').notNull(),
+    version: integer('version').notNull().default(1),
+    createdAt: createdAt(),
+    createdBy: uuid('created_by').references(() => users.id),
+    activatedAt: timestamp('activated_at', { withTimezone: true }),
+    activatedBy: uuid('activated_by').references(() => users.id),
+    retiredAt: timestamp('retired_at', { withTimezone: true }),
+  },
+  (t) => [
+    unique('contract_template_versions_company_id_key').on(t.companyId, t.id),
+    unique('contract_template_versions_no_key').on(t.companyId, t.templateId, t.versionNo),
+    uniqueIndex('contract_template_versions_active_key').on(t.companyId, t.templateId).where(sql`${t.status} = 'active'`),
+    uniqueIndex('contract_template_versions_draft_key').on(t.companyId, t.templateId).where(sql`${t.status} = 'draft'`),
+    foreignKey({ columns: [t.companyId, t.templateId], foreignColumns: [contractTemplates.companyId, contractTemplates.id] }),
+    check('contract_template_versions_status_check', sql`${t.status} in ('draft', 'active', 'retired')`),
+    check('contract_template_versions_body_check', sql`char_length(${t.body}) <= 20000`),
+    check('contract_template_versions_active_check', sql`${t.status} = 'draft' or ${t.activatedAt} is not null`),
+  ],
+)
+
+export const CONTRACT_STATUS_VALUES = ['draft', 'under_review', 'externally_processed', 'archived', 'superseded'] as const
+
+/** A rental contract (spec §83.2): numbered, versioned, with an immutable snapshot. No e-signature state exists. */
+export const contracts = pgTable(
+  'contracts',
+  {
+    id: id(),
+    companyId: uuid('company_id').notNull().references(() => companies.id),
+    contractNo: text('contract_no').notNull(),
+    revision: integer('revision').notNull().default(1),
+    supersedesId: uuid('supersedes_id'),
+    status: text('status', { enum: CONTRACT_STATUS_VALUES }).notNull().default('draft'),
+    rentalId: uuid('rental_id').notNull(),
+    reservationId: uuid('reservation_id'),
+    quoteId: uuid('quote_id'),
+    templateVersionId: uuid('template_version_id').notNull(),
+    /** What the contract says, frozen at creation: parties, vehicle, period, quote lines, rendered text. No ID numbers. */
+    content: jsonb('content').$type<Record<string, unknown>>().notNull(),
+    externalAckAt: timestamp('external_ack_at', { withTimezone: true }),
+    externalAckBy: uuid('external_ack_by').references(() => users.id),
+    externalReference: text('external_reference'),
+    archiveReason: text('archive_reason'),
+    clientRequestId: uuid('client_request_id').notNull(),
+    version: integer('version').notNull().default(1),
+    createdAt: createdAt(),
+    createdBy: uuid('created_by').references(() => users.id),
+    updatedAt: updatedAt(),
+    updatedBy: uuid('updated_by').references(() => users.id),
+  },
+  (t) => [
+    unique('contracts_company_id_key').on(t.companyId, t.id),
+    unique('contracts_company_no_key').on(t.companyId, t.contractNo, t.revision),
+    unique('contracts_request_key').on(t.companyId, t.clientRequestId),
+    uniqueIndex('contracts_rental_open_key').on(t.companyId, t.rentalId).where(sql`${t.status} in ('draft', 'under_review', 'externally_processed')`),
+    index('contracts_rental_idx').on(t.companyId, t.rentalId, t.createdAt),
+    index('contracts_company_created_idx').on(t.companyId, t.createdAt),
+    foreignKey({ columns: [t.companyId, t.rentalId], foreignColumns: [rentals.companyId, rentals.id] }),
+    foreignKey({ columns: [t.companyId, t.reservationId], foreignColumns: [reservations.companyId, reservations.id] }),
+    foreignKey({ columns: [t.companyId, t.quoteId], foreignColumns: [priceQuotes.companyId, priceQuotes.id] }),
+    foreignKey({ columns: [t.companyId, t.templateVersionId], foreignColumns: [contractTemplateVersions.companyId, contractTemplateVersions.id] }),
+    foreignKey({ columns: [t.companyId, t.supersedesId], foreignColumns: [t.companyId, t.id] }),
+    check('contracts_no_check', sql`${t.contractNo} ~ '^S-[0-9]{6,}$'`),
+    check('contracts_status_check', sql`${t.status} in ('draft', 'under_review', 'externally_processed', 'archived', 'superseded')`),
+    check('contracts_external_check', sql`(${t.status} = 'externally_processed') = (${t.externalAckAt} is not null and ${t.externalAckBy} is not null and ${t.externalReference} is not null) or (${t.status} in ('archived', 'superseded') and ${t.externalAckAt} is not null)`),
+    check('contracts_external_reference_check', sql`${t.externalReference} is null or (char_length(${t.externalReference}) between 3 and 40 and ${t.externalReference} ~ '^[A-Za-z0-9][A-Za-z0-9 ./_-]*$')`),
+    check('contracts_archive_check', sql`(${t.status} = 'archived') = (${t.archiveReason} is not null)`),
+    check('contracts_revision_check', sql`${t.revision} >= 1 and ${t.version} >= 1`),
+  ],
+)
+
+export const contractFiles = pgTable(
+  'contract_files',
+  {
+    id: id(),
+    companyId: uuid('company_id').notNull().references(() => companies.id),
+    contractId: uuid('contract_id').notNull(),
+    storageKey: text('storage_key').notNull().unique(),
+    sizeBytes: integer('size_bytes').notNull(),
+    sha256: text('sha256').notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    unique('contract_files_contract_key').on(t.companyId, t.contractId),
+    foreignKey({ columns: [t.companyId, t.contractId], foreignColumns: [contracts.companyId, contracts.id] }),
+    check('contract_files_sha_check', sql`${t.sha256} ~ '^[0-9a-f]{64}$'`),
+  ],
+)
+
+/** Append-only: lifecycle, views and downloads (who, when, which contract; no content). */
+export const contractEvents = pgTable(
+  'contract_events',
+  {
+    id: id(),
+    companyId: uuid('company_id').notNull().references(() => companies.id),
+    contractId: uuid('contract_id').notNull(),
+    kind: text('kind').notNull(),
+    fromStatus: text('from_status'),
+    toStatus: text('to_status'),
+    data: jsonb('data').$type<Record<string, unknown>>(),
+    clientRequestId: uuid('client_request_id'),
+    actorUserId: uuid('actor_user_id').references(() => users.id),
+    at: timestamp('at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index('contract_events_contract_idx').on(t.companyId, t.contractId, t.at),
+    uniqueIndex('contract_events_request_key').on(t.companyId, t.clientRequestId).where(sql`${t.clientRequestId} is not null`),
+    foreignKey({ columns: [t.companyId, t.contractId], foreignColumns: [contracts.companyId, contracts.id] }),
+    check('contract_events_kind_check', sql`${t.kind} in ('created', 'review', 'external', 'archived', 'superseded', 'viewed', 'downloaded')`),
   ],
 )

@@ -218,6 +218,20 @@
       "when": 1791914602397,
       "tag": "0030_rental_external_terms_guards",
       "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "7",
+      "when": 1791917923630,
+      "tag": "0031_pricing_contracts",
+      "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1791917956995,
+      "tag": "0032_pricing_contracts_rls",
+      "breakpoints": true
     }
   ]
 }
