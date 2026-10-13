@@ -85,7 +85,7 @@ export const NAV: NavGroup[] = [
       { slug: 'talep-merkezi', label: 'Talep Merkezi', icon: Tray },
       { slug: 'partnerler', label: 'Partnerler', icon: Handshake },
       { slug: 'arac-tedarikcileri', label: 'Araç Tedarikçileri', icon: Truck },
-      { slug: 'fiyatlandirma', label: 'Fiyatlandırma', icon: Tag },
+      { slug: 'fiyatlandirma', label: 'Fiyatlandırma', icon: Tag, permission: 'pricing.read', built: true },
     ],
   },
   {

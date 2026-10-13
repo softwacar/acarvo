@@ -21,6 +21,7 @@ import type { Tx } from '../../db/client'
 import { toIso } from '../../lib/timestamps'
 import { vehicleBusy } from '../../lib/vehicle-allocation'
 import type { CompanyAccess } from '../auth/context'
+import { currentQuoteForRental } from '../pricing/repository'
 import { companyTimeZone, dayStart, moment, nextDay, people } from '../reservations/repository'
 
 type Row = Record<string, unknown>
@@ -387,16 +388,11 @@ export async function deliveryGates(
   gates.push({ code: 'external_terms', state: (await externalTermsMode(tx)) ? 'attention' : 'blocked' })
   // F8: a quote and a contract draft are shown, but they never release the handover on their own (no legal approval,
   // signature or payment exists in ACARVO); both stay 'attention' and the K1 gates above decide.
-  const quote = (
-    await tx.execute(sql`select quote_no, currency, net_minor, gross_minor, tax_status,
-        (pickup_at = ${k.plannedPickupAt} and return_at = ${k.plannedReturnAt} and vehicle_class_id = (select r2.vehicle_class_id from rentals r2 where r2.id = ${k.id})) as matches_plan
-      from price_quotes where status = 'quoted'
-      and (rental_id = ${k.id} ${k.reservationId ? sql`or reservation_id = ${k.reservationId}` : sql``}) order by (rental_id is not null) desc, created_at desc limit 1`)
-  ).rows[0] as Row | undefined
+  const quote = await currentQuoteForRental(tx, k.id, k.reservationId)
   gates.push({
     code: 'pricing',
     state: 'attention',
-    detail: quote ? { quoteNo: quote.quote_no as string, currency: quote.currency as string, netMinor: Number(quote.net_minor), grossMinor: quote.gross_minor == null ? null : Number(quote.gross_minor), matchesPlan: quote.matches_plan ? 1 : 0 } : undefined,
+    detail: quote ? { quoteNo: quote.quoteNo, currency: quote.currency, netMinor: quote.netMinor, grossMinor: quote.grossMinor, matchesPlan: quote.matchesPlan ? 1 : 0 } : undefined,
   })
   const contract = (await tx.execute(sql`select contract_no, revision, status from contracts where rental_id = ${k.id} and status in ('draft', 'under_review', 'externally_processed') limit 1`)).rows[0] as Row | undefined
   gates.push({ code: 'contract', state: 'attention', detail: contract ? { contractNo: contract.contract_no as string, revision: Number(contract.revision), status: contract.status as string } : undefined })

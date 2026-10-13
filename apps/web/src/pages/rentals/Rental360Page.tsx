@@ -10,6 +10,7 @@ import {
   type RentalGate,
   type RentalInspection,
   type RentalTab,
+  type ContractStatus,
 } from '@acarvo/shared'
 import { ArrowLeft, ArrowRight, Buildings, CalendarCheck, CheckCircle, Clock, Coins, DotsThree, Info, Key, PencilSimple, ShieldCheck, SpinnerGap, Star, WarningCircle, XCircle } from '@phosphor-icons/react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
@@ -36,15 +37,18 @@ import {
   RENTAL_CANCEL_REASON_LABELS,
   RENTAL_STATUS_LABELS,
 } from '@/lib/rental-labels'
+import { CONTRACT_STATUS_LABEL } from '@/lib/pricing-labels'
 import { cn } from '@/lib/utils'
 import { formatDateTime, formatKm } from '@/lib/vehicle-labels'
 import { can, useSession } from '@/session'
 import { TimeField } from '../reservations/ReservationFormPage'
+import { ContractPanel } from '../contracts/ContractPanel'
+import { QuotePanel, QuoteSummary } from '../pricing/QuotePanel'
 import { DamageDiagram, draftOf } from './DamageDiagram'
 import { Note, RentalStatusBadge } from './RentalParts'
 import { listSearchToReturnTo } from './search'
 
-const TAB_LABELS: Record<RentalTab, string> = { genel: 'Genel', kisiler: 'Müşteri ve sürücüler', arac: 'Araç ve rezervasyon', teslim: 'Teslim', iade: 'İade', hasar: 'Hasar ve fotoğraflar', gecmis: 'Geçmiş' }
+const TAB_LABELS: Record<RentalTab, string> = { genel: 'Genel', kisiler: 'Müşteri ve sürücüler', arac: 'Araç ve rezervasyon', fiyat: 'Fiyat teklifi', sozlesme: 'Sözleşme', teslim: 'Teslim', iade: 'İade', hasar: 'Hasar ve fotoğraflar', gecmis: 'Geçmiş' }
 const btnPrimary = 'inline-flex h-10 items-center gap-2 rounded-lg bg-blue px-4 font-medium text-white transition-colors hover:bg-blue-ink disabled:opacity-60'
 const btnSecondary = 'inline-flex h-10 items-center gap-2 rounded-lg border border-line bg-surface px-4 font-medium text-ink transition-colors hover:bg-line-soft disabled:opacity-60'
 
@@ -461,7 +465,29 @@ function CancelDialog({ r, onClose }: { r: RentalDetail; onClose: () => void }) 
   )
 }
 
-/** Kiralama 360°: the rental's operational file. Price, payment, deposit and contract are shown as not built (K1). */
+/** The terms card text (F8): what exists in ACARVO and that it never releases the handover on its own. */
+function termsText(r: RentalDetail) {
+  const pricing = r.deliveryGates.find((g) => g.code === 'pricing')?.detail
+  const contract = r.deliveryGates.find((g) => g.code === 'contract')?.detail
+  const have = [pricing?.quoteNo ? `teklif ${pricing.quoteNo}${pricing.matchesPlan === 0 ? ' (güncel değil)' : ''}` : 'fiyat teklifi yok', contract?.contractNo ? `sözleşme taslağı ${contract.contractNo}` : 'sözleşme taslağı yok'].join(', ')
+  return r.externalTermsMode
+    ? `ACARVO’da: ${have}. Teklif ve taslak teslimi tek başına açmaz; şirket dış süreç modunda: teslimde iki beyan ve dış referans istenir. Ödeme ve depozito kaydı yok.`
+    : `ACARVO’da: ${have}. Hukuki onay, imza ve ödeme süreci olmadığından bunlar teslimi açmaz ve şirketin dış sözleşme/fiyat modu kapalı; teslim yapılamaz. Modu yalnız şirket sahibi Ayarlar’dan açabilir.`
+}
+
+function ContractSummary({ gate, external }: { gate?: RentalGate; external: string | null }) {
+  const d = gate?.detail
+  if (d?.contractNo) {
+    return (
+      <span className="tnum font-medium text-ink">
+        {d.contractNo} <span className="font-normal text-ink-2">· sürüm {d.revision} · {CONTRACT_STATUS_LABEL[d.status as ContractStatus] ?? d.status}</span>
+      </span>
+    )
+  }
+  return <span className="text-ink-2">{external ? `Dış referans ${external} (beyan)` : gate ? 'Taslak yok' : 'Sözleşme sekmesinde'}</span>
+}
+
+/** Kiralama 360°: the rental's operational file, with its price quote and contract drafts. Payment and deposit are not built. */
 export function Rental360Page() {
   const session = useSession()
   const navigate = useNavigate()
@@ -577,7 +603,7 @@ export function Rental360Page() {
                       )}
                       <DropdownMenu.Separator className="my-1 h-px bg-line" />
                       <DropdownMenu.Label className="px-2.5 pt-1.5 pb-1 text-[12px] text-ink-3">İlgili modüllerle açılacak</DropdownMenu.Label>
-                      {['Sözleşme oluştur', 'Ödeme al', 'Araç değiştir', 'Olağan dışı sonlandır'].map((x) => (
+                      {['Ödeme al', 'Araç değiştir', 'Olağan dışı sonlandır'].map((x) => (
                         <DropdownMenu.Item key={x} disabled className="flex h-8 items-center justify-between rounded-md px-2.5 text-[13.5px] text-ink-3 outline-none">
                           {x}
                           <span className="text-[11.5px]">yakında</span>
@@ -615,12 +641,12 @@ export function Rental360Page() {
             )}
           </div>
           <div className="py-1.5">
-            <span className="block text-[12px] text-ink-2">Fiyat ve ödeme</span>
-            <span className="text-ink-2">Hesaplanmadı · ödeme kaydı yok</span>
+            <span className="block text-[12px] text-ink-2">Fiyat teklifi</span>
+            <QuoteSummary kind="rental" targetId={r.id} />
           </div>
           <div className="py-1.5">
             <span className="block text-[12px] text-ink-2">Sözleşme</span>
-            <span className="text-ink-2">ACARVO’da yok{r.externalTerms ? ` · dış referans ${r.externalTerms.reference} (beyan)` : r.status === 'prepared' && !r.externalTermsMode ? ' · dış mod kapalı' : ''}</span>
+            <ContractSummary gate={r.deliveryGates.find((g) => g.code === 'contract')} external={r.externalTerms?.reference ?? null} />
           </div>
         </div>
         {r.status === 'cancelled' && (
@@ -675,10 +701,21 @@ export function Rental360Page() {
           >
             {vehicleGates.filter((g) => g.state === 'blocked').length} engel, {vehicleGates.filter((g) => g.state === 'attention').length} uyarı. Km, yakıt, kontrol listesi ve 4–5 fotoğraf teslim masasında.
           </DecisionCard>
-          <DecisionCard title="Fiyat, sözleşme ve depozito" state={r.externalTermsMode ? 'attention' : 'blocked'}>
-            {r.externalTermsMode
-              ? 'Fiyat hesaplanmadı; ödeme, depozito ve sözleşme kaydı yok. Şirket dış süreç modunda: teslimde iki beyan ve dış referans istenir.'
-              : 'ACARVO’da sözleşme ve fiyat modülü yok ve şirketin dış sözleşme/fiyat modu kapalı; teslim yapılamaz. Modu yalnız şirket sahibi Ayarlar’dan açabilir.'}
+          <DecisionCard
+            title="Fiyat, sözleşme ve depozito"
+            state={r.externalTermsMode ? 'attention' : 'blocked'}
+            action={
+              <span className="flex flex-wrap gap-x-3">
+                <button type="button" onClick={() => onTab('fiyat')} className="text-[13px] font-medium text-blue hover:underline">
+                  Fiyat teklifi
+                </button>
+                <button type="button" onClick={() => onTab('sozlesme')} className="text-[13px] font-medium text-blue hover:underline">
+                  Sözleşme taslağı
+                </button>
+              </span>
+            }
+          >
+            {termsText(r)}
           </DecisionCard>
         </div>
       )}
@@ -713,8 +750,8 @@ export function Rental360Page() {
                   <span className="grid size-10 place-items-center rounded-lg bg-ground text-ink-2">
                     <Coins size={20} />
                   </span>
-                  <h2 className="mt-3 text-[15px] font-semibold">Fiyat, ödeme ve sözleşme bağlı değil</h2>
-                  <p className="mt-1 text-[13px] text-ink-2">Bu kiralama için fiyat hesaplanmadı; ödeme alınmadı, depozito tutulmadı, borç veya fatura oluşmadı ve ACARVO’da sözleşme imzalanmadı. Örnek veya temsili tutar gösterilmez.</p>
+                  <h2 className="mt-3 text-[15px] font-semibold">Ödeme ve depozito bağlı değil</h2>
+                  <p className="mt-1 text-[13px] text-ink-2">Fiyat teklifi ve sözleşme taslağı kendi sekmelerindedir. Ödeme alınmadı, depozito tutulmadı, borç veya fatura oluşmadı; ACARVO’da elektronik imza yoktur.</p>
                 </section>
                 <Panel title="Kayıt bilgisi">
                   <Facts
@@ -820,6 +857,22 @@ export function Rental360Page() {
               </Panel>
             </div>
           )}
+          {tab === 'fiyat' &&
+            (can(session, 'pricing.read') ? (
+              <QuotePanel kind="rental" targetId={r.id} targetNo={r.rentalNo} open={r.status === 'prepared' || r.status === 'delivered'} />
+            ) : (
+              <StatePanel icon={Coins} title="Fiyat teklifini görme yetkiniz yok">
+                <p>Fiyat teklifleri fiyat görüntüleme yetkisi olan kullanıcılara açıktır.</p>
+              </StatePanel>
+            ))}
+          {tab === 'sozlesme' &&
+            (can(session, 'contracts.read') ? (
+              <ContractPanel rentalId={r.id} rentalNo={r.rentalNo} rentalOpen={r.status === 'prepared' || r.status === 'delivered'} />
+            ) : (
+              <StatePanel icon={Key} title="Sözleşmeleri görme yetkiniz yok">
+                <p>Sözleşme taslakları sözleşme görüntüleme yetkisi olan kullanıcılara açıktır.</p>
+              </StatePanel>
+            ))}
           {tab === 'teslim' &&
             (r.handover ? (
               <div className="space-y-5">

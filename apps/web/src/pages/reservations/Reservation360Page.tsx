@@ -33,10 +33,11 @@ import {
 import { cn } from '@/lib/utils'
 import { formatDateTime } from '@/lib/vehicle-labels'
 import { can, useSession } from '@/session'
+import { QuotePanel, QuoteSummary } from '../pricing/QuotePanel'
 import { StatusBadge } from './ReservationParts'
 import { listSearchToReturnTo } from './search'
 
-const TAB_LABELS: Record<ReservationTab, string> = { genel: 'Genel', kisiler: 'Kişiler', arac: 'Araç', durum: 'Durum geçmişi', gecmis: 'İşlem geçmişi', fiyat: 'Fiyat ve kiralama' }
+const TAB_LABELS: Record<ReservationTab, string> = { genel: 'Genel', kisiler: 'Kişiler', arac: 'Araç', durum: 'Durum geçmişi', gecmis: 'İşlem geçmişi', fiyat: 'Fiyat teklifi' }
 const btnPrimary = 'inline-flex h-10 items-center gap-2 rounded-lg bg-blue px-4 font-medium text-white transition-colors hover:bg-blue-ink disabled:opacity-60'
 const btnSecondary = 'inline-flex h-10 items-center gap-2 rounded-lg border border-line bg-surface px-4 font-medium text-ink transition-colors hover:bg-line-soft disabled:opacity-60'
 
@@ -157,7 +158,7 @@ function ConvertDialog({ r, onClose }: { r: ReservationDetail; onClose: () => vo
           </Dialog.Description>
           <ul className="mt-3 space-y-1 rounded-lg bg-ground/70 px-3.5 py-2.5 text-[12.5px] text-ink-2">
             <li>Teslim ayrı bir adımdır: belge kararı, km, yakıt, kontrol listesi ve 4–5 fotoğraf teslim masasında alınır.</li>
-            <li>Fiyat, ödeme, depozito ve sözleşme oluşturulmaz.</li>
+            <li>Ödeme, depozito ve sözleşme oluşturulmaz. Rezervasyonun kayıtlı fiyat teklifi kiralamada görünür; plan aynı kaldıkça geçerlidir.</li>
           </ul>
           {error && (
             <p role="alert" className="mt-3 text-[13px] font-medium text-alert">
@@ -321,7 +322,6 @@ function Tabs({ tab, onTab }: { tab: ReservationTab; onTab: (t: ReservationTab) 
             className={cn('relative h-11 shrink-0 px-3 font-medium whitespace-nowrap', t === tab ? 'text-ink' : 'text-ink-2 hover:text-ink')}
           >
             {TAB_LABELS[t]}
-            {t === 'fiyat' && <span className="sr-only"> (henüz bağlı değil)</span>}
             {t === tab && <span aria-hidden className="absolute inset-x-3 bottom-0 h-0.5 rounded-full bg-blue" />}
           </button>
         ))}
@@ -330,7 +330,7 @@ function Tabs({ tab, onTab }: { tab: ReservationTab; onTab: (t: ReservationTab) 
   )
 }
 
-/** Rezervasyon 360°: the reservation's operational file. No price, payment, contract or rental is shown (modules not built). */
+/** Rezervasyon 360°: the reservation's operational file, with its price quote (Pricing V1). No payment, deposit or contract. */
 export function Reservation360Page() {
   const session = useSession()
   const navigate = useNavigate()
@@ -461,7 +461,7 @@ export function Reservation360Page() {
                       )}
                       <DropdownMenu.Separator className="my-1 h-px bg-line" />
                       <DropdownMenu.Label className="px-2.5 pt-1.5 pb-1 text-[12px] text-ink-3">İlgili modüllerle açılacak</DropdownMenu.Label>
-                      {['Kaparo al', 'Fiyatı gözden geçir'].map((x) => (
+                      {['Kaparo al'].map((x) => (
                         <DropdownMenu.Item key={x} disabled className="flex h-8 items-center justify-between rounded-md px-2.5 text-[13.5px] text-ink-3 outline-none">
                           {x}
                           <span className="text-[11.5px]">yakında</span>
@@ -498,7 +498,7 @@ export function Reservation360Page() {
           </div>
           <div className="py-1.5">
             <span className="block text-[12px] text-ink-2">Fiyat</span>
-            <span className="text-ink-2">Hesaplanmadı · Fiyatlandırma modülüyle</span>
+            <QuoteSummary kind="reservation" targetId={r.id} />
           </div>
         </div>
         {r.status === 'cancelled' && (
@@ -556,7 +556,7 @@ export function Reservation360Page() {
                 <Panel title="Not">{r.note ? <p className="whitespace-pre-line text-ink">{r.note}</p> : <p className="text-ink-2">Not yok.</p>}</Panel>
                 <p className="flex items-start gap-1.5 text-[12.5px] text-ink-2">
                   <Info size={14} className="mt-[3px] shrink-0 text-ink-3" />
-                  {r.status === 'converted' ? 'Bu rezervasyon kiralamaya dönüştü; teslim, iade ve kapanış kiralama kaydında izlenir. ' : r.status === 'confirmed' ? 'Onay, araç ve zaman ayırmasıdır. ' : ''}Bu rezervasyon için fiyat hesaplanmadı; ödeme alınmadı ve sözleşme oluşturulmadı.
+                  {r.status === 'converted' ? 'Bu rezervasyon kiralamaya dönüştü; teslim, iade ve kapanış kiralama kaydında izlenir. ' : r.status === 'confirmed' ? 'Onay, araç ve zaman ayırmasıdır. ' : ''}Fiyat teklifi “Fiyat teklifi” sekmesindedir; teklif ödeme değildir. Ödeme alınmadı ve sözleşme oluşturulmadı.
                 </p>
               </div>
               <div className="min-w-0 space-y-5">
@@ -659,37 +659,14 @@ export function Reservation360Page() {
               </p>
             </Panel>
           )}
-          {tab === 'fiyat' && (
-            <section className="rounded-xl border border-line bg-surface">
-              <div className="grid gap-6 p-6 md:grid-cols-2 md:p-8">
-                <div>
-                  <span className="grid size-11 place-items-center rounded-lg bg-ground text-ink-2">
-                    <Coins size={22} />
-                  </span>
-                  <h2 className="mt-4 text-[18px] font-semibold">Fiyat, kaparo ve kiralama henüz bağlı değil</h2>
-                  <p className="mt-1.5 text-ink-2">Bu rezervasyon için fiyat hesaplanmadı, ödeme alınmadı ve borç oluşmadı. Şimdilik örnek veya temsili veri gösterilmez.</p>
-                </div>
-                <div className="rounded-lg border border-line-soft bg-ground/50 p-5">
-                  <p className="text-[12.5px] font-medium text-ink-2">İlgili modüllerle gelecek</p>
-                  <ul className="mt-3 space-y-2.5 text-[13.5px] text-ink">
-                    {[
-                      [Coins, 'Fiyat dökümü ve fiyat anlık görüntüsü (Fiyatlandırma)'],
-                      [Coins, 'Kaparo / ön ödeme (Finans)'],
-                      [Key, 'Sözleşme ve imza (Sözleşme modülü)'],
-                    ].map(([Ico, t]) => (
-                      <li key={t as string} className="flex items-start gap-2.5">
-                        {(() => {
-                          const I = Ico as typeof Coins
-                          return <I size={16} className="mt-0.5 shrink-0 text-ink-3" />
-                        })()}
-                        {t as string}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              </div>
-            </section>
-          )}
+          {tab === 'fiyat' &&
+            (can(session, 'pricing.read') ? (
+              <QuotePanel kind="reservation" targetId={r.id} targetNo={r.reservationNo} open={r.status === 'pending' || r.status === 'confirmed'} />
+            ) : (
+              <StatePanel icon={Coins} title="Fiyat teklifini görme yetkiniz yok">
+                <p>Fiyat teklifleri fiyat görüntüleme yetkisi olan kullanıcılara açıktır.</p>
+              </StatePanel>
+            ))}
         </div>
       </div>
 

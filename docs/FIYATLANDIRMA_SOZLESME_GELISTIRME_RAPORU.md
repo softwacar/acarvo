@@ -1,0 +1,167 @@
+# ACARVO — Fiyatlandırma ve Sözleşme Yönetimi V1 Geliştirme Raporu
+
+Tarih: 13.10.2026 · Dal: `fiyat-sozlesme-v1` (çalışma kopyası `acarvo-fs1`) · Plan: `docs/FIYATLANDIRMA_SOZLESME_PLANI.md`
+
+Durum: **test ortamında tamamlandı.** Main'e birleştirilmedi, ana veritabanına migration uygulanmadı, GitHub'a gönderilmedi, `.env` değiştirilmedi, finans modülüne geçilmedi. Bütün testler yalnız `acarvo_test` üzerinde, sentetik verilerle çalıştı.
+
+---
+
+## 1. Tamamlanan özellikler
+
+**Fiyatlandırma**
+- Fiyat listeleri: ad, ISO 4217 para birimi (180 kod, kur dönüşümü yok), şube (veya tüm şubeler), geçerlilik tarihleri, öncelik, durum (Taslak / Etkin / Arşivde), oluşturan/değiştiren, zaman.
+- Her kaydetme **yeni ve değişmez bir revizyon**dur (sınıf tarifeleri, sezonlar, ek hizmetler, indirimler, vergi, gün hesabı dahil). Eski revizyonlar okunabilir kalır; revizyon geçmişi kimin, ne zaman, kaç kural ve kaç teklif olduğunu gösterir.
+- Sınıf tarifeleri: 1–6 / 7–29 / 30+ gün kademeleri (boş üst kademe alttakini kullanır).
+- Sezonlar: tarih aralığı, sınıf (veya tümü), yüzde artış/azalış, öncelik, etkin/pasif. Aynı öncelikte çakışan sezonlar hesaplanmaz, sorun olarak gösterilir.
+- Ek hizmetler: gün başına / kiralama başına, en çok adet, vergiye tabi mi, etkin mi. "Ek sürücü" türü kayıttaki ek sürücü sayısına göre kendiliğinden eklenir.
+- İndirimler: yüzde veya sabit tutar, en az gün; teklif başına en fazla bir indirim, yalnız kiralama bedeline, tutarı aşamaz.
+- Vergi: yapılandırılmadı / fiyatlara hariç / fiyatlara dahil; oran ve vergi adı (ör. PDV). Oran tahmin edilmez. Yapılandırılmamışsa yalnız net toplam gösterilir, brüt "hesaplanmadı" olarak kalır.
+- Para: tamsayı minor birim, ISO üsleri (0, 2, 3, 4), kesin ondalık ayrıştırma, "sıfırdan uzağa yarım" yuvarlama; testli.
+- Hesaplama motoru (`packages/shared/src/pricing-engine.ts`, sürüm `pe-1`): sunucuda çalışır, açıklanabilir (her satırda kaynak kural, revizyon, gün, oran), deterministik, saat dilimi ve yaz/kış saati doğru. Gün hesabı listede seçilir: **24 saatlik dönem (tolerans dakikasıyla)** veya **alış şubesinin saatine göre takvim günü**; sistem sessizce birini zorlamaz.
+- Önizleme: fiyat listesi ekranında kayıtlı revizyonla (sınıf, şube, alış/iade, ek sürücü); belirsiz saat (kış saatine geçiş) için seçim istenir, yaşanmamış saat reddedilir.
+
+**Teklifler (rezervasyon ve kiralama)**
+- Önizle → kaydet. Kaydedilen teklif liste ve revizyonu, hesap zamanını, gün sayısını, kademeyi, gün yöntemini, girdileri ve satırları dondurur; sonradan değişmez.
+- Kaydederken kullanıcının gördüğü toplam gönderilir; sunucuda farklıysa **409 PRICE_CHANGED** ve yeni sonuç döner, kullanıcı yeni fiyatı görüp yeniden onaylar.
+- `requestId` ile tekrar gönderim güvenlidir (aynı teklif döner).
+- Yeni teklif öncekini "yerine yenisi kaydedildi" yapar (bir kez, geri alınamaz). Bir kayıtta en fazla bir geçerli teklif.
+- Plan (tarih, saat, sınıf) veya ek sürücü sayısı değişince teklif **"güncel değil"** olarak işaretlenir; otomatik yeniden hesaplanmaz, sözleşmede kullanılmaz.
+- Kiralama, rezervasyonun geçerli teklifini (plan aynıysa) gösterir. Teklif ödeme, tahsilat, depozito, borç veya fatura değildir.
+- Hiçbir mevcut kayda kendiliğinden fiyat atanmaz; liste yoksa her yerde "Hesaplanmadı" yazar.
+
+**Sözleşmeler**
+- Şablonlar (Ayarlar → Sözleşme şablonları, yalnız Sahip): şirkete özel, dil (tr, bs, en, de, hr, sr) ve isteğe bağlı ülke, sürümlü (Taslak → Etkin → Kullanımdan kalktı). Düz metin; yalnız izinli `{{alan}}` adları; HTML, bağlantı, dış kaynak, tanımsız alan ve hatalı süslü parantez reddedilir. Zorunlu alanlar (sözleşme no, kiracı, plaka, alış, iade, fiyat tablosu) olmadan etkinleştirilemez (API ve veritabanı). ACARVO örnek metni "ÖRNEK METİN — HUKUKİ ONAY GEREKTİRİR" işaretlidir ve hukuki hüküm içermez. Etkinleştirme açık bir onay kutusu ister. Önizleme yalnız kurgusal örnek verilerle yapılır.
+- Sözleşme taslağı (Kiralama 360° → Sözleşme): numara `S-000001`, sürüm, kiralama, rezervasyon, müşteri, kurumsal hesap, sürücüler (ad ve müşteri numarası; kimlik numarası, adres, telefon kopyalanmaz), araç, dönem (şube saatiyle), kullanılan teklif, şablon ve sürümü, durum, oluşturan, zaman. İçerik oluşturulduğu anda dondurulur.
+- Fiyat yoksa metinde açıkça "Fiyat hesaplanmadı" yazar; hiçbir tutar uydurulmaz.
+- Yaşam döngüsü: **Taslak → Kontrol bekliyor → Dışarıda işleme alındı**; açık sözleşme **Arşivlendi** (neden zorunlu) veya **Yeni sürümle değiştirildi** olur. İmzalı durumu yoktur. "Dışarıda işleme alındı" bir personel beyanı + dış referanstır (ad/kimlik numarası yazılmaması uyarısıyla), elektronik imza değildir.
+- Yeni sürüm: önceki sürüm aynı metniyle saklanır, yeni sürüm güncel kiralama bilgileri ve geçerli teklifle oluşur. Fiziksel silme yok.
+- PDF taslağı: her sayfada üst bant ve çapraz filigran "TASLAK — HUKUKİ ONAY BEKLİYOR", alt bilgi "ACARVO taslağıdır. İmza, ödeme, fatura veya hukuki onay içermez.", imza alanı yok, DejaVu Sans ile Türkçe/Boşnakça karakterler, belge özelliklerinde kişisel veri yok. Özel depoda rastgele dosya adıyla tutulur; SHA-256 bütünlük kontrolü.
+- İndirme ayrı yetkidir (`contracts.download`); `attachment`, `no-store`, `nosniff`, `sandbox` CSP; dosya adı yalnız sözleşme numarası ve sürüm. Her görüntüleme ve indirme sözleşme geçmişine, indirme ayrıca işlem geçmişine yazılır.
+
+**Ekranlar**
+- Fiyatlandırma listesi ve fiyat listesi düzenleyici (doğrulama, kaydedilmemiş değişiklik koruması, eşzamanlı değişiklik uyarısı, etkinleştirme/arşivleme onayları, önizleme, revizyonlar, yetkisiz/boş/hata durumları).
+- Rezervasyon 360° "Fiyat teklifi" sekmesi ve başlık özeti; Kiralama 360° "Fiyat teklifi" ve "Sözleşme" sekmeleri, başlık özetleri, güncellenen karar kartı.
+- Ayarlar → Sözleşme şablonları (alan ekleme düğmeleri, canlı denetim, önizleme, etkinleştirme).
+
+## 2. Uygulanan kurallar ve ürün kararları (F1–F9)
+
+| Karar | Uygulama | Onay durumu |
+|---|---|---|
+| F1 Gün hesabı | Liste başına zorunlu seçim; düzenleyicide önceden seçili yöntem yok (planda öneri vardı, daha güvenli olanı uygulandı) | Ürün onayı bekliyor |
+| F2 Vergi | Hazır oran yok; yapılandırılmamışsa brüt hesaplanmaz | Hukuki/mali onay bekliyor |
+| F3 Kademe | Toplam süre kademesi tüm günlere uygulanır | Ürün onayı bekliyor |
+| F4 İndirim | En fazla bir, listede tanımlı, bedeli aşamaz; onay akışı yok | Ürün onayı bekliyor |
+| F5 Sözleşme no | Taslak oluşunca `S-` numarası ayrılır, yeniden kullanılmaz; sürümler aynı numarayla | Uygulandı |
+| F6 Şablon metni | ACARVO hukuki metin vermez; örnek işaretli | Hukuki onay bekliyor |
+| F7 Dış işlem | Beyan + dış referans; e-imza değildir | Uygulandı |
+| F8 Teslim | Teklif/sözleşme teslimi açmaz; K1 dış mod ve iki beyan aynen geçerli; kapılar "Dikkat" olarak teklif/sözleşmeyi gösterir | Nihai karar ayrı ürün onayına bırakıldı |
+| F9 Yetkiler | Aşağıda | Uygulandı |
+
+Uygulanmayan fiyat adımları (teklifte "hesaba katılmayanlar" olarak yazılır): kurumsal anlaşma fiyatı, tek yön ücreti, km sınırı/aşımı, sigorta paketi.
+
+## 3. Rezervasyon–kiralama çakışma koruması
+
+Fiyat ve sözleşme modülü araç ayırma koruması (`vehicle_allocation_lock`, `vehicle_busy()`, gecikmiş kiralama) üzerinde hiçbir değişiklik yapmadı. Teklif yalnız okuma yapar; kiralama ve rezervasyon testleri (çakışma, gecikme, K1/K2/K3) değişmeden geçti.
+
+## 4. Güvenlik
+
+- **Şirket yalıtımı:** 12 yeni tablonun hepsinde zorunlu RLS ve 4 politika; tüm yabancı anahtarlar `(company_id, id)` bileşik. Başka şirketin listesi, teklifi, şablonu, sözleşmesi ve PDF'i görünmez (404); uygulama rolüyle doğrudan sorgu da boş döner (testli).
+- **Veritabanı kuralları:** fiyat listesi yaşam döngüsü; revizyonlar ileri doğru ve parçaları yalnız kendi revizyonuyla aynı işlemde yazılabilir; teklif yalnız etkin listenin güncel revizyonuyla, hedefin kendi planı ve sınıfıyla, kendi para biriminde oluşturulur ve yalnız bir kez "yerine yenisi" olabilir; şablon sürümü yalnız taslakken değişir, zorunlu alanlar olmadan etkinleşmez; sözleşme yalnız etkin şablondan, hazırlanan/kirada kiralama için, içerik ve kaynakları değişmez, dış beyan değişmez, arşiv/yenilenmiş durumu kesindir, imzalı durum yoktur. 0033 ile revizyonlar, parçalar, şablonlar, dosyalar ve olaylar her rol için değişmez; listeler, teklifler, şablon sürümleri ve sözleşmeler silinemez.
+- **En az yetki (preset geçmişi v9):** Sahip tümü; Yönetici fiyat görme/teklif, sözleşme görme/yönetme/indirme; Operasyon fiyat görme/teklif, sözleşme görme/taslak (PDF indiremez). Liste, vergi ve şablon yönetimi yalnız Sahip. Özel rollere dokunulmadı. Şube kapsamı: başka şubenin rezervasyon/kiralamasına teklif veya sözleşme işlemi yapılamaz.
+- **Kişisel veri:** sözleşme içeriğine kimlik/belge numarası, doğum tarihi, adres, telefon, e-posta kopyalanmaz (testli); işlem geçmişinde müşteri adı yok (testli); URL'lerde ve dosya adlarında kişisel veri yok; PDF meta verisi nötr. M2 şifrelemesine dokunulmadı; gerçek anahtar üretilmedi.
+- **İstek güvenliği:** CSRF, sürüm kontrolü (409), `requestId` ile tekrar koruması, şablonda HTML/bağlantı/dış kaynak yasağı, PDF tarafında kontrol karakteri temizliği.
+
+## 5. Migration dosyaları (yalnız `acarvo_test`'e uygulandı)
+
+| Dosya | İçerik |
+|---|---|
+| `0031_pricing_contracts.sql` | 12 tablo, indeksler, sıra türleri `price_quote` ve `contract` (yalnız ekleme; tek DROP sıra türü kontrolünün yeniden tanımı) |
+| `0032_pricing_contracts_rls.sql` | RLS, koruma tetikleyicileri, uygulama rolü yetkileri |
+| `0033_pricing_contracts_history.sql` | Geçmiş tabloları için her rolde değişmezlik ve silme yasağı |
+
+`acarvo_test`: 34 migration, `safe-migrate --verify --test` sorun yok. Ana veritabanı 31 migration'da, dokunulmadı.
+
+## 6. API uçları
+
+| Uç | Yetki |
+|---|---|
+| `GET/POST /api/pricing/price-lists`, `GET/PUT /api/pricing/price-lists/:id`, `POST …/activate`, `POST …/archive`, `GET …/history` | okuma `pricing.read`, yazma `pricing.manage` |
+| `POST /api/pricing/preview` | `pricing.read` |
+| `GET/POST /api/reservations/:id/quotes`, `POST …/quotes/preview` (kiralama için aynısı `/api/rentals/:id/quotes`) | `pricing.read` / kaydetme `pricing.quote` + kaydın okuma yetkisi ve şube kapsamı |
+| `GET/POST /api/settings/contract-templates`, `PUT/POST …/:id/draft`, `POST …/:id/activate`, `POST …/preview` | `settings.contracts.manage` (liste ve önizleme `contracts.read`) |
+| `GET/POST /api/rentals/:id/contracts`, `GET /api/contracts/:id`, `POST …/review`, `…/external`, `…/archive`, `…/revise` | `contracts.read` / `contracts.manage` |
+| `GET /api/contracts/:id/pdf` | `contracts.download` |
+
+## 7. Ekranlar
+
+`/fiyatlandirma`, `/fiyatlandirma/yeni`, `/fiyatlandirma/:id`; Rezervasyon 360° Fiyat teklifi; Kiralama 360° Fiyat teklifi ve Sözleşme; Ayarlar → Sözleşme şablonları. Menüde Fiyatlandırma artık `pricing.read` ile açık. V5 tasarım dili korundu (aynı yüzeyler, tipografi, renk ve durum dili).
+
+## 8. Commit'ler (`fiyat-sozlesme-v1`)
+
+| Commit | İçerik |
+|---|---|
+| `818c6a1` | Plan, para birimi ve yuvarlama, hesaplama motoru, şemalar, yazı tipleri, motor testleri |
+| `267828b` | Veri modeli 0031/0032, yetkiler (preset geçmişi v9) |
+| `3408a0b` | API: fiyat listeleri, önizleme, teklifler, şablonlar, sözleşmeler, PDF, 0033, teslim kapısı ayrıntıları, API testleri |
+| (son commit) | Arayüz, sürücü sayısı uyumu, tarayıcı testleri, performans testi, ekran görüntüleri, bu rapor |
+
+## 9. Testler (yalnız `acarvo_test`, sentetik veri)
+
+| Takım | Önce (main) | Şimdi | Yeni |
+|---|---|---|---|
+| API (Vitest) | 399 | **438** | +39: motor 11, fiyat/sözleşme akışları 27, performans 1 |
+| Tarayıcı (Playwright) | 106 (+24 isteğe bağlı) | **113** (+27 isteğe bağlı) | +7: liste düzenleyici, rezervasyon teklifi, şablon, kiralama sözleşmesi + PDF, Operasyon yetkisi, başka şirket, telefon; +3 ekran görüntüsü |
+
+Kapsanan başlıca senaryolar: doğrulama (para birimi, vergi oranı, yinelenen sınıf, başka şirketin sınıfı); boş listenin etkinleşmemesi; şirketler arası görünmezlik (API ve doğrudan veritabanı); sunucu hesabı (gün, kademe, ek hizmet, ek sürücü, vergi); tolerans; sürüm çakışması; para biriminin değişmemesi; revizyon ve parçalarının değişmezliği; liste yokken "Hesaplanmadı" ve teklif reddi; 409 PRICE_CHANGED; tekrar gönderim; yerine yenisi; liste revizyonunun eski teklifi değiştirmemesi; plan değişince "güncel değil"; teklifin değişmezliği ve ödeme alanı olmaması; hedef plan/sınıf uyumu; şube kapsamı; vergisiz brüt hesaplanmaması; şablonda HTML/bağlantı/tanımsız alan/süslü parantez reddi; zorunlu alan olmadan etkinleşmeme (API ve veritabanı); etkin sürümün değişmezliği; tek taslak; kurgusal önizleme; sözleşme anlık görüntüsünde kimlik verisi olmaması; "Fiyat hesaplanmadı"; tek açık sözleşme; PDF başlıkları, ayrı indirme yetkisi, nötr dosya adı, olay ve işlem geçmişi (müşteri adı yok); yaşam döngüsü, imzalı durum yokluğu, içerik/dış beyan değişmezliği, silme yasağı; yeni sürüm; teslim kapılarının "Dikkat" kalması; arşiv nedeni ve kesinliği; tarayıcıda kaydedilmemiş değişiklik koruması, PDF indirme, erişilebilirlik (axe, ciddi/kritik ihlal yok), 390 px'te yatay taşma yok.
+
+Bu sprintte güncellenen eski tarayıcı beklentileri (bilerek değişen metinler): "Fiyat ve kiralama" sekmesi → "Fiyat teklifi"; kiralama başlığındaki fiyat alanı; dönüştürme diyaloğu ve rezervasyon genel notu; kiralama erişilebilirlik turuna iki yeni sekme.
+
+## 10. Performans
+
+Sentetik hacim: 201 fiyat listesi; 100 sezon + 50 ek hizmetli, 20 revizyonlu bir liste; 90 günlük teklif (20 ek hizmet); 30 sürümlü sözleşme. Tek istek süreleri (ms, yerel makine):
+
+| İşlem | ms |
+|---|---|
+| 201 fiyat listesi | 12 |
+| Ağır liste ayrıntısı | 6 |
+| 20 revizyonluk geçmiş | 5 |
+| Önizleme (90 gün, 100 sezon, 20 ek hizmet) | 9 |
+| Kiralama teklif önizleme / kaydetme | 7 / 21 |
+| Sözleşme taslağı + PDF üretimi | 344 |
+| Kiralamanın sözleşmeleri (30 sürüm) | 6 |
+| Sözleşme ayrıntısı / PDF indirme | 8 / 10 |
+| Kiralama ayrıntısı (kapılar dahil) | 30 |
+
+Listeler ve ayrıntılar sabit sayıda sorgu (N+1 yok; sayımlar alt sorgu). İndeksler: teklifler (rezervasyon, kiralama, liste), sözleşmeler (kiralama, açık sözleşme tekilliği), olaylar (sözleşme, zaman), istek kimlikleri. PDF yazı tipi süreç başına bir kez yüklenir. Web: Fiyatlandırma, teklif ve sözleşme ekranları ayrı yüklenen parçalardır; paylaşılan paket `sideEffects: false` ile işaretlendi, ana JS paketi main'e göre +15 kB.
+
+## 11. Ekran görüntüleri
+
+`apps/e2e/screenshots/fs1/` (Git dışında; yeniden üretmek için `SCREENSHOTS=1 npx playwright test pricing-contracts pricing-screens`), 1440 / 768 / 390: 01 liste, 02 düzenleyici, 03 yeni liste doğrulama, 04 rezervasyon teklifi, 05 teklif hesaplama, 06 kiralama 360°, 07 kiralama teklifi, 08 sözleşme, 09 arşivleme diyaloğu, 10 Ayarlar şablonlar. Hepsi gözle incelendi; yatay taşma yok. İnceleme sırasında bulunan ve düzeltilen: dar ekranda teklif tablosunun yatay kayması (miktar × birim artık kalemin altında), kayıt sonrası yönlendirmenin "kaydedilmemiş değişiklik" korumasına takılması.
+
+## 12. Ana veritabanının korunması
+
+Ana veritabanına bağlanılmadı, migration uygulanmadı, sentetik fiyat/sözleşme/ödeme verisi eklenmedi. Ana sunucular (3001/5173) main'den çalışmaya devam ediyor; bu dal onlara yüklenmedi.
+
+## 13. Eksik hukuki, mali ve ürün bağımlılıkları
+
+- Ülke/şirket bazında **hukuken onaylı sözleşme metni** (F6) — ACARVO örnek metni kullanılamaz.
+- **Vergi oranları ve vergi uygulaması** (KDV/PDV, dahil/hariç, ek hizmet istisnaları) için mali müşavir onayı (F2).
+- **Elektronik imza sağlayıcısı** seçimi: altyapı hazır (sözleşme durum makinesi, olaylar, değişmez içerik), entegrasyon yapılmadı; "imzalı" durumu bilerek yok.
+- **Teslimde ACARVO sözleşmesinin zorunlu olup olmayacağı** (F8): ayrı ürün kararı.
+- Kurumsal anlaşma fiyatı, tek yön ücreti, km şartları, sigorta paketleri, yüksek indirim onay akışı.
+- Finans modülü (ödeme, depozito, tahsilat, fatura) — bilerek yapılmadı.
+
+## 14. Main'e geçiş gereksinimleri
+
+1. F1–F4 ve F8 kararlarının onayı; şablon ve vergi için hukuki/mali onay.
+2. `safe-migrate` ile doğrulanmış yedekten sonra ana veritabanına 0031–0033.
+3. Preset geçmişi v9'un ana veritabanında yalnız değiştirilmemiş Sahip/Yönetici/Operasyon rollerini yükseltmesinin kontrolü.
+4. Üretimde PDF depolama dizininin yedek kapsamına alınması.
+5. Mevcut kayıtlara fiyat atanmayacağının ve listelerin şirket tarafından girileceğinin kullanıcıya duyurulması.
+
+## 15. Açık riskler
+
+- Sözleşme görüntüleme her açılışta olay yazar; yoğun kullanımda olay tablosu büyür (indeksli; arşivleme politikası gerekebilir).
+- PDF tek yazı tipine (DejaVu Sans) bağlı; Kiril alfabesi destekli ama Arapça vb. desteklenmez.
+- Teklif "güncel değil" uyarısı dönem, sınıf ve ek sürücü sayısına bakar; alış şubesi değişikliği (farklı liste seçilmesine yol açabilir) ayrıca uyarı üretmez — teklif kendi listesini ve revizyonunu açıkça gösterir.
+- İsteğe bağlı teslim masası mobil iyileştirmesi bu sprintte yapılmadı (mevcut düzen ve regresyon testleri korunuyor).

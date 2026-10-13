@@ -141,7 +141,7 @@ test('a confirmed reservation becomes a rental from Rezervasyon 360°, once', as
   const res = await apiCall<{ id: string; reservationNo: string }>(page, 'POST', '/reservations', { ...p, source: 'phone', confirm: true })
   await page.goto('/rezervasyonlar/' + res.id)
   await page.getByRole('button', { name: 'Kiralamaya dönüştür' }).click()
-  await expect(page.getByRole('dialog')).toContainText('Fiyat, ödeme, depozito ve sözleşme oluşturulmaz.')
+  await expect(page.getByRole('dialog')).toContainText('Ödeme, depozito ve sözleşme oluşturulmaz.')
   await page.getByRole('button', { name: 'Kiralamayı hazırla' }).click()
   await expect(page.getByRole('tablist', { name: 'Kiralama bölümleri' })).toBeVisible()
   await expect(page.getByRole('link', { name: res.reservationNo })).toBeVisible()
@@ -155,7 +155,7 @@ test('overdue rental: the 360° says the vehicle stays held and no late fee is c
   await openRental(page, 'K-000002')
   await expect(page.getByRole('status').filter({ hasText: 'gecikti' })).toContainText('Araç fiilen iade edilene kadar bu kiralamada sayılır')
   await expect(page.getByRole('status').filter({ hasText: 'gecikti' })).toContainText('gecikme ücreti hesaplanmaz')
-  await expect(page.getByText('Hesaplanmadı · ödeme kaydı yok')).toBeVisible()
+  await expect(page.getByRole('region', { name: 'Kiralama özeti' })).toContainText('Hesaplanmadı')
 })
 
 test.describe('branch scope', () => {

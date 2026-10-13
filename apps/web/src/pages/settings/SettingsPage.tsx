@@ -14,6 +14,7 @@ import { countryName, countryOptions, RESIDENCY_LABELS } from '@/lib/customer-la
 import { cn } from '@/lib/utils'
 import { formatDate } from '@/lib/vehicle-labels'
 import { can, useSession } from '@/session'
+import { ContractTemplateSettings } from './ContractTemplates'
 
 const btnPrimary = 'inline-flex h-9 items-center gap-1.5 rounded-lg bg-blue px-3.5 text-[13.5px] font-medium text-white hover:bg-blue-ink disabled:opacity-60'
 const btnSecondary = 'inline-flex h-9 items-center gap-1.5 rounded-lg border border-line bg-surface px-3 text-[13.5px] font-medium text-ink hover:bg-line-soft disabled:opacity-60'
@@ -387,7 +388,7 @@ function RentalModeSettings() {
         Kiralama çalışma modu
       </h2>
       <p className="mt-1 max-w-[760px] text-[13px] text-ink-2">
-        ACARVO’da henüz sözleşme ve fiyatlandırma modülü yok. Bu mod kapalıyken hiçbir kiralama teslim edilemez. Açıldığında teslim personeli her teslimde sözleşmenin ve fiyatın ACARVO dışında yönetildiğini ayrı ayrı beyan eder ve dış sözleşme/işlem referansını girer.
+        ACARVO’daki fiyat teklifi ve sözleşme taslağı hukuki onay, imza ve ödeme süreci içermediği için teslimi tek başına açmaz. Bu mod kapalıyken hiçbir kiralama teslim edilemez. Açıldığında teslim personeli her teslimde sözleşmenin ve fiyatın ACARVO dışında yönetildiğini ayrı ayrı beyan eder ve dış sözleşme/işlem referansını girer.
       </p>
       {q.isError ? (
         <div className="mt-3">
@@ -457,25 +458,27 @@ function RentalModeSettings() {
   )
 }
 
-/** Yönetim → Ayarlar: customer document requirements (M2) and the rental operating mode (K1). */
+/** Yönetim → Ayarlar: customer document requirements (M2), the rental operating mode (K1) and contract templates. */
 export function SettingsPage() {
   const session = useSession()
   const canDocs = can(session, 'settings.documents.manage')
   const canRentalMode = can(session, 'settings.rentals.manage') || can(session, 'rentals.read')
+  const canTemplates = can(session, 'settings.contracts.manage')
   return (
     <div className="space-y-6">
       <PageHeader title="Ayarlar" description={session.company ? `${session.company.name} şirket ayarları` : undefined} />
       {canRentalMode && <RentalModeSettings />}
+      {canTemplates && <ContractTemplateSettings />}
       {canDocs ? (
         <CustomerDocumentSettings />
-      ) : canRentalMode ? null : (
+      ) : canRentalMode || canTemplates ? null : (
         <StatePanel icon={GearSix} title="Görebileceğiniz ayar yok">
           <p>Müşteri belge gereksinimlerini yalnız yetkili kullanıcılar (varsayılan olarak şirket sahibi) yönetebilir.</p>
         </StatePanel>
       )}
       <p className="flex items-start gap-2 text-[12.5px] text-ink-3">
         <WarningCircle size={14} className="mt-[2px] shrink-0" />
-        Diğer ayar bölümleri (fiyatlandırma, bildirim, sözleşme şablonları…) ilgili modüllerle eklenecek.
+        Fiyat listeleri Fiyatlandırma ekranındadır. Diğer ayar bölümleri (bildirim, finans…) ilgili modüllerle eklenecek.
       </p>
     </div>
   )

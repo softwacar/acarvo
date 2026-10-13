@@ -60,7 +60,7 @@ for (const [w, h] of [
     for (const [tab, name] of [
       ['Kişiler', '07-kisiler'],
       ['Durum geçmişi', '08-durum'],
-      ['Fiyat ve kiralama', '09-fiyat-bagli-degil'],
+      ['Fiyat teklifi', '09-fiyat-teklifi'],
     ] as const) {
       await page.getByRole('tab', { name: tab }).click()
       await settle(page)

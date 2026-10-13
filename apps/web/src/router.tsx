@@ -154,6 +154,21 @@ const rentalReturnRoute = createRoute({
   path: '/kiralamalar/$rentalId/iade',
   component: lazyRouteComponent(() => import('./pages/rentals/InspectionPage'), 'ReturnPage'),
 })
+const pricingRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/fiyatlandirma',
+  component: lazyRouteComponent(() => import('./pages/pricing/PricingPage'), 'PricingPage'),
+})
+const priceListNewRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/fiyatlandirma/yeni',
+  component: lazyRouteComponent(() => import('./pages/pricing/PriceListEditorPage'), 'NewPriceListPage'),
+})
+const priceListRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/fiyatlandirma/$priceListId',
+  component: lazyRouteComponent(() => import('./pages/pricing/PriceListEditorPage'), 'EditPriceListPage'),
+})
 const settingsRoute = createRoute({
   getParentRoute: () => appRoute,
   path: '/ayarlar',
@@ -169,7 +184,7 @@ const moduleRoute = createRoute({
   },
 })
 
-const routeTree = rootRoute.addChildren([loginRoute, appRoute.addChildren([indexRoute, branchesRoute, vehiclesRoute, vehicleNewRoute, vehicle360Route, vehicleEditRoute, customersRoute, customer360Route, corporateRoute, corporate360Route, reservationsRoute, reservationNewRoute, reservation360Route, reservationEditRoute, rentalsRoute, rentalNewRoute, rental360Route, rentalEditRoute, rentalHandoverRoute, rentalReturnRoute, settingsRoute, profileRoute, moduleRoute])])
+const routeTree = rootRoute.addChildren([loginRoute, appRoute.addChildren([indexRoute, branchesRoute, vehiclesRoute, vehicleNewRoute, vehicle360Route, vehicleEditRoute, customersRoute, customer360Route, corporateRoute, corporate360Route, reservationsRoute, reservationNewRoute, reservation360Route, reservationEditRoute, rentalsRoute, rentalNewRoute, rental360Route, rentalEditRoute, rentalHandoverRoute, rentalReturnRoute, pricingRoute, priceListNewRoute, priceListRoute, settingsRoute, profileRoute, moduleRoute])])
 
 export function createAppRouter(queryClient: QueryClient) {
   return createRouter({ routeTree, context: { queryClient }, defaultPreload: 'intent', scrollRestoration: true })

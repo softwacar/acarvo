@@ -224,10 +224,17 @@ export function quoteOf(q: Row): PriceQuote {
   }
 }
 
-/** `matches_plan`: the quote's period and class are still those of its reservation / rental (a plan change makes it stale). */
+/**
+ * `matches_plan`: the quote's period, class and number of additional drivers are still those of its reservation / rental
+ * (any change makes it outdated; nothing is recomputed silently).
+ */
 export const QUOTE_SELECT = sql`q.*, pl.name as price_list_name, u.name as created_by_name, coalesce(rs.reservation_no, k.rental_no) as target_no,
-  coalesce(q.pickup_at = rs.pickup_at and q.return_at = rs.return_at and q.vehicle_class_id = rs.vehicle_class_id,
-           q.pickup_at = k.planned_pickup_at and q.return_at = k.planned_return_at and q.vehicle_class_id = k.vehicle_class_id) as matches_plan
+  case when q.reservation_id is not null
+    then q.pickup_at = rs.pickup_at and q.return_at = rs.return_at and q.vehicle_class_id = rs.vehicle_class_id
+      and (q.inputs ->> 'additionalDrivers')::int = greatest(0, (select count(*) from reservation_drivers d where d.company_id = rs.company_id and d.reservation_id = rs.id and d.removed_at is null) - 1)
+    else q.pickup_at = k.planned_pickup_at and q.return_at = k.planned_return_at and q.vehicle_class_id = k.vehicle_class_id
+      and (q.inputs ->> 'additionalDrivers')::int = greatest(0, (select count(*) from rental_drivers d where d.company_id = k.company_id and d.rental_id = k.id and d.removed_at is null) - 1)
+  end as matches_plan
   from price_quotes q join price_lists pl on pl.company_id = q.company_id and pl.id = q.price_list_id
   left join users u on u.id = q.created_by
   left join reservations rs on rs.company_id = q.company_id and rs.id = q.reservation_id
@@ -235,17 +242,18 @@ export const QUOTE_SELECT = sql`q.*, pl.name as price_list_name, u.name as creat
 
 /**
  * The quote currently standing for a rental: its own, otherwise its reservation's. `matchesPlan` is judged against the
- * rental's own plan (a reservation quote only counts while the rental keeps the same period and class).
+ * rental's own plan (a reservation quote only counts while the rental keeps the same period, class and drivers).
  */
 export async function currentQuoteForRental(tx: Tx, rentalId: string, reservationId: string | null) {
   const r = (
-    await tx.execute(sql`select ${QUOTE_SELECT} where q.status = 'quoted' and (q.rental_id = ${rentalId} ${reservationId ? sql`or q.reservation_id = ${reservationId}` : sql``})
+    await tx.execute(sql`select (select q.pickup_at = cur.planned_pickup_at and q.return_at = cur.planned_return_at and q.vehicle_class_id = cur.vehicle_class_id
+            and (q.inputs ->> 'additionalDrivers')::int = greatest(0, (select count(*) from rental_drivers d where d.company_id = cur.company_id and d.rental_id = cur.id and d.removed_at is null) - 1)
+          from rentals cur where cur.company_id = q.company_id and cur.id = ${rentalId}) as rental_match,
+        ${QUOTE_SELECT}
+      where q.status = 'quoted' and (q.rental_id = ${rentalId} ${reservationId ? sql`or q.reservation_id = ${reservationId}` : sql``})
       order by (q.rental_id is not null) desc, q.created_at desc limit 1`)
   ).rows[0] as Row | undefined
-  if (!r) return null
-  const rental = (await tx.execute(sql`select planned_pickup_at, planned_return_at, vehicle_class_id from rentals where id = ${rentalId}`)).rows[0] as Row
-  const q = quoteOf(r)
-  return { ...q, matchesPlan: q.pickupAt === toIso(rental.planned_pickup_at) && q.returnAt === toIso(rental.planned_return_at) && r.vehicle_class_id === rental.vehicle_class_id }
+  return r ? { ...quoteOf(r), matchesPlan: r.rental_match === true } : null
 }
 
 export async function nextNo(tx: Tx, companyId: string, kind: 'price_quote' | 'contract', prefix: string) {

@@ -162,7 +162,7 @@ test.describe('as the owner', () => {
       await expectNoHorizontalOverflow(page)
       await openReservation(page, 'R-000003')
       await expectNoHorizontalOverflow(page)
-      for (const tab of ['Kişiler', 'Araç', 'Durum geçmişi', 'İşlem geçmişi', 'Fiyat ve kiralama']) {
+      for (const tab of ['Kişiler', 'Araç', 'Durum geçmişi', 'İşlem geçmişi', 'Fiyat teklifi']) {
         await page.getByRole('tab', { name: tab }).click()
         await expectNoHorizontalOverflow(page)
       }
@@ -213,7 +213,7 @@ test.describe('product decisions and time zones (integration review)', () => {
     page.once('dialog', (d) => void d.accept())
     await openReservation(page, 'R-000003')
     await expect(page.getByText('Onay, araç ve zaman ayırmasıdır.', { exact: false })).toBeVisible()
-    await expect(page.getByText('fiyat hesaplanmadı; ödeme alınmadı ve sözleşme oluşturulmadı', { exact: false })).toBeVisible()
+    await expect(page.getByText('teklif ödeme değildir. Ödeme alınmadı ve sözleşme oluşturulmadı', { exact: false })).toBeVisible()
     await page.getByRole('tab', { name: 'Araç' }).click()
     await expect(page.getByText('önceki iade kontrolü bitmemiş araç teslim edilemez', { exact: false })).toBeVisible()
   })

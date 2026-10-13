@@ -181,7 +181,7 @@ test('phone: reservation list, new reservation and 360° fit the screen; actions
   await page.getByRole('row', { name: /R-000003/ }).getByRole('link').first().click()
   await expect(page.getByRole('heading', { name: 'Lena Beispiel' })).toBeVisible()
   await expect(page.getByRole('link', { name: 'Düzenle' })).toBeInViewport()
-  await page.getByRole('tab', { name: 'Fiyat ve kiralama' }).click()
+  await page.getByRole('tab', { name: 'Fiyat teklifi' }).click()
   const visible = await page.evaluate(() => {
     const el = document.querySelector('[role=tab][aria-selected=true]')!
     const bar = el.parentElement!.getBoundingClientRect()

@@ -1,4 +1,4 @@
-import type { ApiError, AvailabilityResponse, RentalActivityItem, RentalSettings, RentalDetail, RentalListItem, RentalListResponse, ReservationActivityItem, ReservationBranch, ReservationDetail, ReservationListItem, ReservationListResponse, TimelineResponse, CorporateActivityItem, CorporateDetail, CorporateDuplicateMatch, CorporateListResponse, CorporatePeopleResponse, CustomerCorporateLink, CustomerActivityItem, CustomerDocument, CustomerDocumentsResponse, CustomerDocumentStatus, RequirementItem, RequirementPolicy, CustomerDetail, CustomerDuplicateResponse, CustomerListResponse, HistoryWriteResult, SessionInfo, VehicleActivityItem, VehicleDocumentDetail, VehicleDocumentsResponse, VehiclePhoto, VehiclePhotoList, VehicleClassSummary, VehicleDetail, VehicleHistory, VehicleListResponse } from '@acarvo/shared'
+import type { ContractDetail, ContractTemplate, PriceListDetail, PriceListSummary, PriceQuote, PricingResult, ApiError,AvailabilityResponse, RentalActivityItem, RentalSettings, RentalDetail, RentalListItem, RentalListResponse, ReservationActivityItem, ReservationBranch, ReservationDetail, ReservationListItem, ReservationListResponse, TimelineResponse, CorporateActivityItem, CorporateDetail, CorporateDuplicateMatch, CorporateListResponse, CorporatePeopleResponse, CustomerCorporateLink, CustomerActivityItem, CustomerDocument, CustomerDocumentsResponse, CustomerDocumentStatus, RequirementItem, RequirementPolicy, CustomerDetail, CustomerDuplicateResponse, CustomerListResponse, HistoryWriteResult, SessionInfo, VehicleActivityItem, VehicleDocumentDetail, VehicleDocumentsResponse, VehiclePhoto, VehiclePhotoList, VehicleClassSummary, VehicleDetail, VehicleHistory, VehicleListResponse } from '@acarvo/shared'
 
 export class ApiRequestError extends Error {
   constructor(
@@ -302,4 +302,94 @@ export const settingsApi = {
   saveItems: (policyId: string, items: RequirementItem[]) => api<DocumentSettingsOverview>(`/settings/document-requirements/${policyId}/items`, { method: 'PUT', body: { items } }),
   activate: (policyId: string) => api<DocumentSettingsOverview>(`/settings/document-requirements/${policyId}/activate`, { method: 'POST', body: { confirm: true } }),
   retire: (policyId: string) => api<DocumentSettingsOverview>(`/settings/document-requirements/${policyId}/retire`, { method: 'POST' }),
+}
+
+export type QuoteTargetKind = 'reservation' | 'rental'
+const quoteBase = (kind: QuoteTargetKind, id: string) => `/${kind === 'reservation' ? 'reservations' : 'rentals'}/${id}/quotes`
+
+export interface PriceListHistory {
+  revisions: {
+    revision: number
+    createdAt: string
+    createdByName: string | null
+    dayMethod: string
+    taxMode: string
+    taxRateBp: number | null
+    counts: { rates: number; seasons: number; extras: number; discounts: number; quotes: number }
+  }[]
+  events: { action: string; summary: Record<string, unknown> | null; at: string; actorName: string | null }[]
+}
+
+/** Pricing V1: price lists (each save is a new revision), previews and quotes. Totals are computed by the server only. */
+export const pricingApi = {
+  lists: () => api<{ items: PriceListSummary[] }>('/pricing/price-lists'),
+  get: (id: string, revision?: number) => api<PriceListDetail>(`/pricing/price-lists/${id}${revision ? `?revision=${revision}` : ''}`),
+  history: (id: string) => api<PriceListHistory>(`/pricing/price-lists/${id}/history`),
+  create: (body: unknown) => api<PriceListDetail>('/pricing/price-lists', { method: 'POST', body }),
+  save: (id: string, body: unknown) => api<PriceListDetail>(`/pricing/price-lists/${id}`, { method: 'PUT', body }),
+  activate: (id: string, version: number) => api<PriceListDetail>(`/pricing/price-lists/${id}/activate`, { method: 'POST', body: { version } }),
+  archive: (id: string, version: number) => api<PriceListDetail>(`/pricing/price-lists/${id}/archive`, { method: 'POST', body: { version } }),
+  preview: (body: unknown) => api<PricingResult>('/pricing/preview', { method: 'POST', body }),
+  quotes: (kind: QuoteTargetKind, id: string) => api<{ items: PriceQuote[] }>(quoteBase(kind, id)),
+  quotePreview: (kind: QuoteTargetKind, id: string, body: unknown) => api<PricingResult>(`${quoteBase(kind, id)}/preview`, { method: 'POST', body }),
+  saveQuote: (kind: QuoteTargetKind, id: string, body: unknown) => api<PriceQuote>(quoteBase(kind, id), { method: 'POST', body }),
+}
+
+export interface RentalContractsResponse {
+  items: {
+    id: string
+    contractNo: string
+    revision: number
+    status: ContractDetail['status']
+    createdAt: string
+    createdByName: string | null
+    quoteNo: string | null
+    templateName: string
+    templateVersionNo: number
+    externalReference: string | null
+  }[]
+  activeTemplates: { id: string; name: string; language: string; country: string | null; versionNo: number; isSample: boolean }[]
+  rentalStatus: string
+}
+export interface TemplateCheck {
+  used: string[]
+  unknown: string[]
+  missingRequired: string[]
+  stray: boolean
+}
+
+/** Contracts V1: templates (owner), contract drafts per rental, lifecycle and the draft PDF (separate permission). */
+export const contractsApi = {
+  templates: () => api<{ items: ContractTemplate[]; fields: Record<string, string> }>('/settings/contract-templates'),
+  createTemplate: (body: unknown) => api<ContractTemplate>('/settings/contract-templates', { method: 'POST', body }),
+  saveDraft: (id: string, version: number, body: string) => api<ContractTemplate>(`/settings/contract-templates/${id}/draft`, { method: 'PUT', body: { version, body } }),
+  newDraft: (id: string) => api<ContractTemplate>(`/settings/contract-templates/${id}/draft`, { method: 'POST' }),
+  activateTemplate: (id: string, version: number) => api<ContractTemplate>(`/settings/contract-templates/${id}/activate`, { method: 'POST', body: { version } }),
+  previewTemplate: (body: string) => api<{ text: string; check: TemplateCheck }>('/settings/contract-templates/preview', { method: 'POST', body: { body } }),
+  forRental: (rentalId: string) => api<RentalContractsResponse>(`/rentals/${rentalId}/contracts`),
+  create: (rentalId: string, templateVersionId: string, requestId: string) => api<ContractDetail>(`/rentals/${rentalId}/contracts`, { method: 'POST', body: { templateVersionId, requestId } }),
+  get: (id: string) => api<ContractDetail>(`/contracts/${id}`),
+  revise: (id: string, body: { version: number; templateVersionId: string; requestId: string }) => api<ContractDetail>(`/contracts/${id}/revise`, { method: 'POST', body }),
+  review: (id: string, version: number, requestId: string) => api<ContractDetail>(`/contracts/${id}/review`, { method: 'POST', body: { version, requestId } }),
+  external: (id: string, body: { version: number; requestId: string; externalAck: true; externalReference: string }) => api<ContractDetail>(`/contracts/${id}/external`, { method: 'POST', body }),
+  archive: (id: string, body: { version: number; requestId: string; reason: string }) => api<ContractDetail>(`/contracts/${id}/archive`, { method: 'POST', body }),
+  /** Downloads the draft PDF through the API with the session cookie; no file address is ever made public. */
+  async downloadPdf(id: string) {
+    let res: Response
+    try {
+      res = await fetch(`/api/contracts/${id}/pdf`, { credentials: 'same-origin' })
+    } catch {
+      throw new ApiRequestError(0, 'NETWORK', 'Sunucuya ulaşılamadı. Bağlantınızı kontrol edin.')
+    }
+    if (!res.ok) throw await toError(res)
+    const name = /filename="([^"]+)"/.exec(res.headers.get('content-disposition') ?? '')?.[1] ?? 'sozlesme-taslagi.pdf'
+    const url = URL.createObjectURL(await res.blob())
+    const a = document.createElement('a')
+    a.href = url
+    a.download = name
+    document.body.append(a)
+    a.click()
+    a.remove()
+    setTimeout(() => URL.revokeObjectURL(url), 10_000)
+  },
 }

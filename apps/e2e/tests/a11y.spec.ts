@@ -150,7 +150,7 @@ test.describe('signed in', () => {
     await page.getByRole('row', { name: /R-000003/ }).getByRole('link').first().click()
     await expect(page.getByRole('heading', { name: 'Lena Beispiel' })).toBeVisible()
     await audit(page, 'rezervasyon 360')
-    for (const tab of ['Kişiler', 'Araç', 'Durum geçmişi', 'İşlem geçmişi', 'Fiyat ve kiralama']) {
+    for (const tab of ['Kişiler', 'Araç', 'Durum geçmişi', 'İşlem geçmişi', 'Fiyat teklifi']) {
       await page.getByRole('tab', { name: tab }).click()
       await audit(page, `rezervasyon ${tab}`)
     }
