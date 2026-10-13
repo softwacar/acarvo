@@ -1,5 +1,5 @@
 import type { ContractDetail, ContractStatus } from '@acarvo/shared'
-import { ArrowClockwise, Archive, DownloadSimple, FileText, PaperPlaneTilt, SealWarning, SpinnerGap, WarningCircle } from '@phosphor-icons/react'
+import { ArrowClockwise, Archive, DownloadSimple, FilePdf, FileText, PaperPlaneTilt, SealWarning, SpinnerGap, WarningCircle } from '@phosphor-icons/react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Dialog } from 'radix-ui'
 import { useRef, useState } from 'react'
@@ -37,7 +37,7 @@ const EVENT_LABEL: Record<string, string> = {
   external: 'Dışarıda işleme alındı beyanı',
   archived: 'Arşivlendi',
   superseded: 'Yeni sürümle değiştirildi',
-  viewed: 'Görüntülendi',
+  viewed: 'PDF açıldı',
   downloaded: 'PDF indirildi',
 }
 
@@ -188,8 +188,7 @@ function CreateContract({ rentalId, templates, onCreated }: { rentalId: string; 
 
 function ContractView({ id, templates, canManage, onChanged }: { id: string; templates: RentalContractsResponse['activeTemplates']; canManage: boolean; onChanged: (c?: ContractDetail) => void }) {
   const session = useSession()
-  // Each open of a contract is logged by the server: load it once per selection, not on every focus.
-  const q = useQuery({ queryKey: ['contract', session.company?.id, id], queryFn: () => contractsApi.get(id), staleTime: Number.POSITIVE_INFINITY, refetchOnWindowFocus: false, retry: false })
+  const q = useQuery({ queryKey: ['contract', session.company?.id, id], queryFn: () => contractsApi.get(id), retry: false })
   const [dialog, setDialog] = useState<'external' | 'archive' | 'revise' | null>(null)
   const [pending, setPending] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -221,6 +220,34 @@ function ContractView({ id, templates, canManage, onChanged }: { id: string; tem
     }
   }
   const open = OPEN.includes(c.status)
+  // Opening the PDF is an explicit action: a CSRF-checked request records it and creates a short-lived grant, then the
+  // browser opens or downloads the file (same model as vehicle and customer documents).
+  const openPdf = async (mode: 'view' | 'download') => {
+    const tab = mode === 'view' ? window.open('', '_blank') : null
+    setPending(mode)
+    setError(null)
+    try {
+      const { url } = await contractsApi.access(c.id, mode)
+      if (mode === 'view') {
+        if (tab) {
+          tab.opener = null
+          tab.location.replace(url)
+        } else setError('Tarayıcı yeni sekmeyi engelledi. Bu site için açılır pencerelere izin verip yeniden deneyin.')
+      } else {
+        const a = document.createElement('a')
+        a.href = url
+        document.body.append(a)
+        a.click()
+        a.remove()
+      }
+      void q.refetch()
+    } catch (e) {
+      tab?.close()
+      setError(e instanceof Error ? e.message : 'PDF açılamadı.')
+    } finally {
+      setPending(null)
+    }
+  }
   return (
     <section aria-labelledby="contract-view" className="rounded-xl border border-line bg-surface">
       <div className="flex flex-wrap items-start justify-between gap-3 p-5">
@@ -237,10 +264,16 @@ function ContractView({ id, templates, canManage, onChanged }: { id: string; tem
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          {c.canView && (
+            <button type="button" className={btnSecondary} disabled={pending !== null} onClick={() => openPdf('view')}>
+              {pending === 'view' ? <SpinnerGap size={16} className="animate-spin" /> : <FilePdf size={16} />}
+              PDF taslağını aç
+            </button>
+          )}
           {c.canDownload && (
-            <button type="button" className={btnSecondary} disabled={pending !== null} onClick={() => run('pdf', () => contractsApi.downloadPdf(c.id), 'PDF taslağı indirildi.')}>
-              {pending === 'pdf' ? <SpinnerGap size={16} className="animate-spin" /> : <DownloadSimple size={16} />}
-              PDF taslağı
+            <button type="button" className={btnSecondary} disabled={pending !== null} onClick={() => openPdf('download')}>
+              {pending === 'download' ? <SpinnerGap size={16} className="animate-spin" /> : <DownloadSimple size={16} />}
+              PDF indir
             </button>
           )}
           {canManage && c.status === 'draft' && (

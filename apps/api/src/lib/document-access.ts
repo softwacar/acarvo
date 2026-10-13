@@ -13,8 +13,8 @@ export type DocumentAccessMode = (typeof DOCUMENT_ACCESS_MODES)[number]
 export const DOCUMENT_ACCESS_TTL_MS = 2 * 60 * 1000
 const MAX_GRANTS = 20_000
 
-/** Which file table a grant opens. Vehicle and customer document files are separate record types (M2). */
-export type DocumentAccessKind = 'vehicle_document' | 'customer_document'
+/** Which file table a grant opens. Vehicle and customer document files and contract PDFs are separate record types. */
+export type DocumentAccessKind = 'vehicle_document' | 'customer_document' | 'contract_pdf'
 
 interface Grant {
   kind: DocumentAccessKind

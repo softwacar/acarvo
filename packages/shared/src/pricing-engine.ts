@@ -118,7 +118,10 @@ const addDays = (day: string, n: number) => new Date(Date.parse(`${day}T12:00:00
 const daysBetween = (a: string, b: string) => Math.round((Date.parse(`${b}T12:00:00Z`) - Date.parse(`${a}T12:00:00Z`)) / 86_400_000)
 const pct = (bp: number) => `${bp > 0 ? '+' : bp < 0 ? '−' : ''}${Math.abs(bp) / 100}`.replace('.', ',') + ' %'
 
-/** Billable days (§68, F1): 24-hour blocks after the grace period, or calendar days in the pickup branch's zone. */
+/**
+ * Billable days (§68, F1): 24-hour blocks after the grace period, or the calendar-date difference in the pickup branch's
+ * zone (same local date = 1 day; 10 Oct 23:00 → 11 Oct 01:00 = 1 day; touched dates are not each charged).
+ */
 export function billableDays(input: Pick<EngineInput, 'pickupAt' | 'returnAt' | 'pickupTimeZone'> & { dayMethod: DayMethod; graceMinutes: number; minDays: number }) {
   const minutes = Math.round((Date.parse(input.returnAt) - Date.parse(input.pickupAt)) / 60_000)
   let days: number

@@ -245,28 +245,63 @@ export async function contractRoutes(app: FastifyInstance) {
     return reply.code(out.replay ? 200 : 201).send(out.body)
   })
 
-  /** Logged view of one contract (who looked at which contract, never its content). */
+  /** One contract with its text and history. A plain read: it records nothing (a GET must never create audit entries). */
   app.get('/contracts/:id', async (req) => {
     const id = parseId(req, CONTRACT_NOT_FOUND)
     return withCompany(req, 'contracts.read', async (tx, access) => {
       need(access, 'rentals.read')
       const r = await contractRow(tx, access, id)
       if (!r) throw notFound(CONTRACT_NOT_FOUND)
-      await event(tx, access.companyId, id, 'viewed', req.auth!.user.id)
       return contractDetail(tx, access, r)
     })
   })
 
-  /** The draft PDF as an attachment: separate permission, integrity check, no caching, neutral file name, logged. */
+  /**
+   * The user asked to view or download the draft PDF inside ACARVO (same model as vehicle and customer documents):
+   * Origin, CSRF, session, company, branch scope and the permission of the purpose are checked on this POST, the
+   * request is recorded once (contract history and audit log), and a short-lived grant bound to this session, company,
+   * contract and purpose is created. Nothing secret goes into the URL.
+   */
+  app.post(
+    '/contracts/:id/access',
+    { config: { rateLimit: { max: 120, timeWindow: '1 minute', keyGenerator: (req: FastifyRequest) => `contract-access|${req.auth?.user.id ?? req.ip}` } } },
+    async (req) => {
+      const id = parseId(req, CONTRACT_NOT_FOUND)
+      const { mode } = z.object({ mode: z.enum(['view', 'download']) }).parse(req.body)
+      return withCompany(req, 'contracts.read', async (tx, access) => {
+        need(access, 'rentals.read')
+        if (mode === 'download') need(access, 'contracts.download')
+        const r = await contractRow(tx, access, id)
+        if (!r) throw notFound(CONTRACT_NOT_FOUND)
+        if (!r.storage_key) throw new AppError(404, 'FILE_MISSING', 'Bu sözleşmenin PDF dosyası yok.')
+        const auth = req.auth!
+        await event(tx, access.companyId, id, mode === 'view' ? 'viewed' : 'downloaded', auth.user.id)
+        await audit(tx, { companyId: access.companyId, actorUserId: auth.user.id, action: mode === 'view' ? 'contract.pdf_view' : 'contract.download', entity: 'contract', entityId: id, summary: { contractNo: r.contract_no, revision: Number(r.revision), mode } })
+        const { expiresAt } = app.documentGrants.issue({ kind: 'contract_pdf', sessionId: auth.session.id, userId: auth.user.id, companyId: access.companyId, fileId: id, mode })
+        return { url: `/api/contracts/${id}/pdf${mode === 'download' ? '?indir=1' : ''}`, expiresAt: new Date(expiresAt).toISOString() }
+      })
+    },
+  )
+
+  /**
+   * Serves the draft PDF only with a matching, unexpired grant of this session, company and purpose. Session, company,
+   * scope and permissions are checked again on every request; nothing is recorded here, so reloads and the browser's
+   * PDF viewer never create entries. Integrity check, no caching, sandboxed, neutral file name.
+   */
   app.get('/contracts/:id/pdf', async (req, reply) => {
+    const site = req.headers['sec-fetch-site']
+    if (site !== undefined && site !== 'same-origin' && site !== 'none') throw new AppError(403, 'CROSS_SITE_REQUEST', 'Sözleşmeler yalnız ACARVO içinden açılabilir.')
     const id = parseId(req, CONTRACT_NOT_FOUND)
-    const file = await withCompany(req, 'contracts.download', async (tx, access) => {
+    const mode = (req.query as { indir?: string } | undefined)?.indir === '1' ? 'download' : 'view'
+    const file = await withCompany(req, 'contracts.read', async (tx, access) => {
       need(access, 'rentals.read')
+      if (mode === 'download') need(access, 'contracts.download')
       const r = await contractRow(tx, access, id)
       if (!r) throw notFound(CONTRACT_NOT_FOUND)
       if (!r.storage_key) throw new AppError(404, 'FILE_MISSING', 'Bu sözleşmenin PDF dosyası yok.')
-      await event(tx, access.companyId, id, 'downloaded', req.auth!.user.id)
-      await audit(tx, { companyId: access.companyId, actorUserId: req.auth!.user.id, action: 'contract.download', entity: 'contract', entityId: id, summary: { contractNo: r.contract_no, revision: Number(r.revision) } })
+      if (!app.documentGrants.allows({ kind: 'contract_pdf', sessionId: req.auth!.session.id, companyId: access.companyId, fileId: id, mode })) {
+        throw new AppError(403, 'ACCESS_GRANT_REQUIRED', 'Bu PDF’i açmak için ACARVO içindeki PDF düğmesini kullanın. Bağlantının süresi dolmuş olabilir.')
+      }
       return r
     })
     const data = await app.storage.readAll(file.storage_key as string)
@@ -277,8 +312,8 @@ export async function contractRoutes(app: FastifyInstance) {
       .header('cache-control', 'private, no-store, max-age=0')
       .header('pragma', 'no-cache')
       .header('x-content-type-options', 'nosniff')
-      .header('content-disposition', `attachment; filename="sozlesme-taslagi_${file.contract_no as string}_s${Number(file.revision)}.pdf"`)
-      .header('content-security-policy', "sandbox; default-src 'none'")
+      .header('content-disposition', `${mode === 'download' ? 'attachment' : 'inline'}; filename="sozlesme-taslagi_${file.contract_no as string}_s${Number(file.revision)}.pdf"`)
+      .header('content-security-policy', "sandbox; default-src 'none'; frame-ancestors 'self'")
       .send(data)
   })
 

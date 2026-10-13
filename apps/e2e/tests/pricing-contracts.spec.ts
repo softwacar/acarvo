@@ -216,9 +216,24 @@ test.describe('owner', () => {
     await expect(view.getByLabel('Sözleşme metni')).toContainText('Ajla Testović')
     await audit(page, 'kiralama sözleşme taslağı')
 
+    // Opening: a grant is requested first, then a new tab shows the PDF inline; the history records it once.
+    const popup = page.waitForEvent('popup')
+    await view.getByRole('button', { name: 'PDF taslağını aç' }).click()
+    const tab = await popup
+    const served = await tab.waitForResponse((r) => /\/api\/contracts\/[0-9a-f-]+\/pdf$/.test(r.url()))
+    expect(served.status()).toBe(200)
+    expect(served.headers()['content-disposition']).toMatch(/^inline;/)
+    expect(served.headers()['cache-control']).toContain('no-store')
+    const pdfPath = new URL(served.url()).pathname
+    await tab.close()
+    await expect(view.getByText('PDF açıldı')).toHaveCount(1)
+    // The view grant does not allow a download (a pasted ?indir=1 link is refused and records nothing).
+    expect(await page.evaluate(async (u) => (await fetch(u + '?indir=1')).status, pdfPath)).toBe(403)
+    await expect(view.getByText('PDF indirildi')).toHaveCount(0)
     const download = page.waitForEvent('download')
-    await view.getByRole('button', { name: 'PDF taslağı' }).click()
+    await view.getByRole('button', { name: 'PDF indir' }).click()
     expect((await download).suggestedFilename()).toMatch(/^sozlesme-taslagi_S-\d{6}_s1\.pdf$/)
+    await expect(view.getByText('PDF indirildi')).toHaveCount(1)
 
     await view.getByRole('button', { name: 'Kontrole gönder' }).click()
     await expect(view.getByText('Kontrol bekliyor', { exact: true })).toBeVisible()
@@ -253,7 +268,7 @@ test.describe('owner', () => {
 
 test.describe('operations user (Operasyon, SJJ)', () => {
   test.use({ storageState: authFile('selma') })
-  test('reads prices and contracts but cannot change price lists or download contract PDFs', async ({ page }) => {
+  test('reads prices and contracts, may open but not download contract PDFs, cannot change price lists', async ({ page }) => {
     await page.goto('/fiyatlandirma')
     await expect(page.getByRole('heading', { name: 'Fiyatlandırma' })).toBeVisible()
     await expect(page.getByRole('link', { name: 'Yeni fiyat listesi' })).toHaveCount(0)
@@ -272,7 +287,8 @@ test.describe('operations user (Operasyon, SJJ)', () => {
       if (!c.items.length) continue
       await page.goto(`/kiralamalar/${r.id}?sekme=sozlesme`)
       await expect(page.getByRole('region', { name: /S-\d{6} · sürüm/ })).toBeVisible()
-      await expect(page.getByRole('button', { name: 'PDF taslağı' })).toHaveCount(0)
+      await expect(page.getByRole('button', { name: 'PDF taslağını aç' })).toBeVisible()
+      await expect(page.getByRole('button', { name: 'PDF indir' })).toHaveCount(0)
       break
     }
   })

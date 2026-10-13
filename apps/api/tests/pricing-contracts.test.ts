@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto'
+import { Writable } from 'node:stream'
 import { type ContractDetail, type PriceListDetail, type PriceQuote, type PricingResult, type RentalDetail, todayIn } from '@acarvo/shared'
 import type { FastifyInstance } from 'fastify'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
@@ -50,10 +51,11 @@ const listBody = (over: Record<string, unknown> = {}) => ({
 let list: PriceListDetail
 let reservationId: string
 let rental: RentalDetail
+let logs = ''
 
 beforeAll(async () => {
   data = await resetDatabase()
-  app = await makeApp()
+  app = await makeApp({ logStream: new Writable({ write: (chunk, _e, done) => ((logs += chunk.toString()), done()) }) })
   adnan = await login(EMAILS.adnan)
   selma = await login(EMAILS.selma)
   lejla = await login(EMAILS.lejla)
@@ -284,6 +286,59 @@ describe('reservation quotes', () => {
   })
 })
 
+describe('integration review: decisions and concurrency', () => {
+  it('F1: a price list without a chosen day method is refused; nothing is preselected', async () => {
+    const { dayMethod, ...rest } = listBody()
+    void dayMethod
+    const res = await adnan.post('/api/pricing/price-lists', { ...rest, name: 'Yöntemsiz' })
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error.fields.dayMethod).toBe('Gün hesabı yöntemini seçin')
+    expect((await adnan.post('/api/pricing/price-lists', { ...rest, name: 'Yöntemsiz', dayMethod: 'hourly' })).statusCode).toBe(400)
+  })
+
+  it('F4: the API takes a single discount; a list of discounts is not accepted', async () => {
+    const d = list.discounts[0]!.id
+    const res = await adnan.post(`/api/reservations/${reservationId}/quotes/preview`, { discountId: [d, d] })
+    expect(res.statusCode).toBe(400)
+    // A discount below its minimum length is refused, not silently dropped.
+    const short = await adnan.post(`/api/reservations/${reservationId}/quotes/preview`, { discountId: d })
+    expect(short.json()).toMatchObject({ ok: false, problems: [{ code: 'discount_min_days', minDays: 7 }] })
+  })
+
+  it('concurrent edits of one price list: one revision wins, the other gets 409 with the current list', async () => {
+    const cur = (await adnan.get(`/api/pricing/price-lists/${list.id}`)).json() as PriceListDetail
+    const [a, b] = await Promise.all([
+      adnan.put(`/api/pricing/price-lists/${list.id}`, { ...listBody({ name: 'Eşzamanlı A' }), version: cur.version }),
+      adnan.put(`/api/pricing/price-lists/${list.id}`, { ...listBody({ name: 'Eşzamanlı B' }), version: cur.version }),
+    ])
+    expect([a.statusCode, b.statusCode].sort()).toEqual([200, 409])
+    const loser = a.statusCode === 409 ? a : b
+    expect(loser.json().error.code).toBe('VERSION_CONFLICT')
+    expect(loser.json().error.details.current.revision).toBe(cur.revision + 1)
+    list = (await adnan.get(`/api/pricing/price-lists/${list.id}`)).json()
+  })
+
+  it('concurrent quote saves for one reservation: both are kept as history, exactly one stays current', async () => {
+    const res = await adnan.post('/api/reservations', { customerId: ids.mirza, vehicleClassId: ids.orta, pickupBranchId: ids.sjj, returnBranchId: ids.sjj, pickupLocal: local(80, '10:00'), returnLocal: local(82, '10:00'), source: 'phone' })
+    const rid = res.json().id
+    const p = (await adnan.post(`/api/reservations/${rid}/quotes/preview`, {})).json() as PricingResult
+    const body = () => ({ requestId: uuid(), expectedNetMinor: p.netMinor, expectedGrossMinor: p.grossMinor, selectedExtras: [] })
+    const results = await Promise.all([adnan.post(`/api/reservations/${rid}/quotes`, body()), adnan.post(`/api/reservations/${rid}/quotes`, body())])
+    expect(results.map((r) => r.statusCode)).toEqual([201, 201])
+    const items = (await adnan.get(`/api/reservations/${rid}/quotes`)).json().items as PriceQuote[]
+    expect(items.map((q) => q.status).sort()).toEqual(['quoted', 'superseded'])
+  })
+
+  it('quotes never touch vehicle availability, payments or the reservation itself', async () => {
+    const before = (await one('select version, status, vehicle_id from reservations where id = $1', [reservationId])) as Record<string, unknown>
+    const tables = (await ownerPool.query(`select table_name from information_schema.tables where table_schema = 'public' and table_name ~ '(payment|invoice|deposit|debt|ledger)'`)).rows
+    expect(tables).toEqual([])
+    const p = (await adnan.post(`/api/reservations/${reservationId}/quotes/preview`, {})).json() as PricingResult
+    expect((await adnan.post(`/api/reservations/${reservationId}/quotes`, { requestId: uuid(), expectedNetMinor: p.netMinor, expectedGrossMinor: p.grossMinor, selectedExtras: [] })).statusCode).toBe(201)
+    expect(await one('select version, status, vehicle_id from reservations where id = $1', [reservationId])).toEqual(before)
+  })
+})
+
 describe('contract templates', () => {
   let templateId: string
   it('only the owner manages templates; a sample starts as a clearly marked draft', async () => {
@@ -380,23 +435,93 @@ describe('contracts', () => {
     expect(open.json().error.code).toBe('CONTRACT_OPEN')
   })
 
-  it('PDF: separate download permission, attachment, no-store, neutral file name, logged', async () => {
-    const res = await adnan.get(`/api/contracts/${contract.id}/pdf`)
+  const events = async () => (await asOwner(data.companies.drina, `select kind from contract_events where contract_id = $1 order by at, id`, [contract.id])).rows.map((r) => r.kind as string)
+  const count = async (kind: string) => (await events()).filter((k) => k === kind).length
+
+  it('PDF security: a GET never records a view; a CSRF-checked POST records it once and grants short access', async () => {
+    const before = await events()
+    // Reading the contract and trying the file without a grant record nothing.
+    expect((await adnan.get(`/api/contracts/${contract.id}`)).statusCode).toBe(200)
+    expect((await adnan.get(`/api/contracts/${contract.id}`)).statusCode).toBe(200)
+    const noGrant = await adnan.get(`/api/contracts/${contract.id}/pdf`)
+    expect(noGrant.statusCode).toBe(403)
+    expect(noGrant.json().error.code).toBe('ACCESS_GRANT_REQUIRED')
+    expect(await events()).toEqual(before)
+    // Without the CSRF token (a forged request) no grant and no record.
+    const forged = new Client(app)
+    forged.jar = adnan.jar
+    expect((await forged.post(`/api/contracts/${contract.id}/access`, { mode: 'view' })).statusCode).toBe(403)
+    expect(await events()).toEqual(before)
+
+    const grant = await adnan.post(`/api/contracts/${contract.id}/access`, { mode: 'view' })
+    expect(grant.statusCode, grant.body).toBe(200)
+    expect(grant.json().url).toBe(`/api/contracts/${contract.id}/pdf`)
+    expect(await count('viewed')).toBe(before.filter((k) => k === 'viewed').length + 1)
+    const res = await adnan.get(grant.json().url)
     expect(res.statusCode).toBe(200)
     expect(res.headers['content-type']).toBe('application/pdf')
     expect(res.headers['cache-control']).toContain('no-store')
     expect(res.headers['x-content-type-options']).toBe('nosniff')
-    expect(res.headers['content-disposition']).toBe(`attachment; filename="sozlesme-taslagi_${contract.contractNo}_s1.pdf"`)
+    expect(res.headers['content-security-policy']).toContain('sandbox')
+    expect(res.headers['content-disposition']).toBe(`inline; filename="sozlesme-taslagi_${contract.contractNo}_s1.pdf"`)
     expect(res.rawPayload.subarray(0, 5).toString()).toBe('%PDF-')
     expect(res.rawPayload.toString('latin1')).not.toContain('Ajla')
-    // Operasyon may read contracts but not download them.
-    expect((await selma.get(`/api/contracts/${contract.id}/pdf`)).statusCode).toBe(403)
-    expect((await selma.get(`/api/contracts/${contract.id}`)).json().canDownload).toBe(false)
-    expect((await lejla.get(`/api/contracts/${contract.id}/pdf`)).statusCode).toBe(404)
-    const events = (await asOwner(data.companies.drina, `select kind from contract_events where contract_id = $1 order by at`, [contract.id])).rows.map((r) => r.kind)
-    expect(events).toEqual(expect.arrayContaining(['created', 'downloaded', 'viewed']))
-    const audits = (await asOwner(data.companies.drina, `select summary::text s from audit_log where action like 'contract.%'`)).rows.map((r) => r.s as string).join(' ')
-    expect(audits).not.toMatch(/Ajla|Testović/)
+    // Reloads (the browser's PDF viewer) create no further entries.
+    const afterView = await events()
+    for (let i = 0; i < 3; i++) expect((await adnan.get(grant.json().url)).statusCode).toBe(200)
+    expect(await events()).toEqual(afterView)
+    // A view grant does not download; a cross-site request is refused.
+    expect((await adnan.get(`/api/contracts/${contract.id}/pdf?indir=1`)).statusCode).toBe(403)
+    expect((await adnan.request('GET', grant.json().url, undefined, { 'sec-fetch-site': 'cross-site' })).statusCode).toBe(403)
+
+    const dl = await adnan.post(`/api/contracts/${contract.id}/access`, { mode: 'download' })
+    expect(dl.json().url).toBe(`/api/contracts/${contract.id}/pdf?indir=1`)
+    const file = await adnan.get(dl.json().url)
+    expect(file.headers['content-disposition']).toBe(`attachment; filename="sozlesme-taslagi_${contract.contractNo}_s1.pdf"`)
+    expect(await count('downloaded')).toBe(1)
+    const audits = (await asOwner(data.companies.drina, `select action, summary::text s from audit_log where action like 'contract.%'`)).rows
+    expect(audits.map((r) => r.action)).toEqual(expect.arrayContaining(['contract.pdf_view', 'contract.download']))
+    expect(audits.map((r) => r.s as string).join(' ')).not.toMatch(/Ajla|Testović/)
+  })
+
+  it('PDF permissions: Operasyon may open but not download; another company sees nothing', async () => {
+    const detail = (await selma.get(`/api/contracts/${contract.id}`)).json()
+    expect(detail).toMatchObject({ canView: true, canDownload: false })
+    expect((await selma.post(`/api/contracts/${contract.id}/access`, { mode: 'download' })).statusCode).toBe(403)
+    const view = await selma.post(`/api/contracts/${contract.id}/access`, { mode: 'view' })
+    expect(view.statusCode).toBe(200)
+    expect((await selma.get(view.json().url)).statusCode).toBe(200)
+    expect((await selma.get(`/api/contracts/${contract.id}/pdf?indir=1`)).statusCode).toBe(403)
+    // Another user's grant is not shared: a grant belongs to one session.
+    expect((await lejla.get(view.json().url)).statusCode).toBe(404)
+    expect((await lejla.post(`/api/contracts/${contract.id}/access`, { mode: 'view' })).statusCode).toBe(404)
+    expect(await count('downloaded')).toBe(1)
+  })
+
+  it('PDF grants end with the session, a permission removal or a company switch', async () => {
+    // Session: sign out → the old grant is gone; the next session needs a new one.
+    const other = new Client(app)
+    expect((await other.login(EMAILS.adnan)).statusCode).toBe(200)
+    const g = (await other.post(`/api/contracts/${contract.id}/access`, { mode: 'view' })).json()
+    expect((await other.get(g.url)).statusCode).toBe(200)
+    expect((await other.post('/api/auth/logout')).statusCode).toBeLessThan(300)
+    expect((await other.login(EMAILS.adnan)).statusCode).toBe(200)
+    expect((await other.get(g.url)).statusCode).toBe(403)
+
+    // Permission: removing contracts.read from Operasyon closes the file at once (checked again on every GET).
+    const v = (await selma.post(`/api/contracts/${contract.id}/access`, { mode: 'view' })).json()
+    expect((await selma.get(v.url)).statusCode).toBe(200)
+    await asOwner(data.companies.drina, `update roles set permissions = array_remove(permissions, 'contracts.read') where name = 'Operasyon'`)
+    try {
+      expect((await selma.get(v.url)).statusCode).toBe(403)
+    } finally {
+      await asOwner(data.companies.drina, `update roles set permissions = array_append(permissions, 'contracts.read') where name = 'Operasyon'`)
+    }
+
+    // Company switch (adnan is also in Neretva): the Drina grant does not open anything there.
+    const g2 = (await other.post(`/api/contracts/${contract.id}/access`, { mode: 'view' })).json()
+    expect((await other.post('/api/auth/switch-company', { companyId: data.companies.neretva })).statusCode).toBe(200)
+    expect((await other.get(g2.url)).statusCode).toBe(404)
   })
 
   it('another company cannot see or use it', async () => {
@@ -438,6 +563,12 @@ describe('contracts', () => {
     const old = (await adnan.get(`/api/contracts/${contract.id}`)).json() as ContractDetail
     expect(old.status).toBe('superseded')
     expect(old.snapshot.renderedText).toContain('Fiyat hesaplanmadı')
+    // The first revision keeps its own PDF file; files can be neither changed nor removed.
+    const files = (await asOwner(data.companies.drina, 'select contract_id, sha256 from contract_files where contract_id = any($1)', [[contract.id, next.id]])).rows
+    expect(files).toHaveLength(2)
+    expect(files.find((x) => x.contract_id === contract.id)!.sha256).toBe(old.pdf.sha256)
+    await expect(asOwner(data.companies.drina, "update contract_files set sha256 = repeat('0', 64) where contract_id = $1", [contract.id])).rejects.toThrow()
+    await expect(asOwner(data.companies.drina, 'delete from contract_files where contract_id = $1', [contract.id])).rejects.toThrow()
     const items = (await adnan.get(`/api/rentals/${rental.id}/contracts`)).json().items
     expect(items.map((i: { revision: number; status: string }) => [i.revision, i.status])).toEqual([
       [2, 'draft'],
@@ -464,5 +595,12 @@ describe('contracts', () => {
     const again = await adnan.post(`/api/rentals/${rental.id}/contracts`, { templateVersionId: tv, requestId: uuid() })
     expect(again.statusCode).toBe(201)
     expect(again.json().contractNo).not.toBe(contract.contractNo)
+  })
+})
+
+describe('personal data', () => {
+  it('server logs of the whole run carry no customer names, contract text or reference', () => {
+    expect(logs.length).toBeGreaterThan(0)
+    expect(logs).not.toMatch(/Ajla|Testović|Mirza|Uzorak|Dino|ÖRNEK METİN|renderedText/)
   })
 })

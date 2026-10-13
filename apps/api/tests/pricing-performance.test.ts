@@ -93,7 +93,8 @@ describe('pricing at volume', () => {
     expect(c.revision).toBe(30)
     await timed('rental contracts (30 revisions)', 'GET', `/api/rentals/${rental.id}/contracts`)
     await timed('contract detail', 'GET', `/api/contracts/${c.id}`)
-    await timed('contract PDF', 'GET', `/api/contracts/${c.id}/pdf`)
+    const grant = await timed('contract PDF access (POST)', 'POST', `/api/contracts/${c.id}/access`, { mode: 'download' })
+    await timed('contract PDF', 'GET', grant.url)
     await timed('rental detail with gates', 'GET', `/api/rentals/${rental.id}`)
 
     for (const [label, ms] of Object.entries(timings)) expect(ms, label).toBeLessThan(label.includes('PDF') || label.includes('draft') ? 1500 : 600)

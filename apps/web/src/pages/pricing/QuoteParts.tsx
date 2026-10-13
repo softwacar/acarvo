@@ -1,4 +1,4 @@
-import { formatMoney, type PricingResult, type QuoteLine } from '@acarvo/shared'
+import { currencyExponent, formatMoney, type PricingResult, type QuoteLine } from '@acarvo/shared'
 import { Info, WarningCircle } from '@phosphor-icons/react'
 import { DAY_METHOD_LABEL, formatPercentBp, NOT_APPLIED_LABEL, problemText, TIER_LABEL, UNAVAILABLE_LABEL } from '@/lib/pricing-labels'
 import { cn } from '@/lib/utils'
@@ -83,12 +83,13 @@ export function QuoteBreakdown({
           ) : (
             <tr>
               <td colSpan={3} className="pt-1.5 text-right text-[12.5px] text-hold">
-                Vergi yapılandırılmadı: brüt toplam hesaplanmadı (tahmin edilmez).
+                Vergi yapılandırılmadı: yalnız net tutar gösterilir. Brüt toplam hesaplanmadı (oran tahmin edilmez); bu tutar vergiler dahil kesin fiyat değildir.
               </td>
             </tr>
           )}
         </tfoot>
       </table>
+      <TaxNote currency={currency} lines={lines} taxStatus={taxStatus} />
     </div>
   )
 }
@@ -130,5 +131,27 @@ export function NotApplied({ items }: { items: string[] }) {
       <Info size={14} className="mt-[3px] shrink-0 text-ink-3" />
       Hesaba katılmayanlar: {items.map((x) => NOT_APPLIED_LABEL[x] ?? x).join(', ')}. Bunlar için ACARVO’da kural yok; tutara eklenmedi.
     </p>
+  )
+}
+
+/** F2: rate, included/added and the rounding rule in plain words (what the server applied, nothing assumed). */
+function TaxNote({ currency, lines, taxStatus }: { currency: string; lines: QuoteLine[]; taxStatus: 'complete' | 'not_configured' }) {
+  const tax = lines.find((l) => l.kind === 'tax')
+  const exp = currencyExponent(currency)
+  const step = exp === 0 ? `1 ${currency}` : `${(1 / 10 ** exp).toFixed(exp).replace('.', ',')} ${currency}`
+  const bp = tax?.source.percentBp
+  const rate = bp == null ? '' : `%${(bp / 100).toLocaleString('tr-TR', { maximumFractionDigits: 2 })}`
+  const included = !!tax?.label.includes('içinde')
+  return (
+    <dl className="mt-3 grid gap-x-4 gap-y-1 rounded-lg bg-ground/60 px-3.5 py-2.5 text-[12.5px] text-ink-2 sm:grid-cols-[auto_minmax(0,1fr)]">
+      <dt className="font-medium text-ink">Vergi</dt>
+      <dd>
+        {taxStatus === 'complete' && tax
+          ? `${tax.label.split(' · ')[0]} ${rate} · ${included ? 'fiyatlara dahil (tutarların içinden ayrıldı)' : 'fiyatlara hariç (net tutara eklendi)'} · yalnız vergiye tabi kalemlere`
+          : 'Yapılandırılmadı — net tutar; vergi ve brüt toplam yok'}
+      </dd>
+      <dt className="font-medium text-ink">Yuvarlama</dt>
+      <dd>Her kalem ve vergi bir kez, en yakın {step} birimine; tam yarım değerler sıfırdan uzağa (yukarı) yuvarlanır. Kur dönüşümü yapılmaz.</dd>
+    </dl>
   )
 }

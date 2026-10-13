@@ -150,3 +150,93 @@ describe('calculation', () => {
     expect(kwd.notApplied).toEqual(['corporate_agreement', 'one_way', 'mileage', 'insurance_package'])
   })
 })
+
+describe('integration review: approved decisions F1–F4 and rounding', () => {
+  const days = (from: string, to: string, dayMethod: 'rolling_24h' | 'calendar_day', tz = TZ) =>
+    billableDays({ pickupAt: at(from, tz), returnAt: at(to, tz), pickupTimeZone: tz, dayMethod, graceMinutes: 0, minDays: 1 }).days
+
+  it('F1 calendar day: same local day = 1 day, otherwise the date difference; touched days are not each charged', () => {
+    expect(days('2026-10-10T23:00', '2026-10-11T01:00', 'calendar_day')).toBe(1)
+    expect(days('2026-10-10T08:00', '2026-10-10T20:00', 'calendar_day')).toBe(1)
+    // Mon 10:00 → Wed 22:00 touches three dates but is a two-day difference.
+    expect(days('2026-11-02T10:00', '2026-11-04T22:00', 'calendar_day')).toBe(2)
+    // The night clocks go back (25.10.2026) and spring forward (28.03.2027): still one calendar day.
+    expect(days('2026-10-24T23:00', '2026-10-25T01:00', 'calendar_day')).toBe(1)
+    expect(days('2027-03-27T23:00', '2027-03-28T04:00', 'calendar_day')).toBe(1)
+  })
+
+  it('F1: calendar days are counted in the pickup branch zone, not the browser or server zone', () => {
+    // 22:30 UTC on 10 Oct → 11 Oct 00:30 in Sarajevo (UTC+2) but 01:30 in Istanbul (UTC+3); return 12 Oct 21:30 UTC.
+    const q = (tz: string) => billableDays({ pickupAt: '2026-10-10T22:30:00.000Z', returnAt: '2026-10-12T21:30:00.000Z', pickupTimeZone: tz, dayMethod: 'calendar_day', graceMinutes: 0, minDays: 1 }).days
+    expect(q('Europe/Sarajevo')).toBe(1)
+    expect(q('Europe/Istanbul')).toBe(2)
+    expect(q('America/New_York')).toBe(2)
+  })
+
+  it('F3 tier boundaries 6/7 and 29/30 with both day methods; one tier for the whole rental, never mixed', () => {
+    for (const method of ['rolling_24h', 'calendar_day'] as const) {
+      const priceList = { id: 'pl', name: 'S', revision: 1, currency: 'EUR', dayMethod: method, graceMinutes: 0, minDays: 1 }
+      const q = (to: string) => calculateQuote(input({ priceList, returnAt: at(to) }))
+      expect(q('2026-11-08T10:00')).toMatchObject({ days: 6, tier: '1-6', baseMinor: 6 * 4500 })
+      expect(q('2026-11-09T10:00')).toMatchObject({ days: 7, tier: '7-29', baseMinor: 7 * 4000 })
+      expect(q('2026-11-10T10:00')).toMatchObject({ days: 8, tier: '7-29', baseMinor: 8 * 4000 })
+      expect(q('2026-12-01T10:00')).toMatchObject({ days: 29, tier: '7-29', baseMinor: 29 * 4000 })
+      expect(q('2026-12-02T10:00')).toMatchObject({ days: 30, tier: '30+', baseMinor: 30 * 3000 })
+      expect(q('2026-11-10T10:00').lines.filter((l) => l.kind === 'base')).toHaveLength(1)
+    }
+    // A started 24-hour block crosses the boundary: 6 days + 1 minute is 7 days, tier 7–29.
+    expect(calculateQuote(input({ returnAt: at('2026-11-08T10:01') }))).toMatchObject({ days: 7, tier: '7-29' })
+  })
+
+  it('season start and end days are inclusive; a season outside the period changes nothing', () => {
+    const s = (startDate: string, endDate: string) => ({ id: 's', name: 'S', startDate, endDate, vehicleClassId: null, percentBp: 1000, priority: 0, active: true })
+    // Days of the rental: 02, 03, 04 Nov.
+    expect(calculateQuote(input({ seasons: [s('2026-11-04', '2026-11-10')] })).lines.find((l) => l.kind === 'season')?.quantity).toBe(1)
+    expect(calculateQuote(input({ seasons: [s('2026-10-01', '2026-11-02')] })).lines.find((l) => l.kind === 'season')?.quantity).toBe(1)
+    expect(calculateQuote(input({ seasons: [s('2026-11-05', '2026-11-30')] })).lines.some((l) => l.kind === 'season')).toBe(false)
+  })
+
+  it('F4: only one discount exists per quote; it applies to the rental only and can never make a price negative', () => {
+    const extra = { id: 'x', code: 'GPS', name: 'GPS', kind: 'standard' as const, mode: 'per_rental' as const, priceMinor: 1000, maxQuantity: 1, taxable: true, active: true }
+    const huge = { id: 'd', name: 'Sabit', type: 'fixed' as const, value: 1_000_000, minDays: 1, active: true }
+    const q = calculateQuote(input({ extras: [extra], selectedExtras: [{ extraId: 'x', quantity: 1 }], discounts: [huge], discountId: 'd' }))
+    expect(q).toMatchObject({ ok: true, baseMinor: 13_500, discountMinor: 13_500, extrasMinor: 1000, netMinor: 1000 })
+    expect(q.lines.filter((l) => l.kind === 'discount')).toHaveLength(1)
+    const full = { id: 'p', name: 'Yüzde 100', type: 'percent' as const, value: 10_000, minDays: 1, active: true }
+    const low = { id: 'low', name: 'Kampanya', startDate: '2026-11-01', endDate: '2026-11-30', vehicleClassId: null, percentBp: -9000, priority: 0, active: true }
+    const z = calculateQuote(input({ seasons: [low], discounts: [full], discountId: 'p', tax: { mode: 'exclusive', rateBp: 1700, label: 'PDV' } }))
+    expect(z).toMatchObject({ ok: true, netMinor: 0, taxMinor: 0, grossMinor: 0 })
+    expect(z.baseMinor + z.extrasMinor - z.discountMinor).toBe(0)
+    // The engine input carries a single discount id: stacking is impossible by construction.
+    expect(Object.keys(input()).filter((k) => /discount/i.test(k))).toEqual(['discounts', 'discountId'])
+  })
+
+  it('rounding: once per line, half away from zero, in the currency minor unit; tax exclusive vs inclusive', () => {
+    const one = (rate: number, mode: 'exclusive' | 'inclusive', currency = 'EUR') =>
+      calculateQuote(
+        input({
+          priceList: { id: 'pl', name: 'S', revision: 1, currency, dayMethod: 'rolling_24h', graceMinutes: 0, minDays: 1 },
+          returnAt: at('2026-11-03T10:00'),
+          rates: [{ id: 'r1', vehicleClassId: 'c1', rate1to6: rate, rate7to29: null, rate30plus: null }],
+          tax: { mode, rateBp: 1700, label: 'PDV' },
+        }),
+      )
+    // 0,50 × 17 % = 0,085 → 0,09 (half away from zero); gross 0,59.
+    expect(one(50, 'exclusive')).toMatchObject({ netMinor: 50, taxMinor: 9, grossMinor: 59 })
+    // Inclusive 1,17: tax = 1,17 × 17 / 117 = 0,17; net 1,00.
+    expect(one(117, 'inclusive')).toMatchObject({ netMinor: 100, taxMinor: 17, grossMinor: 117 })
+    // JPY has no minor digits: 1001 × 17 % = 170,17 → 170.
+    expect(one(1001, 'exclusive', 'JPY')).toMatchObject({ currency: 'JPY', taxMinor: 170, grossMinor: 1171 })
+    // KWD has three: 1,005 × 17 % = 0,17085 → 0,171.
+    expect(one(1005, 'exclusive', 'KWD')).toMatchObject({ currency: 'KWD', taxMinor: 171, grossMinor: 1176 })
+    expect(formatMoney(1176, 'KWD')).toBe('1,176 KWD')
+  })
+
+  it('missing tax: net only, gross and tax stay unknown (never guessed from country or currency)', () => {
+    for (const currency of ['BAM', 'TRY', 'EUR']) {
+      const q = calculateQuote(input({ priceList: { id: 'pl', name: 'S', revision: 1, currency, dayMethod: 'rolling_24h', graceMinutes: 0, minDays: 1 } }))
+      expect(q).toMatchObject({ taxStatus: 'not_configured', taxMinor: null, grossMinor: null, netMinor: 13_500 })
+      expect(q.lines.some((l) => l.kind === 'tax')).toBe(false)
+    }
+  })
+})

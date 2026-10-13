@@ -187,6 +187,7 @@ export async function contractDetail(tx: Tx, access: CompanyAccess, r: Row): Pro
     externalAckAt: r.external_ack_at ? toIso(r.external_ack_at) : null,
     externalAckByName: str(r.ack_by_name),
     pdf: { available: !!r.storage_key, sizeBytes: r.size_bytes == null ? null : Number(r.size_bytes), sha256: str(r.sha256) },
+    canView: !!r.storage_key,
     canDownload: access.permissions.has('contracts.download') && !!r.storage_key,
     createdAt: toIso(r.created_at),
     createdByName: str(r.created_by_name),

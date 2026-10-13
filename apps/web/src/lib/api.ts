@@ -373,23 +373,6 @@ export const contractsApi = {
   review: (id: string, version: number, requestId: string) => api<ContractDetail>(`/contracts/${id}/review`, { method: 'POST', body: { version, requestId } }),
   external: (id: string, body: { version: number; requestId: string; externalAck: true; externalReference: string }) => api<ContractDetail>(`/contracts/${id}/external`, { method: 'POST', body }),
   archive: (id: string, body: { version: number; requestId: string; reason: string }) => api<ContractDetail>(`/contracts/${id}/archive`, { method: 'POST', body }),
-  /** Downloads the draft PDF through the API with the session cookie; no file address is ever made public. */
-  async downloadPdf(id: string) {
-    let res: Response
-    try {
-      res = await fetch(`/api/contracts/${id}/pdf`, { credentials: 'same-origin' })
-    } catch {
-      throw new ApiRequestError(0, 'NETWORK', 'Sunucuya ulaşılamadı. Bağlantınızı kontrol edin.')
-    }
-    if (!res.ok) throw await toError(res)
-    const name = /filename="([^"]+)"/.exec(res.headers.get('content-disposition') ?? '')?.[1] ?? 'sozlesme-taslagi.pdf'
-    const url = URL.createObjectURL(await res.blob())
-    const a = document.createElement('a')
-    a.href = url
-    a.download = name
-    document.body.append(a)
-    a.click()
-    a.remove()
-    setTimeout(() => URL.revokeObjectURL(url), 10_000)
-  },
+  /** Asks for a short-lived, session-bound grant to view or download the draft PDF (recorded once, on this POST). */
+  access: (id: string, mode: 'view' | 'download') => api<{ url: string; expiresAt: string }>(`/contracts/${id}/access`, { method: 'POST', body: { mode } }),
 }

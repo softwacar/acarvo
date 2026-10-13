@@ -429,7 +429,7 @@ function Editor({ detail, back }: { detail: PriceListDetail | null; back: ReactN
                 {(
                   [
                     ['rolling_24h', 'Her başlayan 24 saat bir gün sayılır (toleranstan sonra).'],
-                    ['calendar_day', 'Alış şubesinin saatine göre alış ve iade tarihleri arasındaki gün farkı sayılır (aynı gün = 1 gün).'],
+                    ['calendar_day', 'Alış şubesinin saatine göre alış ve iade tarihleri arasındaki gün farkı; aynı gün en az 1 gün. Örnek: 10 Ekim 23.00 – 11 Ekim 01.00 = 1 gün. Dokunulan her tarih ayrıca ücretlenmez.'],
                   ] as const
                 ).map(([m, hint]) => (
                   <label key={m} className={cn('flex cursor-pointer items-start gap-2.5 rounded-lg border px-3 py-2.5', f.dayMethod === m ? 'border-blue bg-blue-soft/40' : 'border-line')}>

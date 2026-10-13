@@ -155,6 +155,8 @@ export interface ContractDetail {
   externalAckAt: string | null
   externalAckByName: string | null
   pdf: { available: boolean; sizeBytes: number | null; sha256: string | null }
+  /** The draft PDF can be opened in the browser (contracts.read); downloading needs contracts.download. */
+  canView: boolean
   canDownload: boolean
   createdAt: string
   createdByName: string | null
