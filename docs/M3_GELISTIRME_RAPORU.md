@@ -1,7 +1,7 @@
 # ACARVO — M3 Geliştirme Raporu (Kurumsal Hesaplar)
 
 **Dal / klasör:** `kurumsal-m3` / `C:\Users\soena\Desktop\acarvo-m3`. Başlangıç noktası `main` `3bda9dd`.
-**Durum:** M3 tamamlandı ve yalnız test veritabanında (`acarvo_test`) çalışıyor. Main'e birleştirilmedi, ana veritabanına uygulanmadı, push yapılmadı.
+**Durum (13.10.2026):** M3 main'e birleştirildi ve ana veritabanına uygulandı (24 migration). Ayrıntılar en alttaki "Son kontroller ve main entegrasyonu" bölümünde. Push yapılmadı.
 **Plan:** `docs/M3_KURUMSAL_HESAPLAR_PLANI.md` (kararlar D1–D13). **Teknik:** `docs/TEKNIK_UYGULAMA.md` §8.8.
 
 ## Özet
@@ -217,3 +217,112 @@
       - mevcut veride değişiklik yok.
 4. Salt okunur doğrulama: `--verify`, öncesi ve sonrası parmak izi karşılaştırması.
 5. Uygulama yeniden başlatılır. Kurumsal Hesaplar menüsü açılır; liste boş gelir ve "Henüz kurumsal hesap yok" yazar. Ana veritabanına örnek kayıt eklenmez.
+
+---
+
+## Son kontroller ve main entegrasyonu (13.10.2026)
+
+### Ürün kararları (onaylandı)
+
+**Hesap durumları:** yalnız "Etkin" ve "Arşivde". Askıya alma Rezervasyon/Kiralama modülüne kaldı. Mevcut işlev buna uygundu; değişiklik yapılmadı.
+
+**Aynı vergi kimliği aynı şirketteki farklı hesaplarda bulunabilir.** Koşullar ve durumları:
+
+| Koşul | Durum |
+|---|---|
+| Güçlü mükerrerlik uyarısı | Vardı |
+| Açık kullanıcı onayı | Vardı |
+| Başka şirketlerle karşılaştırma yapılmaması | Vardı |
+| Otomatik birleştirme yapılmaması | Vardı |
+| Onayın denetim geçmişinde izlenmesi | **Eksik bulundu, düzeltildi** |
+
+- **Eksik:** onay, hesap oluştururken geçmişe yazılıyordu. Sonradan vergi kimliği, telefon veya e-posta eklerken ya da değiştirirken verilen onay yazılmıyordu.
+- **Düzeltme** (`1cbcb57`): bu işlemlerde de `acknowledgedDuplicates` (diğer hesapların numaraları, değer değil) geçmişe yazılıyor.
+- **Regresyon testi:** onay isteniyor; ekleme ve değiştirmede kaydediliyor; geçmişte değer yok; Neretva'da karşılaştırma yok; birleştirme yok.
+
+### Boş migration olayının kesin açıklaması
+- **Etkilenen dosya:** `0023_corporate_accounts_rls.sql`.
+- **Ne oldu:** Sprint sırasında dosya Drizzle'ın boş şablonuyla (`-- Custom SQL migration file…`) oluşturuldu. İçeriği yazma adımı başarısız oldu (araç önce dosyanın okunmasını istedi). Aynı paralel adımdaki geçiş komutu boş şablonu yalnız `acarvo_test`'e uyguladı ve geçmiş kaydına işledi (kayıt id 26).
+- **Nasıl yakalandı:** Salt okunur `--verify` kurumsal tabloların RLS'siz olduğunu hemen bildirdi.
+- **Nasıl düzeltildi:** Yalnız `acarvo_test`'te boş kaydın satırı silindi (owner yetkisiyle, veritabanı adı denetlenerek). Dosyaya gerçek içerik yazıldı ve migration yeniden uygulandı (kayıt id 27).
+- **Git geçmişi:** `0023` yalnız bir kez, gerçek içeriğiyle commit'lendi (`de65f18`); depoda boş hali hiç olmadı.
+- **Ana veritabanı:** o sırada etkilenmedi (22 migration'da kaldı).
+
+### Migration geçmişinin tutarlılığı
+Kontrol yöntemi: Drizzle her uygulanan migration için dosya içeriğinin SHA-256 özetini ve günlükteki zamanı kaydeder. Her dosya özetlendi; test ve ana veritabanı kayıtlarıyla salt okunur olarak karşılaştırıldı.
+
+**Sonuçlar:**
+- **0023:** test veritabanındaki kaydın özeti bugünkü dosyayla birebir aynı; boş şablonun kaydı yok.
+- **Sıra ve zamanlar:** tüm kayıtlar günlükle uyumlu. Kayıt numaralarındaki boşluklar (12, 13 ve 26) eski geri alınmış denemelerden ve silinen boş kayıttan geliyor.
+- **0009 (ana ve test) ve 0017 (yalnız test):** özetler farklı görünüyordu. Bu kayıtlar dosyanın Windows satır sonlu (CRLF) haliyle birebir eşleşiyor: dosyalar uygulandığında çalışma kopyasında CRLF vardı, Git commit'te LF'ye çevirdi. SQL içeriği aynı. Drizzle yalnız zamana bakar, uygulanmış geçmişe dokunulmadı.
+- **Ana veritabanında bekleyen:** yalnız beklenen iki dosya, `0022` ve `0023`.
+
+**Sıfırdan uygulama kontrolü:**
+- Owner rolünün yeni veritabanı açma yetkisi (CREATEDB) yok; bu yetki verilmedi.
+- Bunun yerine test veritabanında tek, geri alınan bir işlem yapıldı: beş kurumsal tablo kaldırıldı, `0022` ve `0023` bugünkü içerikleriyle 22 migration'lık duruma yeniden uygulandı.
+- Oluşan nesneler önceki tanımlarla **birebir aynı:** 90 sütun, 108 kısıt, 22 indeks, 20 politika, 5 RLS, 5 tetikleyici, 15 yetki, 3 fonksiyon. İşlem geri alındı.
+
+### "Exit code 4" hataları
+- **Gözlem:** API (3001) ve web (5173) sorunsuz başlamıştı; sağlık isteğine 200 dönmüş, Vite hazır olmuştu. Ardından ikisi de hata yazmadan aynı anda kapandı.
+- **Neden:** Arka plan komutları Claude oturumuna bağlı ve oturum kapanırken sonlandırıldılar. Exit code 4 bu sonlandırmanın çıkış kodu. Uygulama hatası, port çakışması, yanlış klasör veya ortam değişkeni sorunu yoktu; portlar boştu.
+- **Çözüm:** Sunucular main klasöründen (dal `main`, `1cbcb57`) yeniden başlatıldı. Sağlık kontrolü: API `{"status":"ok","database":"connected"}`, web 200, `/kurumsal-hesaplar` 200.
+- **Not:** Bu sunucular oturum kapanınca yine durabilir. Kendiniz başlatmak için iki ayrı terminalde şunları çalıştırın:
+  - API: `apps/api` klasöründe `npx tsx watch --env-file=../../.env src/server.ts`
+  - Web: `apps/web` klasöründe `npm run dev`
+
+### Son güvenlik incelemesi
+**Yeniden doğrulanan alanlar:**
+- zorunlu RLS ve şirket bazlı bileşik yabancı anahtarlar;
+- hazır roller ve özel rollerin korunması;
+- kurumsal izolasyon (başka şirketin gerçek kimliği 404 döner);
+- kişi ve sürücü ilişkileri;
+- M1 müşteri kaydının korunması;
+- M2 belge yetkilerinin atlatılamaması;
+- vergi kimliği mükerrerlik kontrolleri;
+- günlüklerde ve işlem geçmişinde kişisel veya hassas değer olmaması;
+- arşivleme ve geri alma;
+- eşzamanlı düzenleme ve bağlama;
+- M2'deki günlük 600 deneme sınırının şirketler arası doğru çalışması.
+
+**Sonuç:** kritik bulgu yok. Tek eksik, yukarıdaki onay kaydıydı ve düzeltildi.
+
+### Git
+- Birleştirmeden önce iki çalışma alanı da temizdi; `main`, `kurumsal-m3`'ün atasıydı.
+- Birleştirme yalnız ileri sarma ile yapıldı: `3bda9dd → 1cbcb57`. Bu rapor da aynı yolla eklendi.
+- Push yapılmadı. `kurumsal-m3` dalı ve `acarvo-m3` klasörü korunuyor.
+
+### Ana veritabanı geçişi (22 → 24)
+- **Öncesi:**
+  - `--verify`: yalnız 2 bekleyen migration;
+  - önizleme: `0022`, `0023`;
+  - SQL: yalnız yeni tablolar, kurallar, tetikleyiciler ve yetkiler; mevcut veride değişiklik yok;
+  - parmak izleri salt okunur kaydedildi.
+- **Doğrulanmış yedek:** `C:\Users\soena\Desktop\acarvo\backups\2026-10-13-01-28-46`.
+- **Uygulama:** safe-migrate durmadan geçti; ardından `--verify`: "sorun yok" (36 tablo, 32'sinde zorunlu RLS).
+- **Migration kayıtları:** 24 kaydın tamamı dosya özetleriyle uyumlu; `0022` ve `0023`'ün özetleri test veritabanındakiyle aynı.
+- **Mevcut veriler:**
+  - müşteri kaydı (Drina, 1) içerik özetiyle aynı;
+  - şubeler ve numara sayaçları aynı;
+  - araçlar, fotoğraflar, dosyalar, araç belgeleri, km ve konum kayıtları, kullanıcılar ve şirketler değişmedi.
+- **Beklenen değişiklikler:**
+  - Rollere yalnız ekleme yapıldı, hiç yetki silinmedi:
+
+    | Rol | Eklenen |
+    |---|---|
+    | Sahip | `corporate.read`, `corporate.manage` |
+    | Yönetici | `corporate.read`, `corporate.manage` |
+    | Operasyon | `corporate.read` |
+
+  - Her şirkete 3 "rol yükseltme" geçmiş kaydı düştü.
+  - 5 yeni tablo, 20 politika, 15 yetki ve 22 indeks eklendi.
+- **Örnek veri:** ana veritabanına sentetik kurumsal hesap eklenmedi.
+
+### Testler (yalnız `acarvo_test`)
+
+| Ne zaman | API | Tarayıcı | Tip denetimi ve derleme |
+|---|---|---|---|
+| Birleştirmeden önce, M3 dalında | 335/335 | 83 geçti, 18 isteğe bağlı atlandı | Hatasız |
+| Birleştirmeden sonra, main'de | 335/335 | 83 geçti, 18 isteğe bağlı atlandı | Hatasız |
+
+- **Main'de API testleri:** ilk denemede 24 test dosyasının hiçbiri yüklenemedi ("no tests"). Çıktıda hata ayrıntısı yoktu; birleştirmeden hemen sonra derleme önbelleği yenileniyordu. İkinci çalıştırmada 335/335 geçti.
+- **Ekran görüntüleri:** main kodunda yeniden üretildi (1440 / 768 / 390, 42 görüntü) ve incelendi. Taşma yok, düzen bozulması yok.
