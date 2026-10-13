@@ -362,3 +362,53 @@ describe('permissions, related lists and leaks', () => {
     await expect(asApp(data.companies.drina, (c) => c.query(`update reservations set reservation_no = 'R-999999' where id = $1`, [ids['R-000003']]))).rejects.toThrow(/cannot change/)
   })
 })
+
+describe('final security review (integration)', () => {
+  it('ids of another company for the account, the booker or a driver are unknown here; nothing is created', async () => {
+    const before = (await one(`select count(*)::int n from reservations`)).n
+    const neretvaAccount = (await one(`select id from corporate_accounts limit 1`, [], data.companies.neretva)).id
+    expect((await adnan.post('/api/reservations', { ...base(), corporateAccountId: neretvaAccount })).statusCode).toBe(404)
+    expect((await adnan.post('/api/reservations', { ...base(), bookerCustomerId: ids.dino })).statusCode).toBe(404)
+    expect((await adnan.post('/api/reservations', { ...base(), drivers: [{ customerId: ids.dino, isPrimary: true }] })).statusCode).toBe(404)
+    expect((await one(`select count(*)::int n from reservations`)).n).toBe(before)
+  })
+
+  it('the database itself keeps [pickup, return): touching periods pass, one minute of overlap does not, pending never holds', async () => {
+    const vehicle = (await one(`select id, class_id from vehicles where plate = 'E16-T-093'`)) as { id: string; class_id: string }
+    const insert = (no: string, status: string, from: string, to: string) =>
+      asOwner(
+        data.companies.drina,
+        `insert into reservations (company_id, reservation_no, status, source, customer_id, vehicle_class_id, vehicle_id, pickup_branch_id, return_branch_id, pickup_at, return_at, pickup_timezone, return_timezone, confirmed_at)
+         values ($1, $2, $3, 'phone', $4, $5, $6, $7, $7, $8, $9, 'Europe/Sarajevo', 'Europe/Sarajevo', case when $3 = 'confirmed' then now() else null end)`,
+        [data.companies.drina, no, status, ids.mirza, vehicle.class_id, vehicle.id, ids.sjj, from, to],
+      )
+    await insert('R-900001', 'confirmed', '2027-06-01T08:00:00Z', '2027-06-03T08:00:00Z')
+    await insert('R-900002', 'confirmed', '2027-06-03T08:00:00Z', '2027-06-04T08:00:00Z') // starts when the first ends
+    await insert('R-900003', 'confirmed', '2027-05-30T08:00:00Z', '2027-06-01T08:00:00Z') // ends when the first starts
+    await expect(insert('R-900004', 'confirmed', '2027-06-02T07:59:00Z', '2027-06-02T09:00:00Z')).rejects.toThrow(/already reserved/)
+    await expect(insert('R-900005', 'confirmed', '2027-06-03T07:59:00Z', '2027-06-03T08:01:00Z')).rejects.toThrow(/already reserved/)
+    await insert('R-900006', 'pending', '2027-06-02T00:00:00Z', '2027-06-02T12:00:00Z') // pending: no hold
+    // A pending row cannot be turned into an overlapping confirmed one by a direct update either.
+    await expect(asOwner(data.companies.drina, `update reservations set status = 'confirmed', confirmed_at = now() where reservation_no = 'R-900006'`)).rejects.toThrow(/already reserved/)
+  })
+
+  it('changing the vehicle of a confirmed reservation is checked the same way, and the old vehicle is released', async () => {
+    const r = (await adnan.post('/api/reservations', { ...base(), vehicleId: ids.octavia, pickupLocal: local(80, '10:00'), returnLocal: local(82, '10:00'), confirm: true })).json() as ReservationDetail
+    const other = (await one(`select id from vehicles where plate = 'M87-J-529'`)).id as string
+    const blocker = (await adnan.post('/api/reservations', { ...base(), vehicleId: other, pickupLocal: local(81, '10:00'), returnLocal: local(81, '18:00'), confirm: true })).json() as ReservationDetail
+    const body = { ...base(), customerId: ids.mirza, vehicleClassId: ids.orta, pickupLocal: r.pickup.local, returnLocal: r.return.local, version: r.version, changeReason: 'operational' }
+    const into = await adnan.put(`/api/reservations/${r.id}`, { ...body, vehicleId: other })
+    expect(into.json().error).toMatchObject({ code: 'VEHICLE_UNAVAILABLE', details: { conflicts: [expect.objectContaining({ reservationNo: blocker.reservationNo })] } })
+    const free = (await one(`select id from vehicles where plate = 'O58-E-467'`)).id as string
+    expect((await adnan.put(`/api/reservations/${r.id}`, { ...body, vehicleId: free })).statusCode).toBe(200)
+    // The Octavia is free again for that period.
+    expect((await adnan.post('/api/reservations', { ...base(), vehicleId: ids.octavia, pickupLocal: r.pickup.local, returnLocal: r.return.local, confirm: true })).statusCode).toBe(201)
+  })
+
+  it('a status in the request body is ignored: only the confirm, cancel and no-show endpoints change status', async () => {
+    const p = (await adnan.post('/api/reservations', { ...base(), status: 'confirmed', vehicleId: undefined, pickupLocal: local(90, '10:00'), returnLocal: local(91, '10:00') })).json() as ReservationDetail
+    expect(p.status).toBe('pending')
+    const edited = (await adnan.put(`/api/reservations/${p.id}`, { ...base(), status: 'confirmed', pickupLocal: p.pickup.local, returnLocal: p.return.local, version: p.version, note: 'x' })).json() as ReservationDetail
+    expect(edited.status).toBe('pending')
+  })
+})

@@ -626,6 +626,10 @@ function ReservationForm({ mode, existing }: { mode: 'create' | 'edit'; existing
                       <ShieldCheck size={14} className="mt-[2px] shrink-0 text-ink-3" />
                       Uygunluk yalnız araç durumu ve onaylı rezervasyonlara göre denetlendi. Henüz denetlenemeyen: {avail.data.notChecked.map((k) => NOT_CHECKED_LABELS[k]).join(', ')}.
                     </p>
+                    <p className="flex items-start gap-1.5 text-[12.5px] text-ink-2">
+                      <Info size={14} className="mt-[2px] shrink-0 text-ink-3" />
+                      Rezervasyonlar arasında hazırlık süresi bırakılmaz: bir rezervasyonun bittiği anda başlayan rezervasyon kabul edilir. Bu, aracın temizlenmiş, kontrol edilmiş veya teslime hazır olduğu anlamına gelmez; hazırlık, temizlik, hasar ve teslim kontrolleri Teslim/İade modülüyle gelecek.
+                    </p>
                   </>
                 )}
                 {errors.vehicleId && <p className="text-[13px] text-alert">{errors.vehicleId}</p>}
@@ -702,7 +706,7 @@ function ReservationForm({ mode, existing }: { mode: 'create' | 'edit'; existing
                 <input type="checkbox" disabled={!selectedVehicle?.available} checked={f.confirm && !!selectedVehicle?.available} onChange={(e) => set({ confirm: e.target.checked })} className="mt-0.5 size-4 accent-[var(--ac-blue)]" />
                 <span>
                   <span className="font-medium text-ink">Onaylı olarak oluştur</span>
-                  <span className="block text-[12.5px] text-ink-2">{selectedVehicle?.available ? 'Araç bu dönem için ayrılır; uygunluk kayıtta yeniden denetlenir.' : 'Onay için uygun bir araç seçin.'}</span>
+                  <span className="block text-[12.5px] text-ink-2">{selectedVehicle?.available ? 'Onay yalnız araç ve zaman ayırmasıdır; uygunluk kayıtta yeniden denetlenir. Fiyat, ödeme, sözleşme veya kiralama oluşturulmaz.' : 'Onay için uygun bir araç seçin.'}</span>
                 </span>
               </label>
             )}

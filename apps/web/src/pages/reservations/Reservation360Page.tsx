@@ -472,6 +472,10 @@ export function Reservation360Page() {
                   />
                 </Panel>
                 <Panel title="Not">{r.note ? <p className="whitespace-pre-line text-ink">{r.note}</p> : <p className="text-ink-2">Not yok.</p>}</Panel>
+                <p className="flex items-start gap-1.5 text-[12.5px] text-ink-2">
+                  <Info size={14} className="mt-[3px] shrink-0 text-ink-3" />
+                  {r.status === 'confirmed' ? 'Onay, araç ve zaman ayırmasıdır. ' : ''}Bu rezervasyon için fiyat hesaplanmadı; ödeme alınmadı, sözleşme oluşturulmadı ve kiralama başlamadı.
+                </p>
               </div>
               <div className="min-w-0 space-y-5">
                 <Panel title="Belge durumu">
@@ -528,7 +532,7 @@ export function Reservation360Page() {
               )}
               <p className="mt-3 flex items-start gap-1.5 border-t border-line-soft pt-3 text-[12.5px] text-ink-2">
                 <Info size={14} className="mt-[3px] shrink-0 text-ink-3" />
-                Hazırlık, temizlik ve teslim kontrolleri Kiralamalar ve Bakım modülleriyle gelecek.
+                Rezervasyonlar arasında hazırlık süresi bırakılmaz: bir rezervasyonun bittiği anda başlayan rezervasyon kabul edilir. Bu, aracın temizlenmiş, kontrol edilmiş veya teslime hazır olduğu anlamına gelmez; hazırlık, temizlik, hasar ve teslim kontrolleri Teslim/İade modülüyle gelecek.
               </p>
             </Panel>
           )}
