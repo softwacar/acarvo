@@ -2,7 +2,7 @@
 
 Tarih: 13.10.2026 · Dal: `fiyat-sozlesme-v1` (çalışma kopyası `acarvo-fs1`) · Plan: `docs/FIYATLANDIRMA_SOZLESME_PLANI.md`
 
-Durum: **test ortamında tamamlandı.** Main'e birleştirilmedi, ana veritabanına migration uygulanmadı, GitHub'a gönderilmedi, `.env` değiştirilmedi, finans modülüne geçilmedi. Bütün testler yalnız `acarvo_test` üzerinde, sentetik verilerle çalıştı.
+Durum: **son inceleme tamamlandı, main entegrasyonuna hazır** (ayrıntılar en sondaki "Son inceleme ve main entegrasyonu" bölümünde). GitHub'a gönderilmedi, `.env` değiştirilmedi, finans modülüne geçilmedi. Otomatik testler yalnız `acarvo_test` üzerinde, sentetik verilerle çalıştı.
 
 ---
 
@@ -36,7 +36,7 @@ Durum: **test ortamında tamamlandı.** Main'e birleştirilmedi, ana veritabanı
 - Yaşam döngüsü: **Taslak → Kontrol bekliyor → Dışarıda işleme alındı**; açık sözleşme **Arşivlendi** (neden zorunlu) veya **Yeni sürümle değiştirildi** olur. İmzalı durumu yoktur. "Dışarıda işleme alındı" bir personel beyanı + dış referanstır (ad/kimlik numarası yazılmaması uyarısıyla), elektronik imza değildir.
 - Yeni sürüm: önceki sürüm aynı metniyle saklanır, yeni sürüm güncel kiralama bilgileri ve geçerli teklifle oluşur. Fiziksel silme yok.
 - PDF taslağı: her sayfada üst bant ve çapraz filigran "TASLAK — HUKUKİ ONAY BEKLİYOR", alt bilgi "ACARVO taslağıdır. İmza, ödeme, fatura veya hukuki onay içermez.", imza alanı yok, DejaVu Sans ile Türkçe/Boşnakça karakterler, belge özelliklerinde kişisel veri yok. Özel depoda rastgele dosya adıyla tutulur; SHA-256 bütünlük kontrolü.
-- İndirme ayrı yetkidir (`contracts.download`); `attachment`, `no-store`, `nosniff`, `sandbox` CSP; dosya adı yalnız sözleşme numarası ve sürüm. Her görüntüleme ve indirme sözleşme geçmişine, indirme ayrıca işlem geçmişine yazılır.
+- PDF erişimi araç ve müşteri belgeleriyle aynı modeldir (bkz. "Son inceleme"): açma veya indirme isteği CSRF denetimli bir POST ile bir kez kaydedilir ve kısa süreli izin verir; dosyayı sunan GET hiçbir kayıt yazmaz. Açma `contracts.read`, indirme ayrıca `contracts.download` ister; `no-store`, `nosniff`, `sandbox` CSP; dosya adı yalnız sözleşme numarası ve sürüm.
 
 **Ekranlar**
 - Fiyatlandırma listesi ve fiyat listesi düzenleyici (doğrulama, kaydedilmemiş değişiklik koruması, eşzamanlı değişiklik uyarısı, etkinleştirme/arşivleme onayları, önizleme, revizyonlar, yetkisiz/boş/hata durumları).
@@ -90,7 +90,8 @@ Fiyat ve sözleşme modülü araç ayırma koruması (`vehicle_allocation_lock`,
 | `GET/POST /api/reservations/:id/quotes`, `POST …/quotes/preview` (kiralama için aynısı `/api/rentals/:id/quotes`) | `pricing.read` / kaydetme `pricing.quote` + kaydın okuma yetkisi ve şube kapsamı |
 | `GET/POST /api/settings/contract-templates`, `PUT/POST …/:id/draft`, `POST …/:id/activate`, `POST …/preview` | `settings.contracts.manage` (liste ve önizleme `contracts.read`) |
 | `GET/POST /api/rentals/:id/contracts`, `GET /api/contracts/:id`, `POST …/review`, `…/external`, `…/archive`, `…/revise` | `contracts.read` / `contracts.manage` |
-| `GET /api/contracts/:id/pdf` | `contracts.download` |
+| `POST /api/contracts/:id/access` (`mode`: view / download) | `contracts.read` (+ `contracts.download` indirme için) |
+| `GET /api/contracts/:id/pdf[?indir=1]` | yalnız geçerli erişim izniyle; yetkiler yeniden denetlenir |
 
 ## 7. Ekranlar
 
@@ -161,7 +162,57 @@ Ana veritabanına bağlanılmadı, migration uygulanmadı, sentetik fiyat/sözle
 
 ## 15. Açık riskler
 
-- Sözleşme görüntüleme her açılışta olay yazar; yoğun kullanımda olay tablosu büyür (indeksli; arşivleme politikası gerekebilir).
 - PDF tek yazı tipine (DejaVu Sans) bağlı; Kiril alfabesi destekli ama Arapça vb. desteklenmez.
 - Teklif "güncel değil" uyarısı dönem, sınıf ve ek sürücü sayısına bakar; alış şubesi değişikliği (farklı liste seçilmesine yol açabilir) ayrıca uyarı üretmez — teklif kendi listesini ve revizyonunu açıkça gösterir.
 - İsteğe bağlı teslim masası mobil iyileştirmesi bu sprintte yapılmadı (mevcut düzen ve regresyon testleri korunuyor).
+
+---
+
+## Son inceleme ve main entegrasyonu (14.10.2026)
+
+### 1. Ürün kararları
+
+| Karar | Durum |
+|---|---|
+| F1 Gün hesabı | Uygulandı. Yöntem liste başına zorunlu seçilir, önceden seçili değildir (API seçimsiz listeyi reddeder; testli). **Takvim günü tanımı:** alış şubesinin saat dilimine göre alış ve iade tarihleri arasındaki gün farkı; aynı yerel tarih en az 1 gün; dokunulan her tarih ayrıca ücretlenmez (10 Ekim 23.00 – 11 Ekim 01.00 = 1 gün). 24 saatlik blok yöntemi değişmedi. Mevcut liste ve teklif yok, geriye dönük dönüşüm yapılmadı. |
+| F2 Vergi | Uygulandı. Oran tahmin edilmez; yapılandırılmamışsa yalnız net gösterilir ve "vergiler dahil kesin fiyat değildir" yazar. Teklifte oran, dahil/hariç ve yuvarlama kuralı açıkça yazılır. |
+| F3 Kademeler | Uygulandı. Toplam süreye karşılık gelen tek kademe; 6/7 ve 29/30 sınırları iki gün yöntemiyle testli; karma kademe yok. Spec'te farklı ve açık bir kademe kuralı bulunmadı (spec yalnız gün hesabı için 24 saatlik blok önerisi içerir). |
+| F4 İndirimler | Uygulandı. Teklif başına tek indirim (motor girdisi tek kimlik; API dizi kabul etmez; testli); yalnız kiralama bedeline, açıklama satırıyla; bedeli aşamaz, negatif toplam oluşmaz; kur dönüşümü yok; kaydedilmiş teklif değişmez. İndirimi uygulayan kullanıcı `pricing.quote` ve kaydın şube kapsamıyla denetlenir. |
+| F6 Sözleşme metni | Uygulandı. Örnek metin işaretli, etkinleştirme açık beyan ister, PDF'te "TASLAK — HUKUKİ ONAY BEKLİYOR" her sayfada; imzalı durum yok. |
+| F8 Teslim | Uygulandı. K1 dış mod varsayılan kapalı, yalnız Sahip açar; iki beyan ve dış referans zorunlu; sözleşme taslağı veya teklif teslimi açmaz (kapılar "Dikkat"). |
+
+### 2. Kapatılan güvenlik açığı: GET ile sahte görüntüleme kaydı
+
+Önceki sürümde sözleşme ayrıntısı (GET) her açılışta "görüntülendi" olayı, PDF GET'i "indirildi" olayı yazıyordu; bağlantıyı tetikleyen her istek kayıt üretebiliyordu. Araç ve müşteri belgelerindeki mevcut erişim izni altyapısı (`lib/document-access.ts`, yeni tür `contract_pdf`) kullanılarak düzeltildi:
+
+1. `POST /api/contracts/:id/access` (`view` / `download`): Origin ve CSRF (genel istek koruması), oturum, aktif şirket, şube kapsamı, `contracts.read` ve indirme için `contracts.download` denetlenir. Ancak bunlardan sonra sözleşme geçmişine (`viewed` / `downloaded`) ve işlem geçmişine (`contract.pdf_view` / `contract.download`) **bir kez** yazılır.
+2. Oturuma, kullanıcıya, şirkete, sözleşmeye ve amaca bağlı 2 dakikalık izin oluşturulur; URL'de gizli bilgi yoktur.
+3. `GET /api/contracts/:id/pdf` yalnız eşleşen izinle sunar; oturum, şirket, kapsam ve güncel yetkiler her istekte yeniden denetlenir; başka siteden gelen istek reddedilir; **hiçbir kayıt yazmaz** (yeniden yükleme ve PDF görüntüleyici yeni kayıt üretmez).
+4. Görüntüleme izni indirmeye yetmez (`?indir=1` 403).
+5. Oturum kapanması, yetkinin kaldırılması (her GET'te denetlenir) ve şirket değişimi eski izni geçersiz kılar.
+6. Sözleşme ayrıntısı GET'i artık yalnız okur; kayıt yazmaz.
+7. Ekranda "PDF taslağını aç" (`contracts.read`) ve "PDF indir" (`contracts.download`) ayrı düğmelerdir.
+
+### 3. Eklenen testler
+
+API (+15): GET'in kayıt yazmadığı, izinsiz dosyanın reddi, CSRF'siz POST'un kayıt/izin üretmediği, tek kayıt + tekrar açmada yeni kayıt olmaması, görüntüleme izninin indirmeye yetmemesi, başka siteden isteğin reddi, Operasyon'un açıp indirememesi, başka şirketin 404 alması, oturum kapanınca/yetki kaldırılınca/şirket değişince iznin bitmesi; motor: 6/7 ve 29/30 sınırları (iki yöntem), takvim günü tanımı ve DST geceleri, şube saat dilimi, sezon sınır günleri, tek indirim ve negatif toplam olmaması, 0/2/3 küsuratlı para birimlerinde yuvarlama, eksik vergi; API: gün yöntemi seçilmemesi, indirim dizisinin reddi, eşzamanlı liste düzenleme (biri 200, biri 409 + güncel liste), eşzamanlı teklif kaydı (tek geçerli teklif), teklifin rezervasyona ve ödemeye dokunmaması, eski sözleşme sürümünün PDF dosyasının korunması ve değiştirilememesi, sunucu günlüklerinde kişisel veri olmaması. Tarayıcı: PDF açma (sunulan yanıt satır içi, no-store), görüntüleme izniyle indirmenin reddi, indirme, geçmişte tek kayıt; Operasyon'da yalnız açma düğmesi.
+
+### 4. Fiyatlandırma doğruluğu
+
+Kayan nokta kullanılmıyor (tamsayı küsurat birimi, BigInt); ISO küsurat basamakları (0/2/3/4); yuvarlama her kalemde ve vergide bir kez, yarım değerler sıfırdan uzağa; sıra: taban → sezonlar → ek hizmetler → indirim (yalnız taban + sezona, en fazla bedel kadar) → vergi (yalnız vergiye tabi kalemlere; hariç: net + vergi, dahil: tutarın içinden ayrılır); negatif toplam imkânsız; eksik tarife "sınıfın tarifesi yok" sorunu; eşit öncelikli sezon çakışması hesaplanmaz; aynı girdi aynı sonucu verir; kaydedilmiş teklif ve revizyonlar değişmez (veritabanı); dönem, sınıf veya ek sürücü sayısı değişince teklif "güncel değil" olur (rezervasyon ve kiralama, testli); farklı para birimleri hiçbir yerde birleştirilmez (bir liste tek para birimi; kur dönüşümü yok).
+
+### 5. Sözleşme ve PDF güvenliği
+
+Şablonlar şirkete özel (RLS + bileşik FK; başka şirketin şablonu/kiralaması görünmez ve kullanılamaz); yalnız izinli alanlar; HTML, script, bağlantı ve dış kaynak reddedilir; PDF üretimi düz metinle, yalnız sabit yoldaki yazı tipleriyle (ağ ve kullanıcı kaynaklı dosya erişimi yok); dosyalar özel depoda rastgele adla, SHA-256 bütünlükle; görüntüleme ve indirme yetkileri gerçekten ayrı ve her GET'te yeniden denetleniyor; içerik, dış beyan ve dosyalar değişmez; eski sürümler ve PDF'leri korunur; işlem geçmişi ve günlüklerde kişisel veri yok.
+
+### 6. PostgreSQL ve migration tutarlılığı
+
+- `acarvo_test`: 34 migration; 34 dosyanın SHA-256 özeti veritabanındaki kayıtla aynı (0009 ve 0017 yalnız satır sonu farkı, bilinen ve zararsız). Boş veya yarım migration yok (0031: 72, 0032: 19, 0033: 3 ifade).
+- Ana veritabanı (geçiş öncesi, salt okunur): 31 kayıt; 0000–0030 dosyalarla aynı; yalnız 0031–0033 bekliyor. Uygulanmış eski migration dosyalarında değişiklik yok (`git diff f894b22` yalnız ekleme).
+- Yeni SQL yalnız yeni tablolara dokunuyor; mevcut tablolarda tek değişiklik `company_sequences_kind_check` kısıtının genişletilmesi (mevcut değerler geçerli kalır). Satır güncelleyen/silen ifade yok.
+- 12 yeni tablonun hepsinde zorunlu RLS + 4 politika; 43 yabancı anahtarın tamamı şirket bileşenli (kullanıcı ve şirket tabloları hariç); uygulama rolünde DELETE yok, ekleme-yalnız tablolarda UPDATE yok.
+- Rol izinleri migration ile değil, başlangıçtaki preset yükseltmesiyle (v9) yalnız değiştirilmemiş hazır rollere eklenir; özel rollere dokunulmaz.
+
+### 7. Main entegrasyonu
+
+Bekliyor (bu bölüm entegrasyondan sonra main üzerinde güncellenir).
