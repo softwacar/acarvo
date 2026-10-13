@@ -45,6 +45,7 @@ describe('runtime database role', () => {
       'audit_log',
       'branches',
       'company_document_type_settings',
+      'company_rental_settings',
       'company_sequences',
       'corporate_account_people',
       'corporate_accounts',

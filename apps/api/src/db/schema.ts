@@ -1154,9 +1154,13 @@ export const rentals = pgTable(
     returnTimezone: text('return_timezone').notNull(),
     deliveredAt: timestamp('delivered_at', { withTimezone: true }),
     deliveredBy: uuid('delivered_by').references(() => users.id),
-    /** K1: staff stated that contract and price are handled outside ACARVO for this handover. */
+    /** K1: staff stated that the contract was made and completed outside ACARVO for this handover. */
     externalTermsAckAt: timestamp('external_terms_ack_at', { withTimezone: true }),
     externalTermsAckBy: uuid('external_terms_ack_by').references(() => users.id),
+    /** K1 (0029): separate statement that pricing was set and settled outside ACARVO, and the external reference. */
+    externalPricingAckAt: timestamp('external_pricing_ack_at', { withTimezone: true }),
+    externalPricingAckBy: uuid('external_pricing_ack_by').references(() => users.id),
+    externalReference: text('external_reference'),
     returnedAt: timestamp('returned_at', { withTimezone: true }),
     returnedBy: uuid('returned_by').references(() => users.id),
     actualReturnBranchId: uuid('actual_return_branch_id'),
@@ -1206,8 +1210,21 @@ export const rentals = pgTable(
     check('rentals_cancel_check', sql`(${t.status} = 'cancelled') = (${t.cancelledAt} is not null and ${t.cancelReason} is not null)`),
     check('rentals_cancel_reason_check', sql`${t.cancelReason} is null or ${t.cancelReason} in ('customer_request', 'vehicle_problem', 'documents_missing', 'entry_error', 'other')`),
     check('rentals_version_check', sql`${t.version} >= 1`),
+    check('rentals_external_reference_check', sql`${t.externalReference} is null or (char_length(${t.externalReference}) between 3 and 40 and ${t.externalReference} ~ '^[A-Za-z0-9][A-Za-z0-9 ./_-]*$')`),
   ],
 )
+
+/**
+ * K1: the company's rental operating mode. External contract/pricing mode lets handovers proceed on staff statements
+ * while ACARVO has no contract or pricing module. Off unless the company owner turns it on; no row = off.
+ */
+export const companyRentalSettings = pgTable('company_rental_settings', {
+  companyId: uuid('company_id').primaryKey().references(() => companies.id),
+  externalTermsMode: boolean('external_terms_mode').notNull().default(false),
+  version: integer('version').notNull().default(1),
+  updatedBy: uuid('updated_by').references(() => users.id),
+  updatedAt: updatedAt(),
+})
 
 export const rentalDrivers = pgTable(
   'rental_drivers',

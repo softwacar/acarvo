@@ -68,6 +68,7 @@ export const WARNING_LABELS: Record<ReservationWarningCode, string> = {
   pickup_passed: 'Alış zamanı geçti.',
   vehicle_at_other_branch: 'Aracın ana şubesi alış şubesinden farklı.',
   customer_archived: 'Kişi arşivde.',
+  vehicle_held_by_overdue_rental: 'Araç, iadesi gecikmiş bir kiralamada; fiilen iade edilene kadar bu araçla onay verilemez. Bekleyen rezervasyonda aracın uygunluğu kesin değildir.',
 }
 
 export const NOT_CHECKED_LABELS: Record<string, string> = {

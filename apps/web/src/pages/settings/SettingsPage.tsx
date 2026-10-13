@@ -8,7 +8,7 @@ import { Input, Select } from '@/components/fields'
 import { ErrorState, PageHeader, StatePanel } from '@/components/states'
 import { toast } from '@/components/Toaster'
 import { useReturnFocus } from '@/components/useReturnFocus'
-import { ApiRequestError, type DocumentSettingsOverview, settingsApi } from '@/lib/api'
+import { ApiRequestError, type DocumentSettingsOverview, rentalsApi, settingsApi } from '@/lib/api'
 import { DOCUMENT_TYPE_LABELS } from '@/lib/customer-document-labels'
 import { countryName, countryOptions, RESIDENCY_LABELS } from '@/lib/customer-labels'
 import { cn } from '@/lib/utils'
@@ -357,16 +357,118 @@ function CustomerDocumentSettings() {
   )
 }
 
-/** Yönetim → Ayarlar. The first section (M2): customer document requirements. Other settings come with their modules. */
+/**
+ * K1: the company's rental operating mode. Off by default; only settings.rentals.manage (the owner) changes it. Turning
+ * it on does not create a contract, a price or a payment: it lets handovers proceed on recorded staff statements.
+ */
+function RentalModeSettings() {
+  const session = useSession()
+  const qc = useQueryClient()
+  const q = useQuery({ queryKey: ['settings-rentals', session.company?.id], queryFn: () => rentalsApi.settings() })
+  const [confirming, setConfirming] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const save = useMutation({
+    mutationFn: (on: boolean) => rentalsApi.saveSettings({ version: q.data!.version, externalTermsMode: on }),
+    onSuccess: (s) => {
+      qc.setQueryData(['settings-rentals', session.company?.id], s)
+      void qc.invalidateQueries({ queryKey: ['rental'] })
+      setConfirming(false)
+      setError(null)
+      toast(s.externalTermsMode ? 'Dış sözleşme ve fiyat modu açıldı.' : 'Dış sözleşme ve fiyat modu kapatıldı.')
+    },
+    onError: (e) => {
+      setError(e instanceof ApiRequestError ? e.message : 'Kaydedilemedi.')
+      void q.refetch()
+    },
+  })
+  return (
+    <section aria-labelledby="rental-mode-title" className="rounded-xl border border-line bg-surface p-5 sm:p-6">
+      <h2 id="rental-mode-title" className="text-[16px] font-semibold tracking-[-0.01em]">
+        Kiralama çalışma modu
+      </h2>
+      <p className="mt-1 max-w-[760px] text-[13px] text-ink-2">
+        ACARVO’da henüz sözleşme ve fiyatlandırma modülü yok. Bu mod kapalıyken hiçbir kiralama teslim edilemez. Açıldığında teslim personeli her teslimde sözleşmenin ve fiyatın ACARVO dışında yönetildiğini ayrı ayrı beyan eder ve dış sözleşme/işlem referansını girer.
+      </p>
+      {q.isError ? (
+        <div className="mt-3">
+          <ErrorState message={q.error.message} onRetry={() => q.refetch()} />
+        </div>
+      ) : !q.data ? (
+        <div className="mt-3 h-16 animate-pulse rounded-lg bg-line-soft/60" aria-busy="true" />
+      ) : (
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-line px-4 py-3">
+          <div>
+            <p className="font-medium text-ink">Dış sözleşme ve fiyat modu</p>
+            <p className={cn('text-[13px] font-medium', q.data.externalTermsMode ? 'text-hold' : 'text-ink-2')}>
+              {q.data.externalTermsMode ? 'Açık: teslim, personel beyanı ve dış referansla yapılır' : 'Kapalı (varsayılan): teslim yapılamaz'}
+            </p>
+            {q.data.updatedAt && (
+              <p className="text-[12px] text-ink-3">
+                Son değişiklik: {formatDate(q.data.updatedAt.slice(0, 10))} · {q.data.updatedByName ?? 'kullanıcı bilgisi yok'}
+              </p>
+            )}
+          </div>
+          {can(session, 'settings.rentals.manage') ? (
+            q.data.externalTermsMode ? (
+              <button type="button" disabled={save.isPending} onClick={() => save.mutate(false)} className={btnSecondary}>
+                {save.isPending && <SpinnerGap size={14} className="animate-spin" />}
+                Modu kapat
+              </button>
+            ) : (
+              <button type="button" onClick={() => setConfirming(true)} className={btnPrimary}>
+                Modu aç…
+              </button>
+            )
+          ) : (
+            <span className="text-[12.5px] text-ink-3">Yalnız şirket sahibi değiştirebilir</span>
+          )}
+        </div>
+      )}
+      {error && (
+        <p role="alert" className="mt-2 text-[13px] text-alert">
+          {error}
+        </p>
+      )}
+      <p className="mt-3 flex items-start gap-1.5 text-[12.5px] text-ink-2">
+        <Info size={14} className="mt-[3px] shrink-0 text-ink-3" />
+        Beyanlar imzalı sözleşmenin, ödemenin, kesin fiyatın veya hukuki uygunluğun kanıtı değildir; ACARVO bu sonuçları üretmez. Değişiklik işlem geçmişine yazılır.
+      </p>
+      {confirming && (
+        <Dialog.Root open onOpenChange={(o) => !o && setConfirming(false)}>
+          <Dialog.Portal>
+            <Dialog.Overlay className="fixed inset-0 z-50 bg-ink/30" />
+            <Dialog.Content className="fixed top-1/2 left-1/2 z-50 w-[480px] max-w-[calc(100vw-32px)] -translate-x-1/2 -translate-y-1/2 animate-fade rounded-xl border border-line bg-surface p-5 shadow-xl outline-none">
+              <Dialog.Title className="text-[17px] font-semibold">Dış sözleşme ve fiyat modunu aç</Dialog.Title>
+              <Dialog.Description className="mt-1 text-[13.5px] text-ink-2">
+                Bu şirketin tüm şubelerinde teslim, ACARVO dışında hazırlanan sözleşme ve belirlenen fiyatla yapılabilecek. Her teslimde personel iki beyan verir ve dış referansı girer; beyanlar kullanıcı ve zamanla kaydedilir. ACARVO sözleşmenin imzalandığını, ödemenin alındığını veya fiyatın kesinleştiğini göstermez.
+              </Dialog.Description>
+              <div className="mt-4 flex flex-wrap justify-end gap-2">
+                <Dialog.Close className={btnGhost}>Vazgeç</Dialog.Close>
+                <button type="button" disabled={save.isPending} onClick={() => save.mutate(true)} className={btnPrimary}>
+                  {save.isPending && <SpinnerGap size={14} className="animate-spin" />}
+                  Modu aç
+                </button>
+              </div>
+            </Dialog.Content>
+          </Dialog.Portal>
+        </Dialog.Root>
+      )}
+    </section>
+  )
+}
+
+/** Yönetim → Ayarlar: customer document requirements (M2) and the rental operating mode (K1). */
 export function SettingsPage() {
   const session = useSession()
   const canDocs = can(session, 'settings.documents.manage')
+  const canRentalMode = can(session, 'settings.rentals.manage') || can(session, 'rentals.read')
   return (
     <div className="space-y-6">
       <PageHeader title="Ayarlar" description={session.company ? `${session.company.name} şirket ayarları` : undefined} />
+      {canRentalMode && <RentalModeSettings />}
       {canDocs ? (
         <CustomerDocumentSettings />
-      ) : (
+      ) : canRentalMode ? null : (
         <StatePanel icon={GearSix} title="Görebileceğiniz ayar yok">
           <p>Müşteri belge gereksinimlerini yalnız yetkili kullanıcılar (varsayılan olarak şirket sahibi) yönetebilir.</p>
         </StatePanel>

@@ -1,4 +1,4 @@
-import type { ApiError, AvailabilityResponse, RentalActivityItem, RentalDetail, RentalListItem, RentalListResponse, ReservationActivityItem, ReservationBranch, ReservationDetail, ReservationListItem, ReservationListResponse, TimelineResponse, CorporateActivityItem, CorporateDetail, CorporateDuplicateMatch, CorporateListResponse, CorporatePeopleResponse, CustomerCorporateLink, CustomerActivityItem, CustomerDocument, CustomerDocumentsResponse, CustomerDocumentStatus, RequirementItem, RequirementPolicy, CustomerDetail, CustomerDuplicateResponse, CustomerListResponse, HistoryWriteResult, SessionInfo, VehicleActivityItem, VehicleDocumentDetail, VehicleDocumentsResponse, VehiclePhoto, VehiclePhotoList, VehicleClassSummary, VehicleDetail, VehicleHistory, VehicleListResponse } from '@acarvo/shared'
+import type { ApiError, AvailabilityResponse, RentalActivityItem, RentalSettings, RentalDetail, RentalListItem, RentalListResponse, ReservationActivityItem, ReservationBranch, ReservationDetail, ReservationListItem, ReservationListResponse, TimelineResponse, CorporateActivityItem, CorporateDetail, CorporateDuplicateMatch, CorporateListResponse, CorporatePeopleResponse, CustomerCorporateLink, CustomerActivityItem, CustomerDocument, CustomerDocumentsResponse, CustomerDocumentStatus, RequirementItem, RequirementPolicy, CustomerDetail, CustomerDuplicateResponse, CustomerListResponse, HistoryWriteResult, SessionInfo, VehicleActivityItem, VehicleDocumentDetail, VehicleDocumentsResponse, VehiclePhoto, VehiclePhotoList, VehicleClassSummary, VehicleDetail, VehicleHistory, VehicleListResponse } from '@acarvo/shared'
 
 export class ApiRequestError extends Error {
   constructor(
@@ -264,6 +264,8 @@ export const rentalsApi = {
   forCustomer: (id: string) => api<{ items: RentalListItem[] }>(`/customers/${id}/rentals`),
   forAccount: (id: string) => api<{ items: RentalListItem[] }>(`/corporate-accounts/${id}/rentals`),
   forVehicle: (id: string) => api<{ items: RentalListItem[] }>(`/vehicles/${id}/rentals`),
+  settings: () => api<RentalSettings>('/settings/rentals'),
+  saveSettings: (body: { version: number; externalTermsMode: boolean }) => api<RentalSettings>('/settings/rentals', { method: 'PUT', body }),
 }
 
 /** Customer documents (M2). Numbers are sent in bodies only and come back masked; the full number only from reveal. */

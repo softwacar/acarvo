@@ -32,6 +32,7 @@ export const PERMISSIONS = [
   'branches.read',
   'branches.manage',
   'settings.documents.manage',
+  'settings.rentals.manage',
   'users.read',
   'roles.read',
   'audit.read',

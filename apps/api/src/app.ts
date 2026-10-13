@@ -12,6 +12,7 @@ import { customerRoutes } from './modules/customers/routes'
 import { customerDocumentRoutes } from './modules/customers/documents'
 import { customerDocumentFileRoutes, customerFileRoutes } from './modules/customers/document-files'
 import { documentRequirementRoutes } from './modules/settings/document-requirements'
+import { rentalSettingsRoutes } from './modules/settings/rentals'
 import { documentFileRoutes, vehicleDocumentRoutes } from './modules/vehicles/documents'
 import { vehicleHistoryRoutes } from './modules/vehicles/history'
 import { fileRoutes, vehiclePhotoRoutes } from './modules/vehicles/photos'
@@ -89,6 +90,7 @@ export async function buildApp({
   await app.register(customerDocumentFileRoutes, { prefix: '/api/customers' })
   await app.register(customerFileRoutes, { prefix: '/api/customer-files' })
   await app.register(documentRequirementRoutes, { prefix: '/api/settings' })
+  await app.register(rentalSettingsRoutes, { prefix: '/api/settings' })
   await app.register(corporateRoutes, { prefix: '/api/corporate-accounts' })
   await app.register(customerCorporateLinkRoutes, { prefix: '/api/customers' })
   await app.register(reservationRoutes, { prefix: '/api/reservations' })

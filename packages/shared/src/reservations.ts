@@ -187,6 +187,7 @@ export type ReservationWarningCode =
   | 'pickup_passed'
   | 'vehicle_at_other_branch'
   | 'customer_archived'
+  | 'vehicle_held_by_overdue_rental'
 
 export interface ReservationWarning {
   code: ReservationWarningCode

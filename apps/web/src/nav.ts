@@ -162,6 +162,7 @@ export const PERMISSION_LABELS: Record<Permission, string> = {
   'branches.read': 'Şubeleri görüntüleme',
   'branches.manage': 'Şube ülkesini yönetme',
   'settings.documents.manage': 'Müşteri belge gereksinimlerini yönetme',
+  'settings.rentals.manage': 'Kiralama çalışma modunu (dış sözleşme ve fiyat) yönetme',
   'users.read': 'Kullanıcıları görüntüleme',
   'roles.read': 'Rolleri görüntüleme',
   'audit.read': 'İşlem geçmişini görüntüleme',

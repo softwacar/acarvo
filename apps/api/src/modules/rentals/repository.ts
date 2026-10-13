@@ -3,7 +3,6 @@ import {
   INSPECTION_MAX_PHOTOS,
   INSPECTION_MIN_PHOTOS,
   normalizeName,
-  RENTAL_EXTERNAL_TERMS_ALLOWED,
   type RentalActivityItem,
   type RentalDamageMark,
   type RentalDetail,
@@ -332,6 +331,12 @@ async function latestChecks(tx: Tx, rentalId: string, since: string | null) {
   )
 }
 
+/** K1: the company rental operating mode; off when no row exists (RLS: only the active company). */
+export async function externalTermsMode(tx: Tx): Promise<boolean> {
+  const r = (await tx.execute(sql`select external_terms_mode from company_rental_settings`)).rows[0] as Row | undefined
+  return r?.external_terms_mode === true
+}
+
 // ---------------------------------------------------------------------------
 // Gates (spec §85.4 Teslim Masası, §10.3 closing). Re-evaluated by the server right before the action.
 
@@ -378,7 +383,8 @@ export async function deliveryGates(
   gates.push({ code: 'handover_record', state: missingFields.length ? 'blocked' : 'ok', detail: missingFields.length ? { missing: missingFields.length } : undefined })
   const photos = handover?.photos.length ?? 0
   gates.push({ code: 'photos', state: photos >= INSPECTION_MIN_PHOTOS && photos <= INSPECTION_MAX_PHOTOS ? 'ok' : 'blocked', detail: { count: photos } })
-  gates.push({ code: 'external_terms', state: RENTAL_EXTERNAL_TERMS_ALLOWED ? 'attention' : 'blocked' })
+  // K1: without a contract or pricing module, only the company's external mode (owner's choice) allows a handover.
+  gates.push({ code: 'external_terms', state: (await externalTermsMode(tx)) ? 'attention' : 'blocked' })
   gates.push({ code: 'pricing', state: 'attention' })
   gates.push({ code: 'contract', state: 'attention' })
   return gates
@@ -462,7 +468,7 @@ export async function documentContext(tx: Tx, k: RentalCore, driverIds: string[]
 export async function getRental(tx: Tx, access: CompanyAccess, id: string, opts: { uploadPolicy: { enabled: boolean; reason: string | null } }): Promise<RentalDetail | null> {
   const r = (
     await tx.execute(sql`
-      select ${LIST_SELECT}, k.note, k.version, k.updated_at, k.external_terms_ack_at, k.closed_at, k.cancel_reason, k.cancel_note, k.cancelled_at,
+      select ${LIST_SELECT}, k.note, k.version, k.updated_at, k.external_terms_ack_at, k.external_pricing_ack_at, k.external_reference, k.closed_at, k.cancel_reason, k.cancel_note, k.cancelled_at,
              v.status as vehicle_status, hb.id as hb_id, hb.name as hb_name, hb.code as hb_code,
              cu.name as created_by_name, uu.name as updated_by_name, db.name as delivered_by_name, rt.name as returned_by_name, cl.name as closed_by_name, ca.name as cancelled_by_name,
              (select r2.km from odometer_readings r2 where r2.company_id = v.company_id and r2.vehicle_id = v.id
@@ -520,7 +526,11 @@ export async function getRental(tx: Tx, access: CompanyAccess, id: string, opts:
     },
     note: str(r.note),
     deliveredByName: str(r.delivered_by_name),
-    externalTermsAckAt: r.external_terms_ack_at ? toIso(r.external_terms_ack_at) : null,
+    externalTerms:
+      r.external_terms_ack_at && r.external_pricing_ack_at && r.external_reference
+        ? { contractAckAt: toIso(r.external_terms_ack_at), pricingAckAt: toIso(r.external_pricing_ack_at), reference: r.external_reference as string, byName: str(r.delivered_by_name) }
+        : null,
+    externalTermsMode: await externalTermsMode(tx),
     returnedByName: str(r.returned_by_name),
     closedAt: r.closed_at ? toIso(r.closed_at) : null,
     closedByName: str(r.closed_by_name),

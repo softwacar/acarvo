@@ -276,7 +276,7 @@ function ActivityEntry({ e }: { e: RentalActivityItem }) {
   if (typeof s.angle === 'string') details.push(`${s.inspection === 'return' ? 'iade' : 'teslim'} · ${PHOTO_ANGLE_LABELS[s.angle as 'front'] ?? s.angle}`)
   if (typeof s.toReturnAt === 'string') details.push(`yeni iade ${formatDateTime(s.toReturnAt)} · ${EXTENSION_CHANNEL_LABELS[s.channel as 'phone'] ?? ''} · fiyat hesaplanmadı`)
   if (typeof s.reason === 'string') details.push(`neden: ${RENTAL_CANCEL_REASON_LABELS[s.reason as 'other'] ?? s.reason}`)
-  if (s.externalTermsAck === true) details.push('sözleşme ve fiyatın ACARVO dışında olduğu beyan edildi')
+  if (s.externalContractAck === true) details.push('sözleşme ve fiyatın ACARVO dışında yönetildiği beyan edildi (iki beyan, dış referans kayıtlı)')
   if (typeof s.newFindings === 'number' && s.newFindings > 0) details.push(`${s.newFindings} yeni bulgu onaylandı`)
   if (Array.isArray(s.drivers)) details.push((s.drivers as { customerNo: string; decision: string; ruleStatus: string }[]).map((d) => `${d.customerNo}: ${d.decision === 'eligible' ? 'uygun' : 'uygun değil'}${d.ruleStatus === 'no_policy' ? ' (kural tanımsız)' : ''}`).join(', '))
   const changes = (s.changes as Record<string, [unknown, unknown]> | undefined) ?? {}
@@ -620,7 +620,7 @@ export function Rental360Page() {
           </div>
           <div className="py-1.5">
             <span className="block text-[12px] text-ink-2">Sözleşme</span>
-            <span className="text-ink-2">ACARVO’da yok{r.externalTermsAckAt ? ' · dışarıda yönetildiği beyan edildi' : ''}</span>
+            <span className="text-ink-2">ACARVO’da yok{r.externalTerms ? ` · dış referans ${r.externalTerms.reference} (beyan)` : r.status === 'prepared' && !r.externalTermsMode ? ' · dış mod kapalı' : ''}</span>
           </div>
         </div>
         {r.status === 'cancelled' && (
@@ -675,8 +675,10 @@ export function Rental360Page() {
           >
             {vehicleGates.filter((g) => g.state === 'blocked').length} engel, {vehicleGates.filter((g) => g.state === 'attention').length} uyarı. Km, yakıt, kontrol listesi ve 4–5 fotoğraf teslim masasında.
           </DecisionCard>
-          <DecisionCard title="Fiyat, sözleşme ve depozito" state="na">
-            Fiyat hesaplanmadı; ödeme, depozito ve sözleşme kaydı yok. Teslimde bunların ACARVO dışında yönetildiği açıkça beyan edilir.
+          <DecisionCard title="Fiyat, sözleşme ve depozito" state={r.externalTermsMode ? 'attention' : 'blocked'}>
+            {r.externalTermsMode
+              ? 'Fiyat hesaplanmadı; ödeme, depozito ve sözleşme kaydı yok. Şirket dış süreç modunda: teslimde iki beyan ve dış referans istenir.'
+              : 'ACARVO’da sözleşme ve fiyat modülü yok ve şirketin dış sözleşme/fiyat modu kapalı; teslim yapılamaz. Modu yalnız şirket sahibi Ayarlar’dan açabilir.'}
           </DecisionCard>
         </div>
       )}
@@ -820,7 +822,22 @@ export function Rental360Page() {
           )}
           {tab === 'teslim' &&
             (r.handover ? (
-              <InspectionView i={r.handover} reference={r.previousReturnMarks} referenceLabel="Önceki iadedeki işaret" title="Teslim kaydı" zone={zone} />
+              <div className="space-y-5">
+                {r.externalTerms && (
+                  <Panel title="Dış sözleşme ve fiyat beyanları">
+                    <Facts
+                      rows={[
+                        ['Sözleşme beyanı', formatDateTime(r.externalTerms.contractAckAt)],
+                        ['Fiyat beyanı', formatDateTime(r.externalTerms.pricingAckAt)],
+                        ['Dış referans', <span className="tnum">{r.externalTerms.reference}</span>],
+                        ['Beyan eden', r.externalTerms.byName],
+                      ]}
+                    />
+                    <Note>Bunlar personel beyanıdır; imzalı sözleşmenin, ödemenin, kesin fiyatın veya hukuki uygunluğun kanıtı değildir.</Note>
+                  </Panel>
+                )}
+                <InspectionView i={r.handover} reference={r.previousReturnMarks} referenceLabel="Önceki iadedeki işaret" title="Teslim kaydı" zone={zone} />
+              </div>
             ) : (
               <StatePanel icon={Key} title="Teslim kaydı yok">
                 <p>{r.status === 'prepared' ? 'Teslim masasında km, yakıt, kontrol listesi ve fotoğraflar girildiğinde burada görünür.' : 'Bu kiralama teslim edilmedi.'}</p>

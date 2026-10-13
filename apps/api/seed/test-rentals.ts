@@ -130,6 +130,8 @@ export async function ensureTestRentals(db: OwnerDb, storageDir?: string) {
       const day = (n: number) => new Date(Date.parse(`${today}T12:00:00Z`) + n * 86_400_000).toISOString().slice(0, 10)
       const at = (v: Plan['start'], tz: string) => (Array.isArray(v) ? wallTimeInstant(`${day(v[0])}T${v[1]}`, tz, 'earlier')! : new Date(Date.now() + v.hours * H).toISOString())
       const ago = (hours: number) => new Date(Date.now() + hours * H).toISOString()
+      // K1: the test company Drina works in external contract/pricing mode; Neretva keeps the default (off).
+      if (company.name.startsWith('Drina')) await tx.execute(sql`insert into company_rental_settings (company_id, external_terms_mode, updated_by) values (${company.id}, true, ${staff})`)
       let n = 0
       for (const p of plans) {
         n++
@@ -195,7 +197,8 @@ export async function ensureTestRentals(db: OwnerDb, storageDir?: string) {
               values (${company.id}, ${v.id}, 'with_customer', ${rentalNo}, 'rental_handover', 'rental_handover', ${insp.id}, ${when}, ${staff}) returning id`))!
           await tx.execute(sql`update rental_inspections set state = 'final', occurred_at = ${when}, branch_id = ${pb.id}, performed_by = ${staff}, odometer_reading_id = ${reading.id},
               location_event_id = ${loc.id}, finalized_at = ${when}, finalized_by = ${staff}, version = 2 where id = ${insp.id}`)
-          await tx.execute(sql`update rentals set status = 'delivered', delivered_at = ${when}, delivered_by = ${staff}, external_terms_ack_at = ${when}, external_terms_ack_by = ${staff}, version = 2 where id = ${k.id}`)
+          await tx.execute(sql`update rentals set status = 'delivered', delivered_at = ${when}, delivered_by = ${staff}, external_terms_ack_at = ${when}, external_terms_ack_by = ${staff},
+            external_pricing_ack_at = ${when}, external_pricing_ack_by = ${staff}, external_reference = ${'DIS-' + rentalNo}, version = 2 where id = ${k.id}`)
           await tx.execute(sql`insert into rental_events (company_id, rental_id, kind, from_status, to_status, data, actor_user_id, at)
             values (${company.id}, ${k.id}, 'delivered', 'prepared', 'delivered', ${JSON.stringify({ km: d.km, fuel: d.fuel, deliveredAt: when, photos: d.photos ? 4 : 0 })}::jsonb, ${staff}, ${when})`)
         }

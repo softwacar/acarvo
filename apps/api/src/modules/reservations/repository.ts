@@ -262,6 +262,11 @@ async function warningsFor(tx: Tx, d: ReservationDetail, accountId: string | nul
   if (!d.vehicle && d.status === 'pending') out.push({ code: 'class_only_cannot_confirm' })
   if (d.vehicle && d.vehicle.status !== 'active') out.push({ code: 'vehicle_not_active', subject: d.vehicle.plate })
   if (d.vehicle && d.vehicle.homeBranch.id !== d.pickupBranch.id) out.push({ code: 'vehicle_at_other_branch', subject: d.vehicle.plate })
+  // K2: a vehicle not back from an overdue rental is held until it is returned (same company only, RLS).
+  if (d.vehicle) {
+    const held = (await tx.execute(sql`select rental_no from rentals where vehicle_id = ${d.vehicle.id} and status = 'delivered' and planned_return_at < now() limit 1`)).rows[0] as Row | undefined
+    if (held) out.push({ code: 'vehicle_held_by_overdue_rental', subject: held.rental_no as string })
+  }
   if (!d.drivers.length) out.push({ code: 'no_driver' })
   if (Date.parse(d.pickup.at) < Date.now()) out.push({ code: 'pickup_passed' })
   for (const p of [d.customer, d.booker, ...d.drivers]) if (p && p.status !== 'active') out.push({ code: 'customer_archived', subject: p.customerNo })

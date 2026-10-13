@@ -68,7 +68,7 @@ export const GATE_LABELS: Record<RentalGateCode, string> = {
   vehicle_location: 'Aracın kayıtlı konumu',
   handover_record: 'Teslim kaydı (km, yakıt, kontrol listesi, teslim alan)',
   photos: 'Teslim fotoğrafları (4–5)',
-  external_terms: 'Sözleşme ve fiyat',
+  external_terms: 'Dış sözleşme ve fiyat modu',
   return_record: 'İade kontrolü (temizlik, durum, kontrol listesi)',
   findings: 'Yeni hasar bulguları',
   pricing: 'Fiyat',
@@ -104,7 +104,9 @@ export function gateText(code: RentalGateCode, state: string, d: Record<string, 
     case 'photos':
       return state === 'ok' ? `${d.count} fotoğraf yüklendi.` : `${d.count ?? 0} fotoğraf var; ${kind === 'handover' ? 'teslim' : 'iade'} için en az 4, en fazla 5 gerçek fotoğraf gerekli.`
     case 'external_terms':
-      return state === 'blocked' ? 'Sözleşme ve fiyat modülleri hazır olana kadar teslim kapalı.' : 'ACARVO’da sözleşme ve fiyat yok. Teslimde, bunların ACARVO dışında yönetildiğini açıkça onaylamanız istenir.'
+      return state === 'blocked'
+        ? 'ACARVO’da sözleşme ve fiyat modülü yok ve şirketin dış sözleşme/fiyat modu kapalı; teslim yapılamaz. Modu yalnız şirket sahibi Ayarlar’dan açabilir.'
+        : 'Dış sözleşme/fiyat modu açık. Teslimde sözleşme ve fiyat için iki ayrı beyan ve dış referans istenir.'
     case 'return_record':
       return state === 'ok' ? 'Temizlik, genel durum ve kontrol listesi girildi.' : `${plural(d.missing, 'alan')} eksik.`
     case 'findings':

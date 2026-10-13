@@ -93,7 +93,7 @@ async function readyForHandover(c: Client, r: RentalDetail, km: number, residenc
   return d
 }
 const deliver = (c: Client, d: RentalDetail, extra: Record<string, unknown> = {}) =>
-  c.post(`/api/rentals/${d.id}/deliver`, { version: d.version, inspectionVersion: d.handover!.version, requestId: uuid(), externalTermsAck: true, ...extra })
+  c.post(`/api/rentals/${d.id}/deliver`, { version: d.version, inspectionVersion: d.handover!.version, requestId: uuid(), externalContractAck: true, externalPricingAck: true, externalReference: 'DIS-2026/0042', ...extra })
 async function delivered(c: Client, over: Record<string, unknown>, km: number) {
   const d = await readyForHandover(c, await create(c, { pickupLocal: hoursFromNow(1), returnLocal: local(2, '10:00'), ...over }), km)
   const res = await deliver(c, d)
@@ -412,14 +412,15 @@ describe('handover', () => {
     const r = await create(adnan, { vehicleId: ids.passat })
     const before = (await one(`select count(*)::int n from odometer_readings where vehicle_id = $1`, [ids.passat])).n
     const d = await readyForHandover(adnan, r, 55_800)
-    const noAck = await deliver(adnan, d, { externalTermsAck: false })
+    const noAck = await deliver(adnan, d, { externalPricingAck: false, externalReference: '' })
     expect(noAck.statusCode).toBe(400)
-    expect(noAck.json().error.fields).toHaveProperty('externalTermsAck')
+    expect(Object.keys(noAck.json().error.fields).sort()).toEqual(['externalPricingAck', 'externalReference'])
+    expect((await deliver(adnan, d, { externalReference: 'Ajla <script>' })).statusCode).toBe(400)
     const requestId = uuid()
     const [a, b] = await Promise.all([deliver(adnan, d, { requestId }), deliver(adnan, d, { requestId })])
     expect([a.statusCode, b.statusCode]).toEqual([200, 200])
     const done = a.json() as RentalDetail
-    expect(done).toMatchObject({ status: 'delivered', handover: { state: 'final', km: 55_800, fuel: 'full' }, externalTermsAckAt: expect.any(String), deliveryGates: [] })
+    expect(done).toMatchObject({ status: 'delivered', handover: { state: 'final', km: 55_800, fuel: 'full' }, externalTerms: { reference: 'DIS-2026/0042', contractAckAt: expect.any(String), pricingAckAt: expect.any(String) }, deliveryGates: [] })
     expect(done.delivered).not.toBeNull()
     expect((await one(`select count(*)::int n from odometer_readings where vehicle_id = $1`, [ids.passat])).n).toBe(before + 1)
     const reading = await one(`select r.km, r.event_type, r.source_id from odometer_readings r where r.vehicle_id = $1 and r.event_type = 'rental_handover'`, [ids.passat])

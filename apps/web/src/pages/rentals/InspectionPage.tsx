@@ -753,7 +753,9 @@ type Nav = ReturnType<typeof useNavigate>
 
 /** Teslim Masası (spec §85.4): the gates, the staff statement about contract and price, and one final action. */
 function HandoverDesk({ r, dirty, saveDraft, onDone, pickupBranch, navigate, onUpdated }: { r: RentalDetail; dirty: boolean; saveDraft: () => Promise<RentalDetail>; onDone: () => void; pickupBranch?: { id: string; name: string; code: string; timeZone: string; inScope: boolean }; navigate: Nav; onUpdated: (d: RentalDetail) => void }) {
-  const [ack, setAck] = useState(false)
+  const [contractAck, setContractAck] = useState(false)
+  const [pricingAck, setPricingAck] = useState(false)
+  const [reference, setReference] = useState('')
   const [when, setWhen] = useState<'now' | 'late'>('now')
   const [local, setLocal] = useState('')
   const [choice, setChoice] = useState<'earlier' | 'later' | undefined>()
@@ -762,7 +764,8 @@ function HandoverDesk({ r, dirty, saveDraft, onDone, pickupBranch, navigate, onU
   const [requestId, setRequestId] = useState(() => crypto.randomUUID())
   const [error, setError] = useState<string | null>(null)
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
-  const blocking = r.deliveryGates.filter((g) => g.state === 'blocked' && g.code !== 'external_terms')
+  const blocking = r.deliveryGates.filter((g) => g.state === 'blocked')
+  const statementsReady = r.externalTermsMode && contractAck && pricingAck && reference.trim().length >= 3
   const go = useMutation({
     mutationFn: async () => {
       const current = dirty ? await saveDraft() : r
@@ -772,7 +775,9 @@ function HandoverDesk({ r, dirty, saveDraft, onDone, pickupBranch, navigate, onU
         requestId,
         deliveredLocal: when === 'late' ? local : undefined,
         deliveredChoice: when === 'late' ? choice : undefined,
-        externalTermsAck: ack,
+        externalContractAck: contractAck,
+        externalPricingAck: pricingAck,
+        externalReference: reference.trim() || undefined,
         largeJumpReason: needJump ? jumpReason : undefined,
       })
     },
@@ -815,14 +820,30 @@ function HandoverDesk({ r, dirty, saveDraft, onDone, pickupBranch, navigate, onU
             <Input id="del-jump" value={jumpReason} maxLength={300} onChange={(e) => setJumpReason(e.target.value)} />
           </Field>
         )}
-        <label className="flex cursor-pointer items-start gap-2 rounded-lg border border-hold/35 bg-hold-soft/50 px-3 py-2.5 text-[13px]">
-          <input type="checkbox" checked={ack} onChange={(e) => setAck(e.target.checked)} className="mt-0.5 size-4 accent-[var(--ac-blue)]" />
-          <span>
-            <span className="font-medium text-ink">Sözleşme ve fiyat ACARVO dışında yönetiliyor</span>
-            <span className="block text-[12.5px] text-ink-2">ACARVO’da bu kiralama için sözleşme, imza, fiyat, ödeme veya depozito kaydı yok. Bu beyan adınız ve zamanla kaydedilir.</span>
-          </span>
-        </label>
-        {fieldErrors.externalTermsAck && <p className="text-[12.5px] text-alert">{fieldErrors.externalTermsAck}</p>}
+        {r.externalTermsMode ? (
+          <fieldset className="space-y-2 rounded-lg border border-hold/35 bg-hold-soft/40 px-3 py-3 text-[13px]">
+            <legend className="px-1 text-[13px] font-semibold text-ink">Dış sözleşme ve fiyat beyanları</legend>
+            <label className="flex cursor-pointer items-start gap-2">
+              <input type="checkbox" checked={contractAck} onChange={(e) => setContractAck(e.target.checked)} className="mt-0.5 size-4 accent-[var(--ac-blue)]" />
+              <span className="text-ink">Sözleşmenin ACARVO dışında düzenlendiğini ve işlemin dış süreçte tamamlandığını kontrol ettim.</span>
+            </label>
+            {fieldErrors.externalContractAck && <p className="text-[12.5px] text-alert">{fieldErrors.externalContractAck}</p>}
+            <label className="flex cursor-pointer items-start gap-2">
+              <input type="checkbox" checked={pricingAck} onChange={(e) => setPricingAck(e.target.checked)} className="mt-0.5 size-4 accent-[var(--ac-blue)]" />
+              <span className="text-ink">Fiyatın ACARVO dışında belirlendiğini ve taraflarla dış süreçte ele alındığını kontrol ettim.</span>
+            </label>
+            {fieldErrors.externalPricingAck && <p className="text-[12.5px] text-alert">{fieldErrors.externalPricingAck}</p>}
+            <Field id="ext-ref" label="Dış sözleşme / işlem referansı" required error={fieldErrors.externalReference} hint="Örn. SZL-2026/118. Müşteri adı, telefon veya kimlik numarası yazmayın.">
+              <Input id="ext-ref" value={reference} maxLength={40} autoComplete="off" onChange={(e) => setReference(e.target.value)} className="h-9 text-[13.5px]" />
+            </Field>
+            <p className="text-[12px] text-ink-2">Beyanlar adınız ve zamanla kaydedilir. ACARVO imzalı sözleşme, ödeme, kesin fiyat veya hukuki uygunluk sonucu üretmez.</p>
+          </fieldset>
+        ) : (
+          <p className="flex items-start gap-1.5 rounded-lg border border-alert/30 bg-alert-soft px-3 py-2.5 text-[13px] text-ink">
+            <WarningCircle size={15} className="mt-[2px] shrink-0 text-alert" />
+            Dış sözleşme ve fiyat modu kapalı. ACARVO’da sözleşme ve fiyat modülü olmadığı için teslim yapılamaz; modu yalnız şirket sahibi Ayarlar’dan açabilir.
+          </p>
+        )}
         {error && (
           <p role="alert" className="text-[13px] font-medium text-alert">
             {error}
@@ -831,7 +852,7 @@ function HandoverDesk({ r, dirty, saveDraft, onDone, pickupBranch, navigate, onU
         <button
           type="button"
           onClick={() => go.mutate()}
-          disabled={go.isPending || blocking.length > 0 || !ack}
+          disabled={go.isPending || blocking.length > 0 || !statementsReady}
           className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-blue px-4 font-medium text-white transition-colors hover:bg-blue-ink disabled:opacity-50"
         >
           {go.isPending ? <SpinnerGap size={16} className="animate-spin" /> : <Key size={16} />}

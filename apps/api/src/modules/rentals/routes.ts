@@ -4,7 +4,6 @@ import {
   inspectionDraftSchema,
   largeJump,
   type Permission,
-  RENTAL_EXTERNAL_TERMS_ALLOWED,
   RENTAL_MAX_DAYS,
   RESERVATION_PAST_TOLERANCE_MINUTES,
   RETURN_BACKDATE_HOURS,
@@ -194,6 +193,13 @@ function mapGuard(e: unknown): never {
   if (c === 'rental_drivers_frozen' || c === 'rental_document_checks_frozen') throw new AppError(409, 'RENTAL_NOT_PREPARED', 'Teslimden sonra sürücüler ve belge kararları değiştirilemez.')
   if (c === 'odometer_chronology') throw new AppError(422, 'ODOMETER_OUT_OF_ORDER', 'Kilometre aracın kayıtlı km geçmişiyle çelişiyor (geriye gidemez).', { km: 'Kilometre geçmişle çelişiyor' })
   if (c === 'odometer_future' || c === 'location_future') throw invalid({ time: 'Gerçekleşen zaman gelecekte olamaz' })
+  if (c === 'rentals_external_terms_mode') throw new AppError(409, 'EXTERNAL_TERMS_MODE_OFF', 'Dış sözleşme ve fiyat modu kapalı; ACARVO’da sözleşme ve fiyat modülü olmadığı için teslim yapılamaz.')
+  if (c === 'rentals_external_terms_statement') throw invalid({ externalReference: 'İki beyan ve dış referans gerekli' }, 'Teslim için iki beyan ve dış referans gerekli.')
+  if (c === 'rentals_external_reference_check') throw invalid({ externalReference: 'Yalnız harf, rakam, boşluk ve . / _ - kullanın' })
+  if (c === 'rentals_branch_country') throw new AppError(409, 'BRANCH_COUNTRY_MISSING', 'Başlangıç şubesinin ülkesi tanımlı değil; teslim yapılamaz.')
+  if (c === 'rentals_document_decision') throw new AppError(409, 'DOCUMENT_DECISION_REQUIRED', 'Her sürücü için güncel ve uygun belge kararı olmadan teslim yapılamaz.')
+  if (c === 'rental_inspections_incomplete') throw new AppError(409, 'INSPECTION_INCOMPLETE', 'Kontrol eksik: temizlik, genel durum ve kontrol listesinin her maddesi yanıtlanmalı.')
+  if (c === 'rental_inspections_checklist') throw invalid({ checklist: 'Geçersiz kontrol listesi maddesi veya yanıtı' })
   if (c === 'rentals_reservation_key') throw new AppError(409, 'ALREADY_CONVERTED', 'Bu rezervasyondan zaten bir kiralama oluşturulmuş.')
   if (c === 'rentals_request_key' || c === 'rental_events_request_key') throw new AppError(409, 'REQUEST_REPLAY', 'Bu istek zaten işlendi.')
   if (c === 'rental_inspections_kind_key') throw new AppError(409, 'INSPECTION_CONFLICT', 'Bu kontrol başka bir kullanıcı tarafından başlatıldı. Sayfayı yenileyin.')
@@ -820,10 +826,12 @@ export async function rentalRoutes(app: FastifyInstance) {
       const gates = await deliveryGates(tx, access.companyId, core, drivers, handover, deliveredAt)
       const blocked = gates.filter((g) => g.state === 'blocked')
       if (blocked.length) throw new AppError(409, 'DELIVERY_BLOCKED', 'Teslim için gereken koşullar tamamlanmadı.', undefined, { gates })
-      if (!RENTAL_EXTERNAL_TERMS_ALLOWED) throw new AppError(409, 'DELIVERY_BLOCKED', 'Sözleşme ve fiyat modülleri hazır olana kadar teslim kapalı.')
-      if (!input.externalTermsAck) {
-        throw invalid({ externalTermsAck: 'Sözleşme ve fiyatın ACARVO dışında yönetildiğini onaylayın' }, 'ACARVO’da sözleşme ve fiyat yok; teslim için açık beyanınız gerekli.')
-      }
+      // K1: both statements and the external reference, each explicit; the database checks the same with the handover.
+      const missing: Record<string, string> = {}
+      if (!input.externalContractAck) missing.externalContractAck = 'Sözleşmenin ACARVO dışında düzenlendiğini ve işlemin dış süreçte tamamlandığını kontrol ettiğinizi beyan edin'
+      if (!input.externalPricingAck) missing.externalPricingAck = 'Fiyatın ACARVO dışında belirlendiğini ve taraflarla dış süreçte ele alındığını beyan edin'
+      if (!input.externalReference) missing.externalReference = 'Dış sözleşme veya işlem referansını girin'
+      if (Object.keys(missing).length) throw invalid(missing, 'ACARVO’da sözleşme ve fiyat yok; teslim için iki beyan ve dış referans gerekli.')
       const km = handover.km!
       const jump = await assertOdometer(tx, cur.vehicle_id as string, km, deliveredAt, input.largeJumpReason)
       const userId = req.auth!.user.id
@@ -846,6 +854,7 @@ export async function rentalRoutes(app: FastifyInstance) {
       )
       await guarded(
         tx.execute(sql`update rentals set status = 'delivered', delivered_at = ${deliveredAt}, delivered_by = ${userId}, external_terms_ack_at = now(), external_terms_ack_by = ${userId},
+            external_pricing_ack_at = now(), external_pricing_ack_by = ${userId}, external_reference = ${input.externalReference!},
             version = version + 1, updated_at = now(), updated_by = ${userId} where id = ${id}`),
       )
       const early = Date.parse(deliveredAt) < Date.parse(toIso(cur.planned_pickup_at))
@@ -857,7 +866,7 @@ export async function rentalRoutes(app: FastifyInstance) {
         action: 'rental.deliver',
         entity: 'rental',
         entityId: id,
-        summary: { rentalNo: cur.rental_no, fromVersion: input.version, vehicle: cur.plate, branch: pb.code, externalTermsAck: true, ...data },
+        summary: { rentalNo: cur.rental_no, fromVersion: input.version, vehicle: cur.plate, branch: pb.code, externalContractAck: true, externalPricingAck: true, externalReferenceRecorded: true, ...data },
       })
       return detail(tx, access, id)
     })

@@ -57,10 +57,23 @@ export const RETURN_BACKDATE_HOURS = 72
 export const RENTAL_MAX_DAYS = 366
 export const RENTAL_MAX_ADDITIONAL_DRIVERS = 5
 /**
- * K1: contract and pricing modules do not exist. A handover is possible only with staff's explicit statement that the
- * contract and price are handled outside ACARVO. Setting this to false closes handovers until those modules exist.
+ * K1: contract and pricing modules do not exist. A handover is possible only when the company's owner switched on the
+ * external contract/pricing mode, and then only with two separate staff statements and an external reference.
+ * The reference is a contract or transaction number: letters, digits, space . / _ - (no names or ID numbers).
  */
-export const RENTAL_EXTERNAL_TERMS_ALLOWED = true
+export const EXTERNAL_REFERENCE_PATTERN = /^[A-Za-z0-9][A-Za-z0-9 ./_-]*$/
+
+export const rentalSettingsSchema = z.object({
+  version: z.number().int().min(0),
+  externalTermsMode: z.boolean(),
+})
+export interface RentalSettings {
+  /** Off by default; no stored row = off. */
+  externalTermsMode: boolean
+  version: number
+  updatedAt: string | null
+  updatedByName: string | null
+}
 
 // ---------------------------------------------------------------------------
 // Schemas
@@ -159,7 +172,20 @@ export const rentalDeliverSchema = z.object({
   deliveredLocal: optWallTime('Geçerli bir tarih ve saat girin'),
   deliveredChoice: choice,
   largeJumpReason: optText(300),
-  externalTermsAck: z.boolean().optional(),
+  /** K1 statement 1: the contract was made and the transaction completed in the external process. */
+  externalContractAck: z.boolean().optional(),
+  /** K1 statement 2: the price was set outside ACARVO and handled with the parties in the external process. */
+  externalPricingAck: z.boolean().optional(),
+  externalReference: z.preprocess(
+    blank,
+    z
+      .string()
+      .trim()
+      .min(3, 'Dış sözleşme veya işlem referansı en az 3 karakter')
+      .max(40, 'En fazla 40 karakter')
+      .regex(EXTERNAL_REFERENCE_PATTERN, 'Yalnız harf, rakam, boşluk ve . / _ - kullanın (ad veya kimlik numarası yazmayın)')
+      .optional(),
+  ),
 })
 
 export const rentalExtendSchema = z.object({
@@ -366,7 +392,10 @@ export interface RentalDetail extends Omit<RentalListItem, 'customer' | 'vehicle
   vehicle: { id: string; plate: string; make: string; model: string; status: string; homeBranch: ReservationRef; currentKm: number | null }
   note: string | null
   deliveredByName: string | null
-  externalTermsAckAt: string | null
+  /** K1 statements recorded with the handover (staff statements, not proof of a signed contract or payment). */
+  externalTerms: { contractAckAt: string; pricingAckAt: string; reference: string; byName: string | null } | null
+  /** The company's current mode (K1); off unless the owner switched it on. */
+  externalTermsMode: boolean
   returnedByName: string | null
   closedAt: string | null
   closedByName: string | null

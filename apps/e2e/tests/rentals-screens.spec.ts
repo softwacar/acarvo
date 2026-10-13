@@ -70,6 +70,12 @@ for (const [w, h] of [
     await settle(page)
     await page.screenshot({ path: out(`08-iade-kontrolu-${w}`), fullPage: true })
 
+    await page.goto('/ayarlar')
+    await expect(page.getByRole('region', { name: 'Kiralama çalışma modu' })).toBeVisible()
+    await settle(page)
+    await expectNoHorizontalOverflow(page)
+    await page.screenshot({ path: out(`14-ayarlar-kiralama-modu-${w}`) })
+
     await openRental(page, 'K-000004')
     await settle(page)
     await page.screenshot({ path: out(`09-360-kapandi-genel-${w}`), fullPage: true })
