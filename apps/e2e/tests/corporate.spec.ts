@@ -64,7 +64,10 @@ test.describe('as the owner', () => {
     await expect(page.getByRole('heading', { name: 'Akış Testi Turizam d.o.o.' })).toBeVisible()
     await expect(page.getByText('K-0000', { exact: false }).first()).toBeVisible()
     await expect(page.getByRole('link', { name: '+387 33 000 909' }).first()).toBeVisible()
-    for (const tab of ['Rezervasyonlar', 'Kiralamalar', 'Cari / Finans']) {
+    // Reservations are real since Reservations V1; rentals and finance still say they are not connected.
+    await page.getByRole('tab', { name: 'Rezervasyonlar' }).click()
+    await expect(page.getByText('Bu kurumsal hesapla yapılmış rezervasyon yok.')).toBeVisible()
+    for (const tab of ['Kiralamalar', 'Cari / Finans']) {
       await page.getByRole('tab', { name: tab }).click()
       await expect(page.getByRole('heading', { name: `${tab} henüz bağlı değil` })).toBeVisible()
     }

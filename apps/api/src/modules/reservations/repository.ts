@@ -367,6 +367,8 @@ export async function timeline(tx: Tx, access: CompanyAccess, input: { from: str
     from: input.from,
     days: input.days,
     timeZone: tz,
+    windowStart: start,
+    windowEnd: stop,
     vehicles: vehicles.map((v) => ({ id: v.id as string, plate: v.plate as string, make: v.make as string, model: v.model as string, className: v.class_name as string, status: v.status as string })),
     bars: bars.map((b) => ({ id: b.id as string, reservationNo: b.reservation_no as string, vehicleId: b.vehicle_id as string, status: b.status as TimelineResponse['bars'][number]['status'], pickupAt: toIso(b.pickup_at), returnAt: toIso(b.return_at) })),
     unassigned: Number(unassigned.n),

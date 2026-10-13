@@ -57,6 +57,7 @@ import { PeopleTab } from './CorporatePeople'
 import { btnPrimary, btnSecondary, conflictMessage, Panel, ReasonDialog, useAccountUpdated } from './ui'
 import { AddressesTab, ChannelsPanel, TaxIdsTab } from './CorporateRecords'
 import { listSearchToReturnTo } from './search'
+import { RelatedReservations } from '../reservations/RelatedReservations'
 
 const TAB_LABELS: Record<CorporateTab, string> = {
   genel: 'Genel',
@@ -584,7 +585,7 @@ export function Corporate360Page() {
           {tab === 'kisiler' && <PeopleTab a={a} mode="all" canManage={canManage} />}
           {tab === 'suruculer' && <PeopleTab a={a} mode="drivers" canManage={canManage} />}
           {tab === 'gecmis' && <HistoryTab a={a} />}
-          {PENDING[tab] && <Pending tab={tab} />}
+          {tab === 'rezervasyonlar' && can(session, 'reservations.read') ? <RelatedReservations kind="account" id={a.id} /> : PENDING[tab] && <Pending tab={tab} />}
         </div>
       </div>
       {tab === 'genel' && a.status === 'active' && (

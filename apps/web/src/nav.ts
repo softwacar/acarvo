@@ -66,7 +66,7 @@ export const NAV: NavGroup[] = [
   {
     label: 'Operasyon',
     items: [
-      { slug: 'rezervasyonlar', label: 'Rezervasyonlar', icon: CalendarCheck },
+      { slug: 'rezervasyonlar', label: 'Rezervasyonlar', icon: CalendarCheck, permission: 'reservations.read', built: true },
       { slug: 'kiralamalar', label: 'Kiralamalar', icon: Key },
       { slug: 'takvim', label: 'Takvim', icon: CalendarBlank },
       { slug: 'gorevler', label: 'Görevler', icon: ClipboardText },
@@ -153,6 +153,9 @@ export const PERMISSION_LABELS: Record<Permission, string> = {
   'customers.identity.reveal': 'Tam belge numarasını açma (gerekçeyle)',
   'corporate.read': 'Kurumsal hesapları görüntüleme',
   'corporate.manage': 'Kurumsal hesap ekleme, düzenleme ve kişi bağlama',
+  'reservations.read': 'Rezervasyonları görüntüleme',
+  'reservations.manage': 'Rezervasyon oluşturma, düzenleme ve iptal',
+  'reservations.confirm': 'Rezervasyon onaylama',
   'branches.read': 'Şubeleri görüntüleme',
   'branches.manage': 'Şube ülkesini yönetme',
   'settings.documents.manage': 'Müşteri belge gereksinimlerini yönetme',

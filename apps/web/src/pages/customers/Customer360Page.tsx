@@ -48,6 +48,7 @@ import { formatDate, formatDateTime } from '@/lib/vehicle-labels'
 import { can, useSession } from '@/session'
 import { CustomerDocuments } from './CustomerDocuments'
 import { CustomerFormSheet } from './CustomerForm'
+import { RelatedReservations } from '../reservations/RelatedReservations'
 import { listSearchToReturnTo } from './search'
 
 // ---------------------------------------------------------------------------
@@ -414,7 +415,7 @@ function FileStatus({ c, onTab }: { c: CustomerDetail; onTab: (t: CustomerTab) =
     [UserCircle, 'Kişi ve iletişim bilgileri', <span className="inline-flex items-center gap-1 text-ok"><CheckCircle size={14} weight="fill" />Kayıtlı</span>, null],
     [IdentificationCard, 'Kimlik ve ehliyet belgeleri', <DocumentsState c={c} />, 'belgeler'],
     [Buildings, 'Kurumsal hesap bağlantıları', <CorporateLinksState c={c} />, null],
-    [CalendarCheck, 'Rezervasyonlar', <span className="text-ink-3">Henüz bağlı değil</span>, 'rezervasyonlar'],
+    [CalendarCheck, 'Rezervasyonlar', <span className="text-ink-2">Listeyi aç</span>, 'rezervasyonlar'],
     [Key, 'Kiralamalar', <span className="text-ink-3">Henüz bağlı değil</span>, 'kiralamalar'],
     [Coins, 'Cari hesap', <span className="text-ink-3">Finans modülüyle</span>, 'cari'],
   ]
@@ -742,7 +743,7 @@ export function Customer360Page() {
           {tab === 'genel' && <Overview c={c} canManage={canManage} onEdit={() => setEditing(true)} onTab={onTab} />}
           {tab === 'belgeler' && <CustomerDocuments customer={c} />}
           {tab === 'gecmis' && <HistoryTab c={c} />}
-          {PENDING[tab] && <Pending tab={tab} />}
+          {tab === 'rezervasyonlar' && can(session, 'reservations.read') ? <RelatedReservations kind="customer" id={c.id} /> : PENDING[tab] && <Pending tab={tab} />}
         </div>
       </div>
       {editing && <CustomerFormSheet mode="edit" customer={c} onClose={() => setEditing(false)} />}

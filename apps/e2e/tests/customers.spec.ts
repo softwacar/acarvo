@@ -202,7 +202,6 @@ test.describe('as the owner', () => {
     await openCustomer(page, 'Kenan Örnek')
     await expect(page).toHaveURL(/\/musteriler\/[0-9a-f-]{36}$/)
     for (const [tab, module] of [
-      ['Rezervasyonlar', 'Rezervasyonlar'],
       ['Kiralamalar', 'Kiralamalar'],
       ['Cari ve tahsilatlar', 'Finans'],
       ['Görevler ve olaylar', 'Görevler ve Olay Merkezi'],

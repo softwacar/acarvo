@@ -164,3 +164,30 @@ test('phone: corporate list, 360° tabs, record and link panels fit the screen',
   await expect(page.locator('li', { hasText: 'Ajla Testović' })).toContainText('Ehliyet')
   await expectNoHorizontalOverflow(page)
 })
+
+test('phone: reservation list, new reservation and 360° fit the screen; actions stay reachable', async ({ page }) => {
+  await page.goto('/rezervasyonlar')
+  await expect(page.getByRole('link', { name: 'Lena Beispiel' }).first()).toBeVisible()
+  // Number, status and pickup sit under the name.
+  await expect(page.locator('tbody tr').filter({ hasText: 'R-000003' })).toContainText('Onaylı')
+  await expectNoHorizontalOverflow(page)
+  await page.goto('/rezervasyonlar/yeni')
+  const create = page.getByRole('button', { name: 'Rezervasyon oluştur' })
+  await create.scrollIntoViewIfNeeded()
+  expect((await create.boundingBox())!.height).toBeGreaterThanOrEqual(40)
+  await expectNoHorizontalOverflow(page)
+  await page.goto('/rezervasyonlar?status=all')
+  await page.getByRole('searchbox', { name: 'Rezervasyonlarda ara' }).fill('R-000003')
+  await page.getByRole('row', { name: /R-000003/ }).getByRole('link').first().click()
+  await expect(page.getByRole('heading', { name: 'Lena Beispiel' })).toBeVisible()
+  await expect(page.getByRole('link', { name: 'Düzenle' })).toBeInViewport()
+  await page.getByRole('tab', { name: 'Fiyat ve kiralama' }).click()
+  const visible = await page.evaluate(() => {
+    const el = document.querySelector('[role=tab][aria-selected=true]')!
+    const bar = el.parentElement!.getBoundingClientRect()
+    const r = el.getBoundingClientRect()
+    return r.left >= bar.left - 1 && r.right <= bar.right + 1
+  })
+  expect(visible).toBe(true)
+  await expectNoHorizontalOverflow(page)
+})

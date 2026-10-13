@@ -256,6 +256,9 @@ export interface TimelineResponse {
   from: string
   days: number
   timeZone: string
+  /** Instants of the window's first and last company midnight: bars are placed against these, never the browser's zone. */
+  windowStart: string
+  windowEnd: string
   vehicles: { id: string; plate: string; make: string; model: string; className: string; status: string }[]
   bars: { id: string; reservationNo: string; vehicleId: string; status: ReservationStatus; pickupAt: string; returnAt: string }[]
   unassigned: number
@@ -267,4 +270,13 @@ export interface ReservationActivityItem {
   summary: Record<string, unknown> | null
   at: string
   actorName: string | null
+}
+
+export interface ReservationBranch {
+  id: string
+  name: string
+  code: string
+  timeZone: string
+  /** The user may start (and change) reservations at this branch. */
+  inScope: boolean
 }

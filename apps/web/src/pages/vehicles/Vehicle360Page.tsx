@@ -45,6 +45,7 @@ import { listSearchToReturnTo } from './search'
 import { VehicleDocuments } from './VehicleDocuments'
 import { VehicleGallery } from './VehicleGallery'
 import { OdometerLocationSection, placeText } from './VehicleHistory'
+import { RelatedReservations } from '../reservations/RelatedReservations'
 
 // ---------------------------------------------------------------------------
 // Tabs (spec §13.3: 8 fixed tabs inside the vehicle, never sidebar links)
@@ -881,6 +882,7 @@ export function Vehicle360Page() {
         {tab === 'genel' && <Overview v={v} history={history.data} historyError={history.isError} onRetry={() => history.refetch()} onTab={onTab} canEdit={canEdit} />}
         {tab === 'belgeler' && <VehicleDocuments vehicleId={v.id} plate={v.plate} />}
         {tab === 'gecmis' && <HistoryTab v={v} history={history.data} isLoading={history.isPending} error={history.error} onRetry={() => history.refetch()} />}
+        {tab === 'musaitlik' && can(session, 'reservations.read') && <div className="mb-5"><RelatedReservations kind="vehicle" id={vehicleId} /></div>}
         {PENDING[tab] && <Pending tab={tab} />}
       </div>
     </>

@@ -211,6 +211,14 @@ export async function reservationRoutes(app: FastifyInstance) {
   /** List and search. POST so that names and phone numbers never travel in a URL. */
   app.post('/search', async (req) => withCompany(req, 'reservations.read', async (tx, access) => listReservations(tx, access, reservationSearchSchema.parse(req.body ?? {}))))
 
+  /** Every active branch of the company (a return may end anywhere), with its time zone and whether the user may start reservations there (R10). */
+  app.get('/branches', async (req) =>
+    withCompany(req, 'reservations.read', async (tx, access) => {
+      const rows = (await tx.execute(sql`select id, name, code, timezone from branches where status = 'active' order by name`)).rows as Row[]
+      return { items: rows.map((b) => ({ id: b.id as string, name: b.name as string, code: b.code as string, timeZone: b.timezone as string, inScope: inScope(access, b.id as string) })) }
+    }),
+  )
+
   app.post('/timeline', async (req) => withCompany(req, 'reservations.read', async (tx, access) => timeline(tx, access, reservationTimelineSchema.parse(req.body ?? {}))))
 
   /** Vehicles of a class for a period, as far as ACARVO can tell (R1, R2). No customer data of other reservations. */

@@ -107,6 +107,13 @@ describe('list, search and isolation', () => {
     expect((await selma.post('/api/reservations', { ...base(), returnBranchId: ids.mst })).statusCode).toBe(201)
   })
 
+  it('branch list for the form: every active company branch with its zone; scope marked per user', async () => {
+    const all = (await selma.get('/api/reservations/branches')).json().items as { code: string; timeZone: string; inScope: boolean }[]
+    expect(all.map((b) => [b.code, b.inScope])).toEqual(expect.arrayContaining([['SJJ', true], ['SAC', false], ['MST', false]]))
+    expect(all.every((b) => b.timeZone === TZ)).toBe(true)
+    expect(all.map((b) => b.code)).not.toContain('MOC')
+  })
+
   it('another company sees nothing, also with a known id; the database refuses cross-company links', async () => {
     expect((await search(lejla, { status: 'all' })).items.map((r) => r.customer.displayName)).toEqual(['Dino Neretvić'])
     for (const res of [

@@ -130,6 +130,36 @@ test.describe('signed in', () => {
     await audit(page, 'yeni kurumsal hesap hatalar ve benzer kayit')
   })
 
+  test('reservation list, timeline, new reservation, 360° and dialogs', async ({ page }) => {
+    await page.goto('/rezervasyonlar')
+    await expect(page.getByRole('link', { name: 'Lena Beispiel' }).first()).toBeVisible()
+    await audit(page, 'rezervasyonlar')
+    await page.getByRole('tab', { name: 'Zaman çizelgesi' }).click()
+    await expect(page.getByRole('link', { name: 'R-000001, Onaylı' })).toBeVisible()
+    await audit(page, 'zaman cizelgesi')
+    await page.goto('/rezervasyonlar/yeni')
+    await page.getByRole('button', { name: 'Rezervasyon oluştur' }).click()
+    await page.getByLabel('Araç sınıfı').selectOption({ label: 'Orta' })
+    await expect(page.getByRole('radiogroup', { name: 'Araç seçimi' })).toBeVisible()
+    await page.getByLabel('Alış tarih ve saati').fill('2026-10-25T02:30')
+    await expect(page.getByText('Bu saat kış saatine geçişte iki kez yaşanıyor. Hangisi?')).toBeVisible()
+    await audit(page, 'yeni rezervasyon')
+    page.once('dialog', (d) => void d.accept())
+    await page.goto('/rezervasyonlar?status=all')
+    await page.getByRole('searchbox', { name: 'Rezervasyonlarda ara' }).fill('R-000003')
+    await page.getByRole('row', { name: /R-000003/ }).getByRole('link').first().click()
+    await expect(page.getByRole('heading', { name: 'Lena Beispiel' })).toBeVisible()
+    await audit(page, 'rezervasyon 360')
+    for (const tab of ['Kişiler', 'Araç', 'Durum geçmişi', 'İşlem geçmişi', 'Fiyat ve kiralama']) {
+      await page.getByRole('tab', { name: tab }).click()
+      await audit(page, `rezervasyon ${tab}`)
+    }
+    await page.getByRole('button', { name: 'Diğer işlemler' }).click()
+    await page.getByRole('menuitem', { name: 'Rezervasyonu iptal et' }).click()
+    await audit(page, 'iptal diyalogu')
+    await page.keyboard.press('Escape')
+  })
+
   test('side panels trap focus, close with Escape and give focus back', async ({ page }) => {
     await openVehicle(page, 'A12-K-345', 'Konum ve geçmiş')
     const opener = page.getByRole('button', { name: 'Konumu güncelle' })

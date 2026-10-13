@@ -1,4 +1,4 @@
-import type { ApiError, CorporateActivityItem, CorporateDetail, CorporateDuplicateMatch, CorporateListResponse, CorporatePeopleResponse, CustomerCorporateLink, CustomerActivityItem, CustomerDocument, CustomerDocumentsResponse, CustomerDocumentStatus, RequirementItem, RequirementPolicy, CustomerDetail, CustomerDuplicateResponse, CustomerListResponse, HistoryWriteResult, SessionInfo, VehicleActivityItem, VehicleDocumentDetail, VehicleDocumentsResponse, VehiclePhoto, VehiclePhotoList, VehicleClassSummary, VehicleDetail, VehicleHistory, VehicleListResponse } from '@acarvo/shared'
+import type { ApiError, AvailabilityResponse, ReservationActivityItem, ReservationBranch, ReservationDetail, ReservationListItem, ReservationListResponse, TimelineResponse, CorporateActivityItem, CorporateDetail, CorporateDuplicateMatch, CorporateListResponse, CorporatePeopleResponse, CustomerCorporateLink, CustomerActivityItem, CustomerDocument, CustomerDocumentsResponse, CustomerDocumentStatus, RequirementItem, RequirementPolicy, CustomerDetail, CustomerDuplicateResponse, CustomerListResponse, HistoryWriteResult, SessionInfo, VehicleActivityItem, VehicleDocumentDetail, VehicleDocumentsResponse, VehiclePhoto, VehiclePhotoList, VehicleClassSummary, VehicleDetail, VehicleHistory, VehicleListResponse } from '@acarvo/shared'
 
 export class ApiRequestError extends Error {
   constructor(
@@ -212,6 +212,24 @@ export const corporateApi = {
   updateLink: (id: string, linkId: string, body: unknown) => api<{ id: string }>(`/corporate-accounts/${id}/people/${linkId}`, { method: 'PUT', body }),
   endLink: (id: string, linkId: string, version: number, reason: string) => api<{ id: string }>(`/corporate-accounts/${id}/people/${linkId}/end`, { method: 'POST', body: { version, reason } }),
   customerLinks: (customerId: string) => api<{ items: CustomerCorporateLink[] }>(`/customers/${customerId}/corporate-links`),
+}
+
+/** Reservations V1. Search text travels in request bodies only; wall times are sent as typed with the branch. */
+export const reservationsApi = {
+  search: (body: Record<string, unknown>) => api<ReservationListResponse>('/reservations/search', { method: 'POST', body }),
+  get: (id: string) => api<ReservationDetail>(`/reservations/${id}`),
+  history: (id: string) => api<{ items: ReservationActivityItem[] }>(`/reservations/${id}/history`),
+  branches: () => api<{ items: ReservationBranch[] }>('/reservations/branches'),
+  availability: (body: Record<string, unknown>) => api<AvailabilityResponse>('/reservations/availability', { method: 'POST', body }),
+  timeline: (body: Record<string, unknown>) => api<TimelineResponse>('/reservations/timeline', { method: 'POST', body }),
+  create: (body: unknown) => api<ReservationDetail>('/reservations', { method: 'POST', body }),
+  update: (id: string, body: unknown) => api<ReservationDetail>(`/reservations/${id}`, { method: 'PUT', body }),
+  confirm: (id: string, version: number) => api<ReservationDetail>(`/reservations/${id}/confirm`, { method: 'POST', body: { version } }),
+  cancel: (id: string, version: number, reason: string, note?: string) => api<ReservationDetail>(`/reservations/${id}/cancel`, { method: 'POST', body: { version, reason, note } }),
+  noShow: (id: string, version: number, reason: string, note?: string) => api<ReservationDetail>(`/reservations/${id}/no-show`, { method: 'POST', body: { version, reason, note } }),
+  forCustomer: (id: string) => api<{ items: ReservationListItem[] }>(`/customers/${id}/reservations`),
+  forAccount: (id: string) => api<{ items: ReservationListItem[] }>(`/corporate-accounts/${id}/reservations`),
+  forVehicle: (id: string) => api<{ items: ReservationListItem[] }>(`/vehicles/${id}/reservations`),
 }
 
 /** Customer documents (M2). Numbers are sent in bodies only and come back masked; the full number only from reveal. */
