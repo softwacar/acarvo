@@ -23,6 +23,9 @@ export const PERMISSIONS = [
   'customers.identity.reveal',
   'corporate.read',
   'corporate.manage',
+  'reservations.read',
+  'reservations.manage',
+  'reservations.confirm',
   'branches.read',
   'branches.manage',
   'settings.documents.manage',
@@ -69,3 +72,4 @@ export * from './time'
 export * from './customers'
 export * from './customer-documents'
 export * from './corporate'
+export * from './reservations'

@@ -176,6 +176,20 @@
       "when": 1791856752917,
       "tag": "0024_sensitive_actions_corporate_check",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1791857101313,
+      "tag": "0025_reservations",
+      "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1791857102968,
+      "tag": "0026_reservations_rls",
+      "breakpoints": true
     }
   ]
 }

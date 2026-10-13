@@ -74,9 +74,9 @@ describe('database', () => {
         sequences: (await c.query('select count(*)::int n from company_sequences')).rows[0].n,
       }))
     expect(await count(null)).toEqual({ customers: 0, sequences: 0 })
-    // Two counters per company: customers and corporate accounts (M3 test data).
-    expect(await count(data.companies.drina)).toEqual({ customers: 14, sequences: 2 })
-    expect(await count(data.companies.neretva)).toEqual({ customers: 3, sequences: 2 })
+    // Three counters per company: customers, corporate accounts and reservations (test data).
+    expect(await count(data.companies.drina)).toEqual({ customers: 14, sequences: 3 })
+    expect(await count(data.companies.neretva)).toEqual({ customers: 3, sequences: 3 })
   })
 
   it('the runtime role cannot delete customers or counters', async () => {

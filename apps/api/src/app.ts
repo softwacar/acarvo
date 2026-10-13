@@ -23,6 +23,7 @@ import { vehicleClassRoutes, vehicleRoutes } from './modules/vehicles/routes'
 import { MAX_PHOTO_BYTES } from './lib/images'
 import { createStorage } from './lib/storage'
 import { corporateRoutes, customerCorporateLinkRoutes } from './modules/corporate/routes'
+import { relatedReservationRoutes, reservationRoutes } from './modules/reservations/routes'
 import { registerAuth } from './plugins/auth'
 import { registerSecurity } from './plugins/security'
 
@@ -89,5 +90,7 @@ export async function buildApp({
   await app.register(documentRequirementRoutes, { prefix: '/api/settings' })
   await app.register(corporateRoutes, { prefix: '/api/corporate-accounts' })
   await app.register(customerCorporateLinkRoutes, { prefix: '/api/customers' })
+  await app.register(reservationRoutes, { prefix: '/api/reservations' })
+  await app.register(relatedReservationRoutes, { prefix: '/api' })
   return app
 }

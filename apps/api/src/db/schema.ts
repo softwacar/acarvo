@@ -522,12 +522,12 @@ export const companySequences = pgTable(
   'company_sequences',
   {
     companyId: uuid('company_id').notNull().references(() => companies.id),
-    kind: text('kind', { enum: ['customer', 'corporate_account'] }).notNull(),
+    kind: text('kind', { enum: ['customer', 'corporate_account', 'reservation'] }).notNull(),
     nextValue: bigint('next_value', { mode: 'number' }).notNull(),
   },
   (t) => [
     primaryKey({ columns: [t.companyId, t.kind] }),
-    check('company_sequences_kind_check', sql`${t.kind} in ('customer', 'corporate_account')`),
+    check('company_sequences_kind_check', sql`${t.kind} in ('customer', 'corporate_account', 'reservation')`),
     check('company_sequences_next_check', sql`${t.nextValue} >= 1`),
   ],
 )
@@ -1008,5 +1008,119 @@ export const corporateAccountPeople = pgTable(
     check('corporate_people_end_check', sql`(${t.endedAt} is null) = (${t.endedReason} is null)`),
     check('corporate_people_end_reason_check', sql`${t.endedReason} is null or ${t.endedReason} in ('left_company', 'role_ended', 'entry_error', 'other')`),
     check('corporate_people_version_check', sql`${t.version} >= 1`),
+  ],
+)
+
+// ---------------------------------------------------------------------------
+// Reservations V1 — docs/REZERVASYON_YONETIMI_PLANI.md. A reservation works with one customer (person) and may carry a
+// corporate account context; people are referenced, never copied. Nothing is deleted: reservations end as cancelled or
+// no-show, drivers are removed by a mark, status events are append-only. Price is not stored (no pricing module yet).
+
+export const reservations = pgTable(
+  'reservations',
+  {
+    id: id(),
+    companyId: uuid('company_id').notNull().references(() => companies.id),
+    reservationNo: text('reservation_no').notNull(),
+    status: text('status', { enum: ['pending', 'confirmed', 'converted', 'cancelled', 'no_show'] }).notNull().default('pending'),
+    source: text('source').notNull(),
+    customerId: uuid('customer_id').notNull(),
+    corporateAccountId: uuid('corporate_account_id'),
+    bookerCustomerId: uuid('booker_customer_id'),
+    vehicleClassId: uuid('vehicle_class_id').notNull(),
+    vehicleId: uuid('vehicle_id'),
+    pickupBranchId: uuid('pickup_branch_id').notNull(),
+    returnBranchId: uuid('return_branch_id').notNull(),
+    pickupAt: timestamp('pickup_at', { withTimezone: true }).notNull(),
+    returnAt: timestamp('return_at', { withTimezone: true }).notNull(),
+    /** Time zone the pickup / return wall time was entered in (the branch's zone at that time). */
+    pickupTimezone: text('pickup_timezone').notNull(),
+    returnTimezone: text('return_timezone').notNull(),
+    note: text('note'),
+    confirmedAt: timestamp('confirmed_at', { withTimezone: true }),
+    confirmedBy: uuid('confirmed_by').references(() => users.id),
+    cancelReason: text('cancel_reason'),
+    cancelNote: text('cancel_note'),
+    cancelledAt: timestamp('cancelled_at', { withTimezone: true }),
+    cancelledBy: uuid('cancelled_by').references(() => users.id),
+    noShowReason: text('no_show_reason'),
+    noShowNote: text('no_show_note'),
+    noShowAt: timestamp('no_show_at', { withTimezone: true }),
+    noShowBy: uuid('no_show_by').references(() => users.id),
+    version: integer('version').notNull().default(1),
+    createdAt: createdAt(),
+    createdBy: uuid('created_by').references(() => users.id),
+    updatedAt: updatedAt(),
+    updatedBy: uuid('updated_by').references(() => users.id),
+  },
+  (t) => [
+    unique('reservations_company_id_key').on(t.companyId, t.id),
+    unique('reservations_company_no_key').on(t.companyId, t.reservationNo),
+    index('reservations_company_pickup_idx').on(t.companyId, t.pickupAt),
+    index('reservations_company_status_pickup_idx').on(t.companyId, t.status, t.pickupAt),
+    index('reservations_company_vehicle_idx').on(t.companyId, t.vehicleId, t.pickupAt),
+    index('reservations_company_customer_idx').on(t.companyId, t.customerId),
+    index('reservations_company_account_idx').on(t.companyId, t.corporateAccountId),
+    index('reservations_company_created_idx').on(t.companyId, t.createdAt),
+    foreignKey({ columns: [t.companyId, t.customerId], foreignColumns: [customers.companyId, customers.id] }),
+    foreignKey({ columns: [t.companyId, t.bookerCustomerId], foreignColumns: [customers.companyId, customers.id] }),
+    foreignKey({ columns: [t.companyId, t.corporateAccountId], foreignColumns: [corporateAccounts.companyId, corporateAccounts.id] }),
+    foreignKey({ columns: [t.companyId, t.vehicleClassId], foreignColumns: [vehicleClasses.companyId, vehicleClasses.id] }),
+    foreignKey({ columns: [t.companyId, t.vehicleId], foreignColumns: [vehicles.companyId, vehicles.id] }),
+    foreignKey({ columns: [t.companyId, t.pickupBranchId], foreignColumns: [branches.companyId, branches.id] }),
+    foreignKey({ columns: [t.companyId, t.returnBranchId], foreignColumns: [branches.companyId, branches.id] }),
+    check('reservations_no_check', sql`${t.reservationNo} ~ '^R-[0-9]{6,}$'`),
+    check('reservations_status_check', sql`${t.status} in ('pending', 'confirmed', 'converted', 'cancelled', 'no_show')`),
+    check('reservations_source_check', sql`${t.source} in ('direct_walk_in', 'phone', 'website', 'partner', 'corporate', 'returning_customer', 'other')`),
+    check('reservations_period_check', sql`${t.returnAt} > ${t.pickupAt}`),
+    check('reservations_confirmed_vehicle_check', sql`${t.status} <> 'confirmed' or ${t.vehicleId} is not null`),
+    check('reservations_cancel_check', sql`(${t.status} = 'cancelled') = (${t.cancelledAt} is not null and ${t.cancelReason} is not null)`),
+    check('reservations_cancel_reason_check', sql`${t.cancelReason} is null or ${t.cancelReason} in ('customer_request', 'no_vehicle', 'duplicate', 'entry_error', 'other')`),
+    check('reservations_no_show_check', sql`(${t.status} = 'no_show') = (${t.noShowAt} is not null and ${t.noShowReason} is not null)`),
+    check('reservations_no_show_reason_check', sql`${t.noShowReason} is null or ${t.noShowReason} in ('did_not_arrive', 'unreachable', 'arrived_without_requirements', 'other')`),
+    check('reservations_version_check', sql`${t.version} >= 1`),
+  ],
+)
+
+export const reservationDrivers = pgTable(
+  'reservation_drivers',
+  {
+    id: id(),
+    companyId: uuid('company_id').notNull().references(() => companies.id),
+    reservationId: uuid('reservation_id').notNull(),
+    customerId: uuid('customer_id').notNull(),
+    isPrimary: boolean('is_primary').notNull().default(false),
+    removedAt: timestamp('removed_at', { withTimezone: true }),
+    removedBy: uuid('removed_by').references(() => users.id),
+    createdAt: createdAt(),
+    createdBy: uuid('created_by').references(() => users.id),
+  },
+  (t) => [
+    foreignKey({ columns: [t.companyId, t.reservationId], foreignColumns: [reservations.companyId, reservations.id] }),
+    foreignKey({ columns: [t.companyId, t.customerId], foreignColumns: [customers.companyId, customers.id] }),
+    index('reservation_drivers_reservation_idx').on(t.companyId, t.reservationId),
+    index('reservation_drivers_customer_idx').on(t.companyId, t.customerId),
+    uniqueIndex('reservation_drivers_active_key').on(t.companyId, t.reservationId, t.customerId).where(sql`${t.removedAt} is null`),
+    uniqueIndex('reservation_drivers_primary_key').on(t.companyId, t.reservationId).where(sql`${t.isPrimary} and ${t.removedAt} is null`),
+  ],
+)
+
+export const reservationStatusEvents = pgTable(
+  'reservation_status_events',
+  {
+    id: id(),
+    companyId: uuid('company_id').notNull().references(() => companies.id),
+    reservationId: uuid('reservation_id').notNull(),
+    fromStatus: text('from_status'),
+    toStatus: text('to_status').notNull(),
+    reason: text('reason'),
+    note: text('note'),
+    actorUserId: uuid('actor_user_id').references(() => users.id),
+    at: timestamp('at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    foreignKey({ columns: [t.companyId, t.reservationId], foreignColumns: [reservations.companyId, reservations.id] }),
+    index('reservation_status_events_reservation_idx').on(t.companyId, t.reservationId, t.at),
+    check('reservation_status_events_to_check', sql`${t.toStatus} in ('pending', 'confirmed', 'converted', 'cancelled', 'no_show')`),
   ],
 )
