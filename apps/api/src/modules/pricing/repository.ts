@@ -256,7 +256,7 @@ export async function currentQuoteForRental(tx: Tx, rentalId: string, reservatio
   return r ? { ...quoteOf(r), matchesPlan: r.rental_match === true } : null
 }
 
-export async function nextNo(tx: Tx, companyId: string, kind: 'price_quote' | 'contract', prefix: string) {
+export async function nextNo(tx: Tx, companyId: string, kind: 'price_quote' | 'contract' | 'finance_charge' | 'finance_payment' | 'finance_deposit' | 'finance_refund', prefix: string) {
   const r = await tx.execute(sql`insert into company_sequences (company_id, kind, next_value) values (${companyId}, ${kind}, 2)
     on conflict (company_id, kind) do update set next_value = company_sequences.next_value + 1 returning next_value - 1 as value`)
   return `${prefix}-${String(Number((r.rows[0] as Row).value)).padStart(6, '0')}`

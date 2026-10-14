@@ -15,6 +15,7 @@ import { documentRequirementRoutes } from './modules/settings/document-requireme
 import { rentalSettingsRoutes } from './modules/settings/rentals'
 import { pricingRoutes, quoteRoutes } from './modules/pricing/routes'
 import { contractRoutes, contractTemplateRoutes } from './modules/contracts/routes'
+import { financeRoutes } from './modules/finance/routes'
 import { documentFileRoutes, vehicleDocumentRoutes } from './modules/vehicles/documents'
 import { vehicleHistoryRoutes } from './modules/vehicles/history'
 import { fileRoutes, vehiclePhotoRoutes } from './modules/vehicles/photos'
@@ -103,5 +104,6 @@ export async function buildApp({
   await app.register(quoteRoutes, { prefix: '/api' })
   await app.register(contractTemplateRoutes, { prefix: '/api/settings' })
   await app.register(contractRoutes, { prefix: '/api' })
+  await app.register(financeRoutes, { prefix: '/api' })
   return app
 }
