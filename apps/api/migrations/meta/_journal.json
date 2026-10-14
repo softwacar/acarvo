@@ -239,6 +239,20 @@
       "when": 1791925000000,
       "tag": "0033_pricing_contracts_history",
       "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1791937613857,
+      "tag": "0034_finance",
+      "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "7",
+      "when": 1791937700000,
+      "tag": "0035_finance_rls",
+      "breakpoints": true
     }
   ]
 }
