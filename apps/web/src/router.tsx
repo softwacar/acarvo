@@ -15,6 +15,7 @@ import { validateCustomerSearch } from './pages/customers/search'
 import { validateCorporateSearch } from './pages/corporate/search'
 import { validateReservationSearch } from './pages/reservations/search'
 import { validateRentalSearch } from './pages/rentals/search'
+import { validateFinanceSearch } from './pages/finance/FinanceCenterPage'
 import { sessionQuery } from './session'
 
 const rootRoute = createRootRouteWithContext<{ queryClient: QueryClient }>()({
@@ -169,6 +170,12 @@ const priceListRoute = createRoute({
   path: '/fiyatlandirma/$priceListId',
   component: lazyRouteComponent(() => import('./pages/pricing/PriceListEditorPage'), 'EditPriceListPage'),
 })
+const financeRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/finans',
+  validateSearch: validateFinanceSearch,
+  component: lazyRouteComponent(() => import('./pages/finance/FinanceCenterPage'), 'FinanceCenterPage'),
+})
 const settingsRoute = createRoute({
   getParentRoute: () => appRoute,
   path: '/ayarlar',
@@ -184,7 +191,7 @@ const moduleRoute = createRoute({
   },
 })
 
-const routeTree = rootRoute.addChildren([loginRoute, appRoute.addChildren([indexRoute, branchesRoute, vehiclesRoute, vehicleNewRoute, vehicle360Route, vehicleEditRoute, customersRoute, customer360Route, corporateRoute, corporate360Route, reservationsRoute, reservationNewRoute, reservation360Route, reservationEditRoute, rentalsRoute, rentalNewRoute, rental360Route, rentalEditRoute, rentalHandoverRoute, rentalReturnRoute, pricingRoute, priceListNewRoute, priceListRoute, settingsRoute, profileRoute, moduleRoute])])
+const routeTree = rootRoute.addChildren([loginRoute, appRoute.addChildren([indexRoute, branchesRoute, vehiclesRoute, vehicleNewRoute, vehicle360Route, vehicleEditRoute, customersRoute, customer360Route, corporateRoute, corporate360Route, reservationsRoute, reservationNewRoute, reservation360Route, reservationEditRoute, rentalsRoute, rentalNewRoute, rental360Route, rentalEditRoute, rentalHandoverRoute, rentalReturnRoute, pricingRoute, priceListNewRoute, priceListRoute, financeRoute, settingsRoute, profileRoute, moduleRoute])])
 
 export function createAppRouter(queryClient: QueryClient) {
   return createRouter({ routeTree, context: { queryClient }, defaultPreload: 'intent', scrollRestoration: true })

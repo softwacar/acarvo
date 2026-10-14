@@ -59,6 +59,7 @@ import { AddressesTab, ChannelsPanel, TaxIdsTab } from './CorporateRecords'
 import { listSearchToReturnTo } from './search'
 import { RelatedReservations } from '../reservations/RelatedReservations'
 import { RelatedRentals } from '../rentals/RelatedRentals'
+import { PartyFinancePanel } from '../finance/PartyFinancePanel'
 
 const TAB_LABELS: Record<CorporateTab, string> = {
   genel: 'Genel',
@@ -75,7 +76,6 @@ const TAB_LABELS: Record<CorporateTab, string> = {
 const PENDING: Partial<Record<CorporateTab, { icon: Icon; module: string; will: string[] }>> = {
   rezervasyonlar: { icon: CalendarCheck, module: 'Rezervasyonlar', will: ['Bu hesap adına yapılan rezervasyonlar', 'Rezervasyonu yapan kişi ve sürücü', 'Kurumsal fiyat bağlamı'] },
   kiralamalar: { icon: Key, module: 'Kiralamalar', will: ['Ödeyen taraf bu hesap olan kiralamalar', 'Yetkili sürücülerin kiralamaları', 'Sözleşmeye kopyalanan fatura adresi ve vergi kimliği'] },
-  cari: { icon: Coins, module: 'Finans', will: ['Kredi limiti ve kullanımı', 'Açık bakiye, tahakkuk ve tahsilatlar; para birimleri ayrı', 'Ekstre ve ödeme koşulları'] },
 }
 
 function Facts({ rows }: { rows: [string, ReactNode][] }) {
@@ -303,7 +303,7 @@ function Overview({ a, canManage, onEdit, onTab }: { a: CorporateDetail; canMana
                 [Receipt, 'Vergi kimlikleri', a.taxIds.length ? `${a.taxIds.length} kayıt` : 'Girilmemiş', 'vergi'],
                 [IdentificationBadge, 'Kişiler', a.peopleCount ? `${a.peopleCount} kişi` : 'Bağlı kişi yok', 'kisiler'],
                 [SteeringWheel, 'Yetkili sürücüler', a.driverCount ? `${a.driverCount} sürücü` : 'Yok', 'suruculer'],
-                [Coins, 'Cari / kredi limiti', 'Finans modülüyle', 'cari'],
+                [Coins, 'Cari / finans', 'Finans kayıtlarını aç', 'cari'],
               ] as [Icon, string, string, CorporateTab][]
             ).map(([Ico, label, state, tab]) => (
               <li key={label}>
@@ -586,7 +586,7 @@ export function Corporate360Page() {
           {tab === 'kisiler' && <PeopleTab a={a} mode="all" canManage={canManage} />}
           {tab === 'suruculer' && <PeopleTab a={a} mode="drivers" canManage={canManage} />}
           {tab === 'gecmis' && <HistoryTab a={a} />}
-          {tab === 'rezervasyonlar' && can(session, 'reservations.read') ? <RelatedReservations kind="account" id={a.id} /> : tab === 'kiralamalar' && can(session, 'rentals.read') ? <RelatedRentals kind="account" id={a.id} /> : PENDING[tab] && <Pending tab={tab} />}
+          {tab === 'rezervasyonlar' && can(session, 'reservations.read') ? <RelatedReservations kind="account" id={a.id} /> : tab === 'kiralamalar' && can(session, 'rentals.read') ? <RelatedRentals kind="account" id={a.id} /> : tab === 'cari' ? <PartyFinancePanel kind="corporate" id={a.id} /> : PENDING[tab] && <Pending tab={tab} />}
         </div>
       </div>
       {tab === 'genel' && a.status === 'active' && (

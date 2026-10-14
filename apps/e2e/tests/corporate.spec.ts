@@ -64,15 +64,14 @@ test.describe('as the owner', () => {
     await expect(page.getByRole('heading', { name: 'Akış Testi Turizam d.o.o.' })).toBeVisible()
     await expect(page.getByText('K-0000', { exact: false }).first()).toBeVisible()
     await expect(page.getByRole('link', { name: '+387 33 000 909' }).first()).toBeVisible()
-    // Reservations (V1) and rentals (Rentals V1) are real; finance still says it is not connected.
+    // Reservations (V1), rentals (Rentals V1) and the statement (Finance V1) are real.
     await page.getByRole('tab', { name: 'Rezervasyonlar' }).click()
     await expect(page.getByText('Bu kurumsal hesapla yapılmış rezervasyon yok.')).toBeVisible()
     await page.getByRole('tab', { name: 'Kiralamalar' }).click()
     await expect(page.getByText('Bu kurumsal hesapla yapılmış kiralama yok.')).toBeVisible()
-    for (const tab of ['Cari / Finans']) {
-      await page.getByRole('tab', { name: tab }).click()
-      await expect(page.getByRole('heading', { name: `${tab} henüz bağlı değil` })).toBeVisible()
-    }
+    // Finance V1: the statement is real; with no finance file it says so (no sample amounts).
+    await page.getByRole('tab', { name: 'Cari / Finans' }).click()
+    await expect(page.getByText('Ödeme sorumlusu bu kurumsal hesap olan finans dosyası yok.')).toBeVisible()
   })
 
   test('360°: addresses with one primary per kind, tax ids with hints, channels; removal keeps history', async ({ page }) => {

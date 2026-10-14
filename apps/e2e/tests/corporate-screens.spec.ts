@@ -51,7 +51,7 @@ for (const [w, h] of [
       [/^Kişiler/, '06-kisiler'],
       [/^Sürücüler/, '07-suruculer'],
       ['Geçmiş', '08-gecmis'],
-      ['Cari / Finans', '09-cari-bagli-degil'],
+      ['Cari / Finans', '09-cari'],
     ] as const) {
       await page.getByRole('tab', { name: tab }).click()
       await settle(page)

@@ -29,7 +29,7 @@ test('rental list, form, 360° tabs, handover desk, return and dialogs', async (
   await audit(page, 'yeni kiralama')
   page.once('dialog', (d) => void d.accept())
   await openRental(page, 'K-000004')
-  for (const tab of ['Genel', 'Müşteri ve sürücüler', 'Araç ve rezervasyon', 'Fiyat teklifi', 'Sözleşme', 'Teslim', 'İade', 'Hasar ve fotoğraflar', 'Geçmiş']) {
+  for (const tab of ['Genel', 'Müşteri ve sürücüler', 'Araç ve rezervasyon', 'Fiyat teklifi', 'Sözleşme', 'Finans', 'Teslim', 'İade', 'Hasar ve fotoğraflar', 'Geçmiş']) {
     await page.getByRole('tab', { name: tab, exact: true }).click()
     await audit(page, `kiralama 360 ${tab}`)
   }

@@ -47,7 +47,7 @@ export type RentalSort = (typeof RENTAL_SORTS)[number]
 export const RENTAL_PAGE_SIZES = [25, 50, 100] as const
 export const RENTAL_VIEWS = ['active', 'prepared', 'delivered', 'overdue', 'returned', 'closed', 'cancelled', 'all'] as const
 export type RentalView = (typeof RENTAL_VIEWS)[number]
-export const RENTAL_TABS = ['genel', 'kisiler', 'arac', 'fiyat', 'sozlesme', 'teslim', 'iade', 'hasar', 'gecmis'] as const
+export const RENTAL_TABS = ['genel', 'kisiler', 'arac', 'fiyat', 'sozlesme', 'finans', 'teslim', 'iade', 'hasar', 'gecmis'] as const
 export type RentalTab = (typeof RENTAL_TABS)[number]
 
 /** K8: a handover or return may be recorded late, at most this far back, never in the future. */

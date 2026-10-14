@@ -1,4 +1,4 @@
-import type { ContractDetail, ContractTemplate, PriceListDetail, PriceListSummary, PriceQuote, PricingResult, ApiError,AvailabilityResponse, RentalActivityItem, RentalSettings, RentalDetail, RentalListItem, RentalListResponse, ReservationActivityItem, ReservationBranch, ReservationDetail, ReservationListItem, ReservationListResponse, TimelineResponse, CorporateActivityItem, CorporateDetail, CorporateDuplicateMatch, CorporateListResponse, CorporatePeopleResponse, CustomerCorporateLink, CustomerActivityItem, CustomerDocument, CustomerDocumentsResponse, CustomerDocumentStatus, RequirementItem, RequirementPolicy, CustomerDetail, CustomerDuplicateResponse, CustomerListResponse, HistoryWriteResult, SessionInfo, VehicleActivityItem, VehicleDocumentDetail, VehicleDocumentsResponse, VehiclePhoto, VehiclePhotoList, VehicleClassSummary, VehicleDetail, VehicleHistory, VehicleListResponse } from '@acarvo/shared'
+import type { FinanceDepositListItem, FinanceFileListItem, FinanceListPage, FinancePaymentListItem, FinancePendingResponse, FinanceRefundListItem, FinanceSummaryRow, PartyFinanceView, RentalFinanceView, ContractDetail, ContractTemplate, PriceListDetail, PriceListSummary, PriceQuote, PricingResult, ApiError,AvailabilityResponse, RentalActivityItem, RentalSettings, RentalDetail, RentalListItem, RentalListResponse, ReservationActivityItem, ReservationBranch, ReservationDetail, ReservationListItem, ReservationListResponse, TimelineResponse, CorporateActivityItem, CorporateDetail, CorporateDuplicateMatch, CorporateListResponse, CorporatePeopleResponse, CustomerCorporateLink, CustomerActivityItem, CustomerDocument, CustomerDocumentsResponse, CustomerDocumentStatus, RequirementItem, RequirementPolicy, CustomerDetail, CustomerDuplicateResponse, CustomerListResponse, HistoryWriteResult, SessionInfo, VehicleActivityItem, VehicleDocumentDetail, VehicleDocumentsResponse, VehiclePhoto, VehiclePhotoList, VehicleClassSummary, VehicleDetail, VehicleHistory, VehicleListResponse } from '@acarvo/shared'
 
 export class ApiRequestError extends Error {
   constructor(
@@ -375,4 +375,43 @@ export const contractsApi = {
   archive: (id: string, body: { version: number; requestId: string; reason: string }) => api<ContractDetail>(`/contracts/${id}/archive`, { method: 'POST', body }),
   /** Asks for a short-lived, session-bound grant to view or download the draft PDF (recorded once, on this POST). */
   access: (id: string, mode: 'view' | 'download') => api<{ url: string; expiresAt: string }>(`/contracts/${id}/access`, { method: 'POST', body: { mode } }),
+}
+
+export interface FinanceEventListItem {
+  id: string
+  rental: { id: string; no: string }
+  entityType: string
+  entityNo: string | null
+  kind: string
+  fromStatus: string | null
+  toStatus: string | null
+  amountMinor: number | null
+  currency: string | null
+  actorName: string | null
+  at: string
+}
+
+/** Finance V1: internal records only. Every change carries the version seen and a request id (safe to retry). */
+export const financeApi = {
+  rental: (rentalId: string) => api<RentalFinanceView>(`/rentals/${rentalId}/finance`),
+  open: (rentalId: string, body: unknown) => api<RentalFinanceView>(`/rentals/${rentalId}/finance/open`, { method: 'POST', body }),
+  close: (rentalId: string, body: unknown) => api<RentalFinanceView>(`/rentals/${rentalId}/finance/close`, { method: 'POST', body }),
+  reopen: (rentalId: string, body: unknown) => api<RentalFinanceView>(`/rentals/${rentalId}/finance/reopen`, { method: 'POST', body }),
+  createCharge: (rentalId: string, body: unknown) => api<RentalFinanceView>(`/rentals/${rentalId}/finance/charges`, { method: 'POST', body }),
+  chargeAction: (id: string, action: string, body: unknown) => api<RentalFinanceView>(`/finance/charges/${id}/${action}`, { method: 'POST', body }),
+  createPayment: (rentalId: string, body: unknown) => api<RentalFinanceView>(`/rentals/${rentalId}/finance/payments`, { method: 'POST', body }),
+  paymentAction: (id: string, action: string, body: unknown) => api<RentalFinanceView>(`/finance/payments/${id}/${action}`, { method: 'POST', body }),
+  createDeposit: (rentalId: string, body: unknown) => api<RentalFinanceView>(`/rentals/${rentalId}/finance/deposits`, { method: 'POST', body }),
+  depositAction: (id: string, action: string, body: unknown) => api<RentalFinanceView>(`/finance/deposits/${id}/${action}`, { method: 'POST', body }),
+  createRefund: (depositId: string, body: unknown) => api<RentalFinanceView>(`/finance/deposits/${depositId}/refunds`, { method: 'POST', body }),
+  refundAction: (id: string, action: string, body: unknown) => api<RentalFinanceView>(`/finance/refunds/${id}/${action}`, { method: 'POST', body }),
+  payments: (body: unknown) => api<FinanceListPage<FinancePaymentListItem>>('/finance/payments/search', { method: 'POST', body }),
+  deposits: (body: unknown) => api<FinanceListPage<FinanceDepositListItem>>('/finance/deposits/search', { method: 'POST', body }),
+  refunds: (body: unknown) => api<FinanceListPage<FinanceRefundListItem>>('/finance/refunds/search', { method: 'POST', body }),
+  files: (body: unknown) => api<FinanceListPage<FinanceFileListItem>>('/finance/files/search', { method: 'POST', body }),
+  events: (body: unknown) => api<FinanceListPage<FinanceEventListItem>>('/finance/events/search', { method: 'POST', body }),
+  pending: () => api<FinancePendingResponse>('/finance/pending'),
+  summary: (body: unknown) => api<{ rows: FinanceSummaryRow[] }>('/finance/summary', { method: 'POST', body }),
+  customer: (id: string) => api<PartyFinanceView>(`/customers/${id}/finance`),
+  corporate: (id: string) => api<PartyFinanceView>(`/corporate-accounts/${id}/finance`),
 }

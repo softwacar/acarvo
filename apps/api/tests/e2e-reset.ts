@@ -6,6 +6,13 @@ if (!process.env.E2E_PASSWORD) throw new Error('E2E_PASSWORD missing')
 const data = await resetDatabase(process.env.E2E_STORAGE)
 // Browser DST test: one vehicle registered early enough for the 2025 clock changes to be valid back-dated entries.
 await asOwner(data.companies.drina, `update vehicles set created_at = '2025-01-01T00:00:00Z' where plate = 'A05-J-418'`)
+// Finance four-eyes: a second Drina user with the Yönetici preset (synthetic, acarvo_test only, same run password).
+const role = (await asOwner(data.companies.drina, `select id from roles where name = 'Yönetici'`)).rows[0].id
+const kontrol = (
+  await asOwner(null, `insert into users (email, name, password_hash) select 'kontrol@drina-demo.ba', 'Kontrol Kullanıcı', password_hash from users where email = 'adnan.kovac@drina-demo.ba' returning id`)
+).rows[0].id
+const membership = (await asOwner(data.companies.drina, `insert into memberships (company_id, user_id, all_branches) values ($1, $2, 'yes') returning id`, [data.companies.drina, kontrol])).rows[0].id
+await asOwner(data.companies.drina, `insert into membership_roles (company_id, membership_id, role_id) values ($1, $2, $3)`, [data.companies.drina, membership, role])
 await ownerPool.end()
 await appPool.end()
 console.log('e2e: acarvo_test reset and seeded')

@@ -6,6 +6,7 @@ export const USERS = {
   adnan: 'adnan.kovac@drina-demo.ba', // Drina: Sahip, all branches; Neretva: Yönetici
   selma: 'selma.karic@drina-demo.ba', // Drina: Operasyon, Sarajevo Aerodrom (SJJ) only
   lejla: 'lejla.begic@neretva-demo.ba', // Neretva: Sahip
+  kontrol: 'kontrol@drina-demo.ba', // Drina: Yönetici (finance four-eyes partner; created by the e2e reset)
 } as const
 export type User = keyof typeof USERS
 

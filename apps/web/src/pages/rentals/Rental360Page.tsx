@@ -43,12 +43,13 @@ import { formatDateTime, formatKm } from '@/lib/vehicle-labels'
 import { can, useSession } from '@/session'
 import { TimeField } from '../reservations/ReservationFormPage'
 import { ContractPanel } from '../contracts/ContractPanel'
+import { RentalFinancePanel } from '../finance/RentalFinancePanel'
 import { QuotePanel, QuoteSummary } from '../pricing/QuotePanel'
 import { DamageDiagram, draftOf } from './DamageDiagram'
 import { Note, RentalStatusBadge } from './RentalParts'
 import { listSearchToReturnTo } from './search'
 
-const TAB_LABELS: Record<RentalTab, string> = { genel: 'Genel', kisiler: 'Müşteri ve sürücüler', arac: 'Araç ve rezervasyon', fiyat: 'Fiyat teklifi', sozlesme: 'Sözleşme', teslim: 'Teslim', iade: 'İade', hasar: 'Hasar ve fotoğraflar', gecmis: 'Geçmiş' }
+const TAB_LABELS: Record<RentalTab, string> = { genel: 'Genel', kisiler: 'Müşteri ve sürücüler', arac: 'Araç ve rezervasyon', fiyat: 'Fiyat teklifi', sozlesme: 'Sözleşme', finans: 'Finans', teslim: 'Teslim', iade: 'İade', hasar: 'Hasar ve fotoğraflar', gecmis: 'Geçmiş' }
 const btnPrimary = 'inline-flex h-10 items-center gap-2 rounded-lg bg-blue px-4 font-medium text-white transition-colors hover:bg-blue-ink disabled:opacity-60'
 const btnSecondary = 'inline-flex h-10 items-center gap-2 rounded-lg border border-line bg-surface px-4 font-medium text-ink transition-colors hover:bg-line-soft disabled:opacity-60'
 
@@ -603,7 +604,7 @@ export function Rental360Page() {
                       )}
                       <DropdownMenu.Separator className="my-1 h-px bg-line" />
                       <DropdownMenu.Label className="px-2.5 pt-1.5 pb-1 text-[12px] text-ink-3">İlgili modüllerle açılacak</DropdownMenu.Label>
-                      {['Ödeme al', 'Araç değiştir', 'Olağan dışı sonlandır'].map((x) => (
+                      {['Araç değiştir', 'Olağan dışı sonlandır'].map((x) => (
                         <DropdownMenu.Item key={x} disabled className="flex h-8 items-center justify-between rounded-md px-2.5 text-[13.5px] text-ink-3 outline-none">
                           {x}
                           <span className="text-[11.5px]">yakında</span>
@@ -750,8 +751,11 @@ export function Rental360Page() {
                   <span className="grid size-10 place-items-center rounded-lg bg-ground text-ink-2">
                     <Coins size={20} />
                   </span>
-                  <h2 className="mt-3 text-[15px] font-semibold">Ödeme ve depozito bağlı değil</h2>
-                  <p className="mt-1 text-[13px] text-ink-2">Fiyat teklifi ve sözleşme taslağı kendi sekmelerindedir. Ödeme alınmadı, depozito tutulmadı, borç veya fatura oluşmadı; ACARVO’da elektronik imza yoktur.</p>
+                  <h2 className="mt-3 text-[15px] font-semibold">Fiyat, sözleşme ve finans</h2>
+                  <p className="mt-1 text-[13px] text-ink-2">Fiyat teklifi, sözleşme taslağı ve finans kayıtları (iç hesap, tahsilat, depozito) kendi sekmelerindedir. ACARVO para tahsil etmez, fatura kesmez ve elektronik imza içermez.</p>
+                  <button type="button" onClick={() => onTab('finans')} className="mt-2 text-[13px] font-medium text-blue hover:underline">
+                    Finans sekmesine git
+                  </button>
                 </section>
                 <Panel title="Kayıt bilgisi">
                   <Facts
@@ -871,6 +875,14 @@ export function Rental360Page() {
             ) : (
               <StatePanel icon={Key} title="Sözleşmeleri görme yetkiniz yok">
                 <p>Sözleşme taslakları sözleşme görüntüleme yetkisi olan kullanıcılara açıktır.</p>
+              </StatePanel>
+            ))}
+          {tab === 'finans' &&
+            (can(session, 'finance.read') ? (
+              <RentalFinancePanel rentalId={r.id} />
+            ) : (
+              <StatePanel icon={Coins} title="Finans bilgilerini görme yetkiniz yok">
+                <p>Kiralamanın finans bölümü finans görüntüleme yetkisi olan kullanıcılara açıktır.</p>
               </StatePanel>
             ))}
           {tab === 'teslim' &&

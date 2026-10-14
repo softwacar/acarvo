@@ -106,7 +106,7 @@ test.describe('signed in', () => {
       [/^Vergi bilgileri/, 'vergi'],
       [/^Sürücüler/, 'suruculer'],
       ['Geçmiş', 'gecmis'],
-      ['Cari / Finans', 'cari bekliyor'],
+      ['Cari / Finans', 'cari'],
     ] as const) {
       await page.getByRole('tab', { name: tab }).click()
       await audit(page, `kurumsal ${label}`)

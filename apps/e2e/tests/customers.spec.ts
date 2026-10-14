@@ -201,10 +201,7 @@ test.describe('as the owner', () => {
   test('Müşteri 360°: tabs without data say so and show no sample records', async ({ page }) => {
     await openCustomer(page, 'Kenan Örnek')
     await expect(page).toHaveURL(/\/musteriler\/[0-9a-f-]{36}$/)
-    for (const [tab, module] of [
-      ['Cari ve tahsilatlar', 'Finans'],
-      ['Görevler ve olaylar', 'Görevler ve Olay Merkezi'],
-    ] as const) {
+    for (const [tab, module] of [['Görevler ve olaylar', 'Görevler ve Olay Merkezi']] as const) {
       await page.getByRole('tab', { name: new RegExp(`^${tab}`) }).click()
       const panel = page.getByRole('tabpanel')
       await expect(panel.getByRole('heading', { name: `${tab} henüz bağlı değil` })).toBeVisible()

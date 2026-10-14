@@ -50,6 +50,7 @@ import { CustomerDocuments } from './CustomerDocuments'
 import { CustomerFormSheet } from './CustomerForm'
 import { RelatedReservations } from '../reservations/RelatedReservations'
 import { RelatedRentals } from '../rentals/RelatedRentals'
+import { PartyFinancePanel } from '../finance/PartyFinancePanel'
 import { listSearchToReturnTo } from './search'
 
 // ---------------------------------------------------------------------------
@@ -76,11 +77,7 @@ const PENDING: Partial<Record<CustomerTab, { icon: Icon; module: string; will: s
     module: 'Kiralamalar',
     will: ['Kiracı veya sürücü olduğu kiralamalar', 'Teslim ve iade bilgileri, sözleşme bağlantıları', 'Birincil ve ek sürücü olarak yer aldığı kayıtlar'],
   },
-  cari: {
-    icon: Coins,
-    module: 'Finans',
-    will: ['Tahakkuk, tahsilat ve açık bakiye; para birimleri ayrı', 'Depozito ve iade hareketleri', 'Kaynağına bağlı finans kayıtları; karışık toplam yok'],
-  },
+
   gorevler: {
     icon: ClipboardText,
     module: 'Görevler ve Olay Merkezi',
@@ -418,7 +415,7 @@ function FileStatus({ c, onTab }: { c: CustomerDetail; onTab: (t: CustomerTab) =
     [Buildings, 'Kurumsal hesap bağlantıları', <CorporateLinksState c={c} />, null],
     [CalendarCheck, 'Rezervasyonlar', <span className="text-ink-2">Listeyi aç</span>, 'rezervasyonlar'],
     [Key, 'Kiralamalar', <span className="text-ink-2">Listeyi aç</span>, 'kiralamalar'],
-    [Coins, 'Cari hesap', <span className="text-ink-3">Finans modülüyle</span>, 'cari'],
+    [Coins, 'Cari hesap', <span className="text-ink-2">Finans kayıtlarını aç</span>, 'cari'],
   ]
   return (
     <Panel title="Müşteri dosyası">
@@ -744,7 +741,7 @@ export function Customer360Page() {
           {tab === 'genel' && <Overview c={c} canManage={canManage} onEdit={() => setEditing(true)} onTab={onTab} />}
           {tab === 'belgeler' && <CustomerDocuments customer={c} />}
           {tab === 'gecmis' && <HistoryTab c={c} />}
-          {tab === 'rezervasyonlar' && can(session, 'reservations.read') ? <RelatedReservations kind="customer" id={c.id} /> : tab === 'kiralamalar' && can(session, 'rentals.read') ? <RelatedRentals kind="customer" id={c.id} /> : PENDING[tab] && <Pending tab={tab} />}
+          {tab === 'rezervasyonlar' && can(session, 'reservations.read') ? <RelatedReservations kind="customer" id={c.id} /> : tab === 'kiralamalar' && can(session, 'rentals.read') ? <RelatedRentals kind="customer" id={c.id} /> : tab === 'cari' ? <PartyFinancePanel kind="customer" id={c.id} /> : PENDING[tab] && <Pending tab={tab} />}
         </div>
       </div>
       {editing && <CustomerFormSheet mode="edit" customer={c} onClose={() => setEditing(false)} />}
