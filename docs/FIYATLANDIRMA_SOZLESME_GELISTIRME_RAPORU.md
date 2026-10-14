@@ -2,7 +2,7 @@
 
 Tarih: 13.10.2026 · Dal: `fiyat-sozlesme-v1` (çalışma kopyası `acarvo-fs1`) · Plan: `docs/FIYATLANDIRMA_SOZLESME_PLANI.md`
 
-Durum: **son inceleme tamamlandı, main entegrasyonuna hazır** (ayrıntılar en sondaki "Son inceleme ve main entegrasyonu" bölümünde). GitHub'a gönderilmedi, `.env` değiştirilmedi, finans modülüne geçilmedi. Otomatik testler yalnız `acarvo_test` üzerinde, sentetik verilerle çalıştı.
+Durum: **main'e entegre edildi; ana veritabanı 34 migration** (ayrıntılar en sondaki "Son inceleme ve main entegrasyonu" bölümünde). GitHub'a gönderilmedi, `.env` değiştirilmedi, finans modülüne geçilmedi. Otomatik testler yalnız `acarvo_test` üzerinde, sentetik verilerle çalıştı.
 
 ---
 
@@ -215,4 +215,33 @@ Kayan nokta kullanılmıyor (tamsayı küsurat birimi, BigInt); ISO küsurat bas
 
 ### 7. Main entegrasyonu
 
-Bekliyor (bu bölüm entegrasyondan sonra main üzerinde güncellenir).
+| Konu | Sonuç |
+|---|---|
+| Git | İki çalışma ağacı temizdi; main (`f894b22`) dalın atasıydı; yalnız fast-forward. Force, reset veya rebase yok. GitHub'a gönderilmedi. Dal `fiyat-sozlesme-v1` ve `acarvo-fs1` korunuyor. |
+| Son main commit'i | Bu raporu güncelleyen commit (kod: `506386e`) |
+| Ana sunucular | Kod değişince yeniden başlamaması için geçişten önce durduruldu, geçişten sonra main kodundan yeniden başlatıldı |
+| Geçiş öncesi | `safe-migrate --verify`: yalnız 3 bekleyen migration; `--dry-run`: 0031, 0032, 0033; satır sayıları ve içerik özetleri (şirket bazında 50 tablo, kullanıcılar, şirketler, oturumlar, dosya deposu) alındı |
+| Doğrulanmış yedek | `C:\Users\soena\Desktop\acarvo\backups\2026-10-13-23-53-12` (yedekteki satır sayıları canlı sayılarla karşılaştırılarak doğrulandı) |
+| Ana veritabanı | 31 → **34** migration; `safe-migrate --verify`: sorun yok (59 tablo, 55'i RLS'li) |
+| Güvenlik karşılaştırması | 48 yeni politika (12 × 4), 28 yeni uygulama rolü yetkisi, 42 yeni indeks; kaldırılan politika, yetki, indeks yok; RLS ayarı değişen tablo yok; veritabanı rolleri aynı |
+| Rol izinleri | Yalnız değiştirilmemiş hazır roller yükseltildi (her iki şirkette): Sahip +7 (fiyat görme/teklif/yönetme, sözleşme görme/yönetme/indirme, şablon yönetimi), Yönetici +5, Operasyon +4 (fiyat görme/teklif, sözleşme görme/yönetme; indirme yok). Özel rol yok, başka izin değişmedi |
+| Mevcut gerçek veriler | **Korundu.** Müşteriler, araçlar, sınıflar, rezervasyonlar ve sürücüleri, kiralamalar ve tüm alt kayıtları, araç/müşteri belgeleri, dosyalar, fotoğraflar, km ve konum geçmişi, şubeler, üyelikler, kullanıcılar, şirketler, oturumlar, sıra sayaçları ve dosya deposu (16 dosya) birebir aynı. Tek ekleme: şirket başına 3 `role.preset_upgrade` işlem geçmişi kaydı (sistem) |
+| Sentetik veri | Ana veritabanına fiyat listesi, teklif, şablon veya sözleşme eklenmedi (yeni tabloların hepsi boş) |
+| Testler (main, yalnız `acarvo_test`) | API **453** / 453; tarayıcı **113** geçti (+27 isteğe bağlı ekran görüntüsü testi) |
+| TypeScript ve build | 4 proje hatasız; üretim derlemesi başarılı (ana paket main öncesine göre ~+15 kB) |
+| Çalışan uygulama | API http://localhost:3001 sağlıklı (`/api/health` → veritabanı bağlı); web http://localhost:5173 açılıyor; fiyat API'si oturumsuz isteği 401 ile reddediyor |
+
+**Ekran adresleri:** Fiyatlandırma http://localhost:5173/fiyatlandirma (yeni liste: `/fiyatlandirma/yeni`), rezervasyon teklifi `/rezervasyonlar/<id>?sekme=fiyat`, kiralama teklifi `/kiralamalar/<id>?sekme=fiyat`, sözleşme `/kiralamalar/<id>?sekme=sozlesme`, şablonlar http://localhost:5173/ayarlar (yalnız Sahip). Ana veritabanında henüz fiyat listesi ve şablon yok: ekranlar "Fiyat listesi yok" / "Henüz şablon yok" ve teklif/sözleşmede "Hesaplanmadı" gösterir; örnek veri gösterilmez. İçerik doğrulaması gerçek hesabınla değil, test veritabanındaki tarayıcı testleriyle yapıldı.
+
+### 8. Açık riskler
+
+- Erişim izinleri API sürecinin belleğinde: yeniden başlatmada düşer (kullanıcı tekrar tıklar); birden fazla API örneği için ortak depo gerekir (araç ve müşteri belgeleriyle aynı bilinen sınır).
+- Operasyon PDF'i tarayıcıda açabilir; tarayıcının kendi kaydet düğmesi teknik olarak engellenemez. "İndirme" yetkisi ACARVO'nun indirme düğmesini ve ek dosyasını yönetir (belge modülleriyle aynı yaklaşım).
+- Hukuki onaylı sözleşme metni, vergi oranlarının mali onayı ve e-imza entegrasyonu yok; gerçek kiralamanın tüm hukuki ve operasyonel ön koşulları bu modülle tamamlanmış sayılmaz.
+- Ana veritabanındaki 4 şubenin ülkesi boş ve dış sözleşme/fiyat modu kapalı: teslim bilerek yapılamıyor (değiştirilmedi).
+- Alış şubesi değişikliği teklif için ayrıca "güncel değil" uyarısı üretmez (teklif kendi listesini ve revizyonunu gösterir).
+- PDF yazı tipi DejaVu Sans: Latin ve Kiril desteklenir; Arapça vb. desteklenmez.
+
+### 9. Finans modülüne devredilecek işler
+
+Ödeme ve tahsilat (teklif tutarına bağlanarak, kur kuralıyla), depozito/ön provizyon, borç ve cari hesap, fatura ve vergi belgeleri (onaylı vergi oranları ile), iade ve kredi notu, gecikme/km/hasar ücretleri, kurumsal anlaşma fiyatları, tek yön ücreti ve sigorta paketleri; teslimde "ödeme alındı" kapısının gerçek finans kaydına bağlanması. Teklifler bunun için değişmez kaynak olarak hazır (liste, revizyon, kalemler, vergi durumu); teklif hiçbir zaman ödeme veya borç kaydı sayılmamalı.
