@@ -258,7 +258,7 @@ export function VehicleOption({ v, selected, onSelect, zone }: { v: Availability
         {v.status !== 'active' ? (
           <span className="block text-[12.5px] font-medium text-alert">Hizmet dışı</span>
         ) : v.conflicts.length ? (
-          <span className="block text-[12.5px] font-medium text-alert">Dolu: {v.conflicts.map(allocationConflictText).join(', ')}</span>
+          <span className="block text-[12.5px] font-medium text-alert">Dolu: {v.conflicts.map((c) => (c.kind === 'reservation' || c.kind === 'rental' ? (c.endsAt ? c.refNo : `${c.refNo} (iade gecikti)`) : allocationConflictText(c))).join(', ')}</span>
         ) : (
           <span className="inline-flex items-center gap-1 text-[12.5px] font-medium text-ok">
             <CheckCircle size={13} weight="fill" /> Seçili dönemde onaylı rezervasyonu veya kiralaması yok
