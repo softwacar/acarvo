@@ -10,7 +10,9 @@ import type {
   MaintenanceType,
   OperationEvent,
   ServiceDueState,
+  TransferPurpose,
   TransferStatus,
+  TransportMethod,
 } from '@acarvo/shared'
 import type { Tone } from './finance-labels'
 
@@ -69,6 +71,8 @@ export const DAMAGE_REVIEW_LABELS: Record<DamageReviewStatus, string> = { report
 export const DAMAGE_REVIEW_TONE: Record<DamageReviewStatus, Tone> = { reported: 'hold', under_review: 'blue', assessed: 'blue', closed: 'muted' }
 export const DAMAGE_REPAIR_LABELS: Record<DamageRepairStatus, string> = { not_needed: 'Onarım gerekmiyor', pending: 'Onarım bekliyor', in_repair: 'Onarımda', repaired: 'Onarıldı' }
 
+export const TRANSFER_PURPOSE_LABELS: Record<TransferPurpose, string> = { operational: 'Normal transfer', repair: 'Onarım amaçlı taşıma' }
+export const TRANSPORT_METHOD_LABELS: Record<TransportMethod, string> = { tow_truck: 'Çekici', car_carrier: 'Araç taşıyıcı' }
 export const TRANSFER_STATUS_LABELS: Record<TransferStatus, string> = { requested: 'Talep edildi', approved: 'Onaylandı', in_transit: 'Yolda', completed: 'Teslim alındı', cancelled: 'İptal' }
 export const TRANSFER_STATUS_TONE: Record<TransferStatus, Tone> = { requested: 'hold', approved: 'blue', in_transit: 'hold', completed: 'ok', cancelled: 'muted' }
 export const TRANSFER_STATUS_HINT: Record<TransferStatus, string> = {

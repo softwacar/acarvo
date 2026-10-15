@@ -385,11 +385,13 @@ export async function maintenanceRoutes(app: FastifyInstance) {
         ).id as string
       }
       await guarded(
+        // Started earlier than planned: the plan's start moves to the real start (the original plan stays in the event).
         tx.execute(sql`update maintenance_records set status = 'in_service', actual_start_at = ${startedAt}, started_by = ${userId}, planned_end_at = ${end},
+            planned_start_at = least(planned_start_at, ${startedAt}::timestamptz),
             at_provider = ${input.atProvider}, provider_name = ${providerName}, start_km = ${input.km ?? null}, start_odometer_reading_id = ${readingId},
             start_location_event_id = ${locationId}, version = version + 1, updated_at = now(), updated_by = ${userId} where id = ${id}`),
       )
-      const data = { startedAt, expectedEndAt: end, km: input.km ?? null, atProvider: input.atProvider, largeJump: !!jump }
+      const data = { startedAt, expectedEndAt: end, plannedStartAt: toIso(cur.planned_start_at), plannedEndAt: toIso(cur.planned_end_at), km: input.km ?? null, atProvider: input.atProvider, largeJump: !!jump }
       await addEvent(tx, MAINTENANCE_EVENTS, access.companyId, id, 'started', userId, { from: cur.status as string, to: 'in_service', data, requestId: input.requestId })
       await audit(tx, { companyId: access.companyId, actorUserId: userId, action: 'maintenance.start', entity: 'maintenance', entityId: id, summary: { maintenanceNo: cur.maintenance_no, vehicle: cur.plate, fromVersion: input.version, ...data } })
       return detail(tx, access, id)

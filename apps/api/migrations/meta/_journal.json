@@ -281,6 +281,27 @@
       "when": 1792076659479,
       "tag": "0039_operations_history_guard_fix",
       "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "7",
+      "when": 1792100257717,
+      "tag": "0040_transfer_purpose",
+      "breakpoints": true
+    },
+    {
+      "idx": 41,
+      "version": "7",
+      "when": 1792100258717,
+      "tag": "0041_transfer_purpose_guard",
+      "breakpoints": true
+    },
+    {
+      "idx": 42,
+      "version": "7",
+      "when": 1792100259717,
+      "tag": "0042_transfer_damage_window",
+      "breakpoints": true
     }
   ]
 }

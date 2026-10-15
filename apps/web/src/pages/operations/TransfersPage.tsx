@@ -47,6 +47,7 @@ function Row({ t }: { t: TransferListItem }) {
         <span className="mt-0.5 block truncate text-[12.5px] text-ink-2">
           <span className="tnum sm:hidden">{t.transferNo} · </span>
           {t.vehicle.make} {t.vehicle.model}
+          {t.purpose === 'repair' ? ' · onarım taşıması' : ''}
         </span>
         <span className="mt-1 block md:hidden">
           <Pill tone={t.late ? 'alert' : TRANSFER_STATUS_TONE[t.status]}>{label}</Pill>

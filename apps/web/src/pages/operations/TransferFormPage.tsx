@@ -1,3 +1,4 @@
+import { TRANSPORT_METHODS, type TransferPurpose, type TransportMethod } from '@acarvo/shared'
 import { ArrowLeft, SpinnerGap } from '@phosphor-icons/react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useNavigate, useSearch } from '@tanstack/react-router'
@@ -5,10 +6,11 @@ import { useEffect, useState } from 'react'
 import { describe, Field, Input, Select } from '@/components/fields'
 import { ForbiddenState } from '@/components/states'
 import { toast } from '@/components/Toaster'
-import { ApiRequestError, transfersApi, vehiclesApi } from '@/lib/api'
+import { ApiRequestError, transfersApi, vehicleOpsApi, vehiclesApi } from '@/lib/api'
+import { DAMAGE_TYPE_LABELS, DAMAGE_VIEW_LABELS, TRANSPORT_METHOD_LABELS } from '@/lib/operation-labels'
 import { can, useSession } from '@/session'
 import { TimeField } from '../reservations/ReservationFormPage'
-import { btnGhost, btnPrimary, ErrorLine, newRequestId, Section, VehiclePicker } from './OpsParts'
+import { btnGhost, btnPrimary, ErrorLine, newRequestId, Notice, Section, VehiclePicker } from './OpsParts'
 import type { CreateSearch } from './search'
 
 /** Transfer talebi: from a branch of the user to another branch of the company. Holds nothing until approved. */
@@ -28,15 +30,28 @@ export function TransferFormPage() {
   const [arrChoice, setArrChoice] = useState<'earlier' | 'later'>()
   const [reason, setReason] = useState('')
   const [driver, setDriver] = useState('')
+  const [purpose, setPurpose] = useState<TransferPurpose>(search.hasar ? 'repair' : 'operational')
+  const [damageFileId, setDamageFileId] = useState(search.hasar ?? '')
+  const [method, setMethod] = useState<TransportMethod | ''>('')
+  const canRepair = can(session, 'transfers.repair')
+  const ops = useQuery({ queryKey: ['vehicle-ops', session.company?.id, vehicle?.id], queryFn: () => vehicleOpsApi.get(vehicle!.id), enabled: !!vehicle && purpose === 'repair', retry: false })
+  const openDamages = (ops.data?.damages ?? []).filter((d) => d.reviewStatus !== 'closed')
+  const blocked = (ops.data?.damages ?? []).some((d) => d.blocked)
   const [requestId] = useState(newRequestId)
   const [fields, setFields] = useState<Record<string, string>>({})
   const [error, setError] = useState<string | null>(null)
   const [pending, setPending] = useState(false)
   useEffect(() => {
-    if (prefill.data && !vehicle) setVehicle({ id: prefill.data.id, plate: prefill.data.plate, text: `${prefill.data.make} ${prefill.data.model} · ${prefill.data.className}` })
+    if (prefill.data && !vehicle) setVehicle({ id: prefill.data.id, plate: prefill.data.plate, text: `${prefill.data.make} ${prefill.data.model} · ${prefill.data.className}`, homeBranchId: prefill.data.homeBranchId })
   }, [prefill.data, vehicle])
   const all = branches.data?.branches ?? []
   const inScope = all.filter((b) => b.inScope)
+  // The vehicle's home branch when it is the user's (the physical location may differ; the user can change it).
+  const homeId = vehicle?.homeBranchId
+  const homeInScope = !!homeId && inScope.some((b) => b.id === homeId)
+  useEffect(() => {
+    if (homeInScope) setFromId(homeId!)
+  }, [homeId, homeInScope])
   useEffect(() => {
     if (!fromId && inScope.length) setFromId(inScope[0]!.id)
   }, [fromId, inScope])
@@ -64,12 +79,14 @@ export function TransferFormPage() {
           if (!dep) f.plannedDepartureLocal = 'Planlanan çıkışı girin'
           if (!arr) f.plannedArrivalLocal = 'Planlanan varışı girin'
           if (reason.trim().length < 3) f.reason = 'Transferin nedenini yazın'
+          if (purpose === 'repair' && !damageFileId) f.damageFileId = 'Taşımanın bağlı olduğu hasar dosyasını seçin'
+          if (purpose === 'repair' && !method) f.transportMethod = 'Taşıma yöntemini seçin'
           setFields(f)
           if (Object.keys(f).length) return
           setPending(true)
           setError(null)
           try {
-            const t = await transfersApi.create({ requestId, vehicleId: vehicle!.id, fromBranchId: fromId, toBranchId: toId, reason, plannedDepartureLocal: dep, plannedDepartureChoice: depChoice, plannedArrivalLocal: arr, plannedArrivalChoice: arrChoice, driverNote: driver || undefined })
+            const t = await transfersApi.create({ requestId, vehicleId: vehicle!.id, fromBranchId: fromId, toBranchId: toId, reason, plannedDepartureLocal: dep, plannedDepartureChoice: depChoice, plannedArrivalLocal: arr, plannedArrivalChoice: arrChoice, driverNote: driver || undefined, purpose, damageFileId: purpose === 'repair' ? damageFileId : undefined, transportMethod: purpose === 'repair' ? method : undefined })
             void qc.invalidateQueries({ queryKey: ['transfers'] })
             void qc.invalidateQueries({ queryKey: ['vehicle-ops'] })
             toast(`${t.transferNo} talebi oluşturuldu.`)
@@ -86,6 +103,56 @@ export function TransferFormPage() {
       >
         <Section title="Araç">
           <VehiclePicker value={vehicle} onChange={(v) => setVehicle(v)} error={fields.vehicleId} />
+        </Section>
+        <Section title="Taşımanın türü">
+          <fieldset>
+            <legend className="sr-only">Taşımanın türü</legend>
+            <div className="grid gap-2 sm:grid-cols-2">
+              <label className="flex cursor-pointer items-start gap-2.5 rounded-lg border border-line px-3 py-2.5 text-[13.5px] has-[:checked]:border-blue/45 has-[:checked]:bg-blue-soft/30">
+                <input type="radio" name="purpose" checked={purpose === 'operational'} onChange={() => setPurpose('operational')} className="mt-0.5 accent-[var(--ac-blue)]" />
+                <span>
+                  <span className="block font-medium">Normal transfer</span>
+                  <span className="block text-[12.5px] text-ink-2">Kullanılabilir aracın şubeler arası taşınması. Kullanılamaz işaretli araç bu yolla çıkarılamaz.</span>
+                </span>
+              </label>
+              <label className={`flex items-start gap-2.5 rounded-lg border border-line px-3 py-2.5 text-[13.5px] has-[:checked]:border-blue/45 has-[:checked]:bg-blue-soft/30 ${canRepair ? 'cursor-pointer' : 'cursor-not-allowed opacity-60'}`}>
+                <input type="radio" name="purpose" disabled={!canRepair} checked={purpose === 'repair'} onChange={() => setPurpose('repair')} className="mt-0.5 accent-[var(--ac-blue)]" />
+                <span>
+                  <span className="block font-medium">Onarım amaçlı taşıma</span>
+                  <span className="block text-[12.5px] text-ink-2">{canRepair ? 'Hasarlı aracın çekici veya taşıyıcıyla onarım yerine götürülmesi. Araç sürülmez.' : 'Bu taşıma için ayrı yetki gerekir.'}</span>
+                </span>
+              </label>
+            </div>
+          </fieldset>
+          {purpose === 'repair' && (
+            <div className="mt-4 space-y-4">
+              <Notice tone="alert">
+                Onarım amaçlı taşıma, aracın trafikte kendi gücüyle sürülebileceği anlamına gelmez. Araç yalnız beyan edilen çekici veya taşıyıcıyla taşınır; çıkışta bunu yetkili kişi beyan eder. ACARVO taşımayı ayrıca doğrulamaz. Varışta hasar dosyası açık, kullanım engeli olduğu gibi kalır.
+              </Notice>
+              <Field id="t-damage" label="Bağlı hasar dosyası" required error={fields.damageFileId}>
+                <Select {...describe('t-damage', fields.damageFileId)} value={damageFileId} onChange={(e) => setDamageFileId(e.target.value)}>
+                  <option value="">{vehicle ? (openDamages.length ? 'Seçin' : 'Bu aracın açık hasar dosyası yok') : 'Önce aracı seçin'}</option>
+                  {openDamages.map((d) => (
+                    <option key={d.id} value={d.id}>
+                      {d.damageNo} · {DAMAGE_TYPE_LABELS[d.damageType]} · {DAMAGE_VIEW_LABELS[d.view]}
+                      {d.blocked ? ' · kullanılamaz' : ''}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
+              <Field id="t-method" label="Taşıma yöntemi" required error={fields.transportMethod}>
+                <Select {...describe('t-method', fields.transportMethod)} value={method} onChange={(e) => setMethod(e.target.value as TransportMethod)}>
+                  <option value="">Seçin</option>
+                  {TRANSPORT_METHODS.map((m) => (
+                    <option key={m} value={m}>
+                      {TRANSPORT_METHOD_LABELS[m]}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
+            </div>
+          )}
+          {purpose === 'operational' && blocked && <p className="mt-3 text-[13px] text-alert">Bu araç kullanılamaz olarak işaretli; normal transfer onaylanamaz.</p>}
         </Section>
         <Section title="Güzergâh ve plan">
           <div className="grid gap-4 sm:grid-cols-2">

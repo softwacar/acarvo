@@ -34,6 +34,11 @@ export type DamageListView = (typeof DAMAGE_LIST_VIEWS)[number]
 
 export const TRANSFER_STATUSES = ['requested', 'approved', 'in_transit', 'completed', 'cancelled'] as const
 export type TransferStatus = (typeof TRANSFER_STATUSES)[number]
+/** operational: a usable vehicle moved between branches. repair: a damaged vehicle carried to a repair place (never driven). */
+export const TRANSFER_PURPOSES = ['operational', 'repair'] as const
+export type TransferPurpose = (typeof TRANSFER_PURPOSES)[number]
+export const TRANSPORT_METHODS = ['tow_truck', 'car_carrier'] as const
+export type TransportMethod = (typeof TRANSPORT_METHODS)[number]
 export const TRANSFER_VIEWS = ['open', 'requested', 'approved', 'in_transit', 'late', 'incoming', 'completed', 'cancelled', 'all'] as const
 export type TransferView = (typeof TRANSFER_VIEWS)[number]
 
@@ -399,8 +404,14 @@ export const transferCreateSchema = z
     plannedArrivalLocal: wallTime('Planlanan varışı girin'),
     plannedArrivalChoice: choice,
     driverNote: optText(300),
+    purpose: z.enum(TRANSFER_PURPOSES).default('operational'),
+    /** repair only: the open damage file of the vehicle and how it is carried. */
+    damageFileId: z.preprocess(blank, z.uuid().optional()),
+    transportMethod: z.preprocess(blank, z.enum(TRANSPORT_METHODS, { error: 'Taşıma yöntemini seçin' }).optional()),
   })
   .refine((v) => v.fromBranchId !== v.toBranchId, { message: 'Varış şubesi çıkış şubesinden farklı olmalı', path: ['toBranchId'] })
+  .refine((v) => v.purpose !== 'repair' || v.damageFileId, { message: 'Taşımanın bağlı olduğu hasar dosyasını seçin', path: ['damageFileId'] })
+  .refine((v) => v.purpose !== 'repair' || v.transportMethod, { message: 'Taşıma yöntemini seçin (çekici veya taşıyıcı)', path: ['transportMethod'] })
 export type TransferCreateInput = z.infer<typeof transferCreateSchema>
 
 export const transferUpdateSchema = z.object({
@@ -423,7 +434,13 @@ const movement = {
   largeJumpReason: optText(300),
   note: optText(1000),
 }
-export const transferDepartSchema = z.object({ ...movement, departedLocal: optWallTime('Geçerli bir tarih ve saat girin'), departedChoice: choice })
+export const transferDepartSchema = z.object({
+  ...movement,
+  departedLocal: optWallTime('Geçerli bir tarih ve saat girin'),
+  departedChoice: choice,
+  /** repair transport: staff statement that the vehicle left on the stated tow truck or carrier, not under its own power. */
+  transportAck: z.boolean().default(false),
+})
 export const transferReceiveSchema = z.object({ ...movement, arrivedLocal: optWallTime('Geçerli bir tarih ve saat girin'), arrivedChoice: choice })
 export const transferApproveSchema = z.object({ version, requestId })
 export const transferCancelSchema = z.object({ version, requestId, reason: reason('İptal gerekçesini yazın (en az 5 karakter)') })
@@ -449,6 +466,7 @@ export interface TransferListItem {
   arrivedAt: string | null
   /** Derived: in transit and the planned arrival has passed. Not "arrived". */
   late: boolean
+  purpose: TransferPurpose
 }
 
 export interface TransferListResponse {
@@ -462,6 +480,9 @@ export interface TransferListResponse {
 export interface TransferDetail extends TransferListItem {
   reason: string
   driverNote: string | null
+  transportMethod: TransportMethod | null
+  transportAckAt: string | null
+  damageFile: { id: string; damageNo: string; blocked: boolean } | null
   departureKm: number | null
   arrivalKm: number | null
   departureFuel: FuelLevel | null

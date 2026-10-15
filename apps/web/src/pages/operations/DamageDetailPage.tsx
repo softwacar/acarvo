@@ -1,5 +1,5 @@
 import { DAMAGE_REPAIR_STATUSES, DAMAGE_SEVERITIES, DAMAGE_TYPES, type DamageDetail, type DamageRepairStatus } from '@acarvo/shared'
-import { Bandaids, Prohibit, Wrench } from '@phosphor-icons/react'
+import { Bandaids, Prohibit, Truck, Wrench } from '@phosphor-icons/react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useParams } from '@tanstack/react-router'
 import { type ReactNode, useState } from 'react'
@@ -274,6 +274,12 @@ export function DamageDetailPage() {
                     </li>
                   ))}
                 </ul>
+              )}
+              {open && can(session, 'transfers.repair') && (
+                <Link to="/araclar/transferler/yeni" search={{ arac: d.vehicle.id, hasar: d.id }} className="flex items-center gap-1.5 font-medium text-blue hover:underline">
+                  <Truck size={14} />
+                  Onarım için taşıma başlat (çekici / taşıyıcı)
+                </Link>
               )}
               {open && can(session, 'maintenance.manage') && (
                 <Link to="/bakim-servis/yeni" search={{ arac: d.vehicle.id, hasar: d.id }} className="inline-flex items-center gap-1.5 font-medium text-blue hover:underline">

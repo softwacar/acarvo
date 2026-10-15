@@ -63,6 +63,7 @@ export const ROLE_PRESETS: Record<string, readonly Permission[]> = {
     'transfers.request',
     'transfers.approve',
     'transfers.execute',
+    'transfers.repair',
   ],
   Yönetici: [
     'vehicles.read',
@@ -116,6 +117,7 @@ export const ROLE_PRESETS: Record<string, readonly Permission[]> = {
     'transfers.request',
     'transfers.approve',
     'transfers.execute',
+    'transfers.repair',
   ],
   Operasyon: [
     'vehicles.read',

@@ -2375,6 +2375,8 @@ export const damagePhotos = pgTable(
 )
 
 export const TRANSFER_STATUSES = ['requested', 'approved', 'in_transit', 'completed', 'cancelled'] as const
+export const TRANSFER_PURPOSES = ['operational', 'repair'] as const
+export const TRANSPORT_METHODS = ['tow_truck', 'car_carrier'] as const
 
 export const vehicleTransfers = pgTable(
   'vehicle_transfers',
@@ -2387,6 +2389,13 @@ export const vehicleTransfers = pgTable(
     toBranchId: uuid('to_branch_id').notNull(),
     status: text('status', { enum: TRANSFER_STATUSES }).notNull().default('requested'),
     reason: text('reason').notNull(),
+    /** operational: a normal move of a usable vehicle. repair: carrying a damaged vehicle to a repair place (not driven). */
+    purpose: text('purpose', { enum: TRANSFER_PURPOSES }).notNull().default('operational'),
+    damageFileId: uuid('damage_file_id'),
+    transportMethod: text('transport_method', { enum: TRANSPORT_METHODS }),
+    /** Staff statement at departure that the vehicle left on the stated transport (a statement, not a verification). */
+    transportAckAt: timestamp('transport_ack_at', { withTimezone: true }),
+    transportAckBy: uuid('transport_ack_by').references(() => users.id),
     plannedDepartureAt: timestamp('planned_departure_at', { withTimezone: true }).notNull(),
     plannedArrivalAt: timestamp('planned_arrival_at', { withTimezone: true }).notNull(),
     fromTimezone: text('from_timezone').notNull(),
@@ -2426,9 +2435,11 @@ export const vehicleTransfers = pgTable(
     index('vehicle_transfers_status_idx').on(t.companyId, t.status, t.plannedDepartureAt),
     index('vehicle_transfers_from_idx').on(t.companyId, t.fromBranchId),
     index('vehicle_transfers_to_idx').on(t.companyId, t.toBranchId),
+    index('vehicle_transfers_damage_idx').on(t.companyId, t.damageFileId),
     foreignKey({ columns: [t.companyId, t.vehicleId], foreignColumns: [vehicles.companyId, vehicles.id] }),
     foreignKey({ columns: [t.companyId, t.fromBranchId], foreignColumns: [branches.companyId, branches.id] }),
     foreignKey({ columns: [t.companyId, t.toBranchId], foreignColumns: [branches.companyId, branches.id] }),
+    foreignKey({ columns: [t.companyId, t.damageFileId], foreignColumns: [damageFiles.companyId, damageFiles.id] }),
     foreignKey({ columns: [t.companyId, t.departureOdometerReadingId], foreignColumns: [odometerReadings.companyId, odometerReadings.id] }),
     foreignKey({ columns: [t.companyId, t.arrivalOdometerReadingId], foreignColumns: [odometerReadings.companyId, odometerReadings.id] }),
     foreignKey({ columns: [t.companyId, t.departureLocationEventId], foreignColumns: [vehicleLocationEvents.companyId, vehicleLocationEvents.id] }),
@@ -2436,6 +2447,12 @@ export const vehicleTransfers = pgTable(
     check('vehicle_transfers_no_check', sql`${t.transferNo} ~ '^T-[0-9]{6,}$'`),
     check('vehicle_transfers_status_check', sql`${t.status} in ('requested', 'approved', 'in_transit', 'completed', 'cancelled')`),
     check('vehicle_transfers_branches_check', sql`${t.fromBranchId} <> ${t.toBranchId}`),
+    check(
+      'vehicle_transfers_purpose_check',
+      sql`(${t.purpose} = 'operational' and ${t.damageFileId} is null and ${t.transportMethod} is null and ${t.transportAckAt} is null)
+        or (${t.purpose} = 'repair' and ${t.damageFileId} is not null and ${t.transportMethod} in ('tow_truck', 'car_carrier'))`,
+    ),
+    check('vehicle_transfers_transport_ack_check', sql`(${t.transportAckAt} is null) = (${t.transportAckBy} is null)`),
     check('vehicle_transfers_plan_check', sql`${t.plannedArrivalAt} > ${t.plannedDepartureAt} and ${t.plannedArrivalAt} - ${t.plannedDepartureAt} <= interval '30 days'`),
     check('vehicle_transfers_reason_check', sql`char_length(${t.reason}) between 3 and 500`),
     check(

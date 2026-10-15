@@ -62,6 +62,7 @@ export const PERMISSIONS = [
   'transfers.request',
   'transfers.approve',
   'transfers.execute',
+  'transfers.repair',
   'users.read',
   'roles.read',
   'audit.read',

@@ -38,6 +38,7 @@ import {
   invalid,
   isoOrNull,
   loadEvents,
+  need,
   num,
   operationalVehicle,
   operationBranches,
@@ -56,7 +57,7 @@ export const TRANSFER_NOT_FOUND = 'Transfer bulunamadı veya bu kayda erişim ye
 const PLAN_PAST_HOURS = 24
 
 const LIST_SELECT = sql`
-  t.id, t.transfer_no, t.status, t.from_timezone, t.to_timezone, t.planned_departure_at, t.planned_arrival_at, t.departed_at, t.arrived_at,
+  t.id, t.transfer_no, t.status, t.purpose, t.from_timezone, t.to_timezone, t.planned_departure_at, t.planned_arrival_at, t.departed_at, t.arrived_at,
   v.id as v_id, v.plate as v_plate, v.make as v_make, v.model as v_model,
   fb.id as fb_id, fb.name as fb_name, fb.code as fb_code, tb.id as tb_id, tb.name as tb_name, tb.code as tb_code`
 const LIST_FROM = sql`
@@ -81,6 +82,7 @@ export function transferItem(r: Row): TransferListItem {
     departedAt: isoOrNull(r.departed_at),
     arrivedAt: isoOrNull(r.arrived_at),
     late: r.status === 'in_transit' && Date.parse(toIso(r.planned_arrival_at)) < Date.now(),
+    purpose: r.purpose as TransferListItem['purpose'],
   }
 }
 
@@ -132,6 +134,22 @@ export async function listTransfers(tx: Tx, access: CompanyAccess, q: TransferSe
 async function holdConflicts(tx: Tx, companyId: string, vehicleId: string, from: string, to: string | null, exceptId?: string): Promise<AllocationConflict[]> {
   return (await vehicleBusy(tx, companyId, vehicleId, from, to, { transferId: exceptId ?? null })).filter((c) => c.kind !== 'damage')
 }
+/** A damage block on the vehicle in the window: a normal transfer never moves a vehicle marked not usable (BHT1). */
+async function damageHolds(tx: Tx, companyId: string, vehicleId: string, from: string, to: string | null) {
+  // From now on: a block lifted earlier in the planned window does not count.
+  const start = new Date(Math.max(Date.parse(from), Date.now())).toISOString()
+  if (to && Date.parse(to) <= Date.parse(start)) return []
+  return (await vehicleBusy(tx, companyId, vehicleId, start, to)).filter((c) => c.kind === 'damage')
+}
+const damagedError = (plate: string, holds: AllocationConflict[]) =>
+  new AppError(
+    409,
+    'VEHICLE_NOT_USABLE',
+    `${plate} kullanılamaz olarak işaretli (${holds.map((h) => h.refNo).join(', ')}). Normal transferle yola çıkarılamaz. Onarım için taşınacaksa hasar dosyasından çekici veya taşıyıcıyla “onarım amaçlı taşıma” oluşturun.`,
+    undefined,
+    { conflicts: holds },
+  )
+
 async function nextCommitmentConflict(tx: Tx, companyId: string, vehicleId: string, arrival: string, destination: string) {
   const r = (await tx.execute(sql`select transfer_next_commitment_conflict(${companyId}::uuid, ${vehicleId}::uuid, ${arrival}::timestamptz, ${destination}::uuid) as ref`)).rows[0] as Row
   return str(r.ref)
@@ -140,24 +158,36 @@ async function nextCommitmentConflict(tx: Tx, companyId: string, vehicleId: stri
 async function getTransfer(tx: Tx, access: CompanyAccess, id: string): Promise<TransferDetail> {
   const r = (
     await tx.execute(sql`select ${LIST_SELECT}, t.*, v.status as v_status, v.home_branch_id as v_home, vc.name as v_class,
-        ru.name as requested_by_name, au.name as approved_by_name, du.name as departed_by_name, eu.name as received_by_name
+        ru.name as requested_by_name, au.name as approved_by_name, du.name as departed_by_name, eu.name as received_by_name,
+        df.damage_no as df_no, exists (select 1 from damage_blocks x where x.company_id = t.company_id and x.damage_id = t.damage_file_id and x.ended_at is null) as df_blocked
       ${LIST_FROM}
       join vehicle_classes vc on vc.company_id = v.company_id and vc.id = v.class_id
+      left join damage_files df on df.company_id = t.company_id and df.id = t.damage_file_id
       left join users ru on ru.id = t.created_by left join users au on au.id = t.approved_by left join users du on du.id = t.departed_by left join users eu on eu.id = t.received_by
       where t.id = ${id} and ${scopeSql(access)}`)
   ).rows[0] as Row | undefined
   if (!r) throw notFound(TRANSFER_NOT_FOUND)
   const item = transferItem(r)
   const open = item.status === 'requested' || item.status === 'approved'
-  const conflicts = open && item.plannedArrival.at > new Date().toISOString() ? await holdConflicts(tx, access.companyId, item.vehicle.id, item.plannedDeparture.at, item.plannedArrival.at, id) : []
+  const conflicts =
+    open && item.plannedArrival.at > new Date().toISOString()
+      ? [
+          ...(item.purpose === 'operational' ? await damageHolds(tx, access.companyId, item.vehicle.id, item.plannedDeparture.at, item.plannedArrival.at) : []),
+          ...(await holdConflicts(tx, access.companyId, item.vehicle.id, item.plannedDeparture.at, item.plannedArrival.at, id)),
+        ]
+      : []
   const next = open ? await nextCommitmentConflict(tx, access.companyId, item.vehicle.id, item.plannedArrival.at, item.toBranch.id) : null
   const p = access.permissions
   const fromScope = inScope(access, item.fromBranch.id)
   const toScope = inScope(access, item.toBranch.id)
+  const repairOk = item.purpose === 'operational' || p.has('transfers.repair')
   return {
     ...item,
     reason: r.reason as string,
     driverNote: str(r.driver_note),
+    transportMethod: (r.transport_method as TransferDetail['transportMethod']) ?? null,
+    transportAckAt: isoOrNull(r.transport_ack_at),
+    damageFile: r.damage_file_id ? { id: r.damage_file_id as string, damageNo: r.df_no as string, blocked: r.df_blocked === true } : null,
     departureKm: num(r.departure_km),
     arrivalKm: num(r.arrival_km),
     departureFuel: (r.departure_fuel as TransferDetail['departureFuel']) ?? null,
@@ -178,8 +208,8 @@ async function getTransfer(tx: Tx, access: CompanyAccess, id: string): Promise<T
     nextCommitmentConflict: next,
     currentLocation: await currentLocation(tx, item.vehicle.id),
     can: {
-      approve: item.status === 'requested' && p.has('transfers.approve') && fromScope,
-      depart: item.status === 'approved' && p.has('transfers.execute') && fromScope,
+      approve: item.status === 'requested' && p.has('transfers.approve') && fromScope && repairOk,
+      depart: item.status === 'approved' && p.has('transfers.execute') && fromScope && repairOk,
       receive: item.status === 'in_transit' && p.has('transfers.execute') && toScope,
       cancel: open && p.has('transfers.request') && fromScope,
       edit: open && p.has('transfers.request') && fromScope,
@@ -234,6 +264,7 @@ export async function transferRoutes(app: FastifyInstance) {
       const userId = req.auth!.user.id
       const prior = (await tx.execute(sql`select id from vehicle_transfers where client_request_id = ${input.requestId}`)).rows[0] as Row | undefined
       if (prior) return reply.code(200).send(await detail(tx, access, prior.id as string))
+      if (input.purpose === 'repair') need(access, 'transfers.repair')
       const vehicle = await operationalVehicle(tx, access, input.vehicleId)
       if (vehicle.status === 'sold' || vehicle.status === 'disposed') throw invalid({ vehicleId: 'Araç artık filoda değil' })
       const from = await activeBranch(tx, access, input.fromBranchId, 'fromBranchId', true, 'transfer talebi')
@@ -243,17 +274,22 @@ export async function transferRoutes(app: FastifyInstance) {
       if (Date.parse(arr) <= Date.parse(dep)) throw invalid({ plannedArrivalLocal: 'Varış çıkıştan sonra olmalı' })
       if (Date.parse(arr) - Date.parse(dep) > 30 * 86_400_000) throw invalid({ plannedArrivalLocal: 'Bir transfer en fazla 30 gün sürebilir' })
       if (Date.parse(dep) < Date.now() - PLAN_PAST_HOURS * 3_600_000) throw invalid({ plannedDepartureLocal: `Planlanan çıkış en fazla ${PLAN_PAST_HOURS} saat öncesi olabilir` })
+      if (input.purpose === 'repair') {
+        const d = (await tx.execute(sql`select vehicle_id, review_status from damage_files where id = ${input.damageFileId!}`)).rows[0] as Row | undefined
+        if (!d || d.vehicle_id !== vehicle.id || d.review_status === 'closed') throw invalid({ damageFileId: 'Bu aracın açık bir hasar dosyasını seçin' })
+      }
       const no = await nextNo(tx, access.companyId, 'transfer', 'T')
       const row = (
         await guarded(
           tx.execute(sql`insert into vehicle_transfers (company_id, transfer_no, vehicle_id, from_branch_id, to_branch_id, reason, planned_departure_at, planned_arrival_at,
-              from_timezone, to_timezone, driver_note, client_request_id, created_by, updated_by)
+              from_timezone, to_timezone, driver_note, purpose, damage_file_id, transport_method, client_request_id, created_by, updated_by)
             values (${access.companyId}, ${no}, ${vehicle.id}, ${from.id}, ${to.id}, ${input.reason}, ${dep}, ${arr}, ${from.timezone}, ${to.timezone},
-              ${input.driverNote ?? null}, ${input.requestId}, ${userId}, ${userId}) returning id`),
+              ${input.driverNote ?? null}, ${input.purpose}, ${input.purpose === 'repair' ? input.damageFileId! : null}, ${input.purpose === 'repair' ? input.transportMethod! : null},
+              ${input.requestId}, ${userId}, ${userId}) returning id`),
         )
       ).rows[0] as Row
       const id = row.id as string
-      const data = { vehicle: vehicle.plate, from: from.code, to: to.code, plannedDepartureAt: dep, plannedArrivalAt: arr }
+      const data = { vehicle: vehicle.plate, from: from.code, to: to.code, plannedDepartureAt: dep, plannedArrivalAt: arr, purpose: input.purpose, transportMethod: input.transportMethod ?? null }
       await addEvent(tx, TRANSFER_EVENTS, access.companyId, id, 'created', userId, { to: 'requested', data })
       await audit(tx, { companyId: access.companyId, actorUserId: userId, action: 'transfer.create', entity: 'transfer', entityId: id, summary: { transferNo: no, ...data } })
       return reply.code(201).send(await detail(tx, access, id))
@@ -278,6 +314,10 @@ export async function transferRoutes(app: FastifyInstance) {
       const planChanged = dep !== toIso(cur.planned_departure_at) || arr !== toIso(cur.planned_arrival_at)
       if (planChanged && cur.status === 'approved') {
         await lockVehicleAllocation(tx, access.companyId, cur.vehicle_id as string)
+        if (cur.purpose === 'operational') {
+          const damaged = await damageHolds(tx, access.companyId, cur.vehicle_id as string, dep, arr)
+          if (damaged.length) throw damagedError(cur.plate as string, damaged)
+        }
         const conflicts = await holdConflicts(tx, access.companyId, cur.vehicle_id as string, dep, arr, id)
         if (conflicts.length) throw conflictError(cur.plate as string, conflicts, 'Plan değiştirilmedi.')
         const next = await nextCommitmentConflict(tx, access.companyId, cur.vehicle_id as string, arr, to.id)
@@ -304,9 +344,14 @@ export async function transferRoutes(app: FastifyInstance) {
       const cur = await begin(tx, access, id, input, 'from', 'transfer onayı')
       if (!cur) return detail(tx, access, id)
       if (cur.status !== 'requested') throw new AppError(409, 'INVALID_TRANSITION', 'Yalnız talep aşamasındaki transfer onaylanabilir.')
+      if (cur.purpose === 'repair') need(access, 'transfers.repair')
       if (Date.parse(toIso(cur.planned_arrival_at)) <= Date.now()) throw invalid({ plannedArrivalLocal: 'Planlanan varış geçti; önce planı güncelleyin' }, 'Planlanan varış geçmiş; transfer onaylanmadı.')
       const vehicleId = cur.vehicle_id as string
       await lockVehicleAllocation(tx, access.companyId, vehicleId)
+      if (cur.purpose === 'operational') {
+        const damaged = await damageHolds(tx, access.companyId, vehicleId, toIso(cur.planned_departure_at), toIso(cur.planned_arrival_at))
+        if (damaged.length) throw damagedError(cur.plate as string, damaged)
+      }
       const conflicts = await holdConflicts(tx, access.companyId, vehicleId, toIso(cur.planned_departure_at), toIso(cur.planned_arrival_at), id)
       if (conflicts.length) throw conflictError(cur.plate as string, conflicts, 'Transfer onaylanmadı; rezervasyonlar otomatik iptal edilmez.')
       const next = await nextCommitmentConflict(tx, access.companyId, vehicleId, toIso(cur.planned_arrival_at), cur.to_branch_id as string)
@@ -331,12 +376,22 @@ export async function transferRoutes(app: FastifyInstance) {
       const cur = await begin(tx, access, id, input, 'from', 'çıkış kaydı')
       if (!cur) return detail(tx, access, id)
       if (cur.status !== 'approved') throw new AppError(409, 'INVALID_TRANSITION', 'Yalnız onaylanmış transfer yola çıkabilir.')
+      if (cur.purpose === 'repair') {
+        need(access, 'transfers.repair')
+        if (!input.transportAck) {
+          throw invalid({ transportAck: 'Aracın beyan edilen çekici veya taşıyıcıyla yola çıktığını onaylayın' }, 'Onarım amaçlı taşıma yalnız taşıma beyanıyla yola çıkar; araç kendi gücüyle sürülmez.')
+        }
+      }
       const departedAt = actualTime(input.departedLocal, { name: cur.fb_name as string, timezone: cur.fb_tz as string }, input.departedChoice, 'departedLocal', 'departedChoice', OPERATION_BACKDATE_HOURS)
       if (Date.parse(toIso(cur.planned_arrival_at)) <= Math.max(Date.now(), Date.parse(departedAt))) {
         throw invalid({ plannedArrivalLocal: 'Planlanan varış geçti; önce varış zamanını güncelleyin' }, 'Planlanan varış geçmiş. Önce beklenen varışı güncelleyin; araç süresiz tutulmaz.')
       }
       const vehicleId = cur.vehicle_id as string
       await lockVehicleAllocation(tx, access.companyId, vehicleId)
+      if (cur.purpose === 'operational') {
+        const damaged = await damageHolds(tx, access.companyId, vehicleId, departedAt, toIso(cur.planned_arrival_at))
+        if (damaged.length) throw damagedError(cur.plate as string, damaged)
+      }
       const conflicts = await holdConflicts(tx, access.companyId, vehicleId, departedAt, toIso(cur.planned_arrival_at), id)
       if (conflicts.length) throw conflictError(cur.plate as string, conflicts, 'Araç yola çıkarılmadı.')
       const next = await nextCommitmentConflict(tx, access.companyId, vehicleId, toIso(cur.planned_arrival_at), cur.to_branch_id as string)
@@ -357,10 +412,11 @@ export async function transferRoutes(app: FastifyInstance) {
       ).rows[0] as Row
       await guarded(
         tx.execute(sql`update vehicle_transfers set status = 'in_transit', departed_at = ${departedAt}, departed_by = ${userId}, departure_km = ${input.km}, departure_fuel = ${input.fuel},
-            departure_note = ${input.note ?? null}, departure_odometer_reading_id = ${reading.id as string}, departure_location_event_id = ${location.id as string},
+            departure_note = ${input.note ?? null}, transport_ack_at = ${cur.purpose === 'repair' ? sql`now()` : null}, transport_ack_by = ${cur.purpose === 'repair' ? userId : null},
+            departure_odometer_reading_id = ${reading.id as string}, departure_location_event_id = ${location.id as string},
             version = version + 1, updated_at = now(), updated_by = ${userId} where id = ${id}`),
       )
-      const data = { departedAt, km: input.km, fuel: input.fuel, largeJump: !!jump }
+      const data = { departedAt, km: input.km, fuel: input.fuel, largeJump: !!jump, purpose: cur.purpose, transportMethod: cur.transport_method ?? null, transportAck: cur.purpose === 'repair' }
       await addEvent(tx, TRANSFER_EVENTS, access.companyId, id, 'departed', userId, { from: 'approved', to: 'in_transit', data, requestId: input.requestId })
       await audit(tx, { companyId: access.companyId, actorUserId: userId, action: 'transfer.depart', entity: 'transfer', entityId: id, summary: { transferNo: cur.transfer_no, vehicle: cur.plate, fromVersion: input.version, ...data } })
       return detail(tx, access, id)

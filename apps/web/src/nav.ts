@@ -191,6 +191,7 @@ export const PERMISSION_LABELS: Record<Permission, string> = {
   'transfers.request': 'Transfer talebi oluşturma ve iptal',
   'transfers.approve': 'Transfer onaylama',
   'transfers.execute': 'Transfer çıkışı ve varışta teslim alma',
+  'transfers.repair': 'Kullanılamaz aracın onarım amaçlı taşınması (çekici / taşıyıcı)',
   'settings.rentals.manage': 'Kiralama çalışma modunu (dış sözleşme ve fiyat) yönetme',
   'users.read': 'Kullanıcıları görüntüleme',
   'roles.read': 'Rolleri görüntüleme',

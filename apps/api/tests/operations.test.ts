@@ -114,8 +114,9 @@ afterAll(async () => {
 describe('permissions', () => {
   it('presets: Sahip and Yönetici get every operations permission; Operasyon plans, reports, requests and moves but does not approve, review or unblock', async () => {
     const perms = async (name: string) => ((await one(`select permissions from roles where name = $1`, [name])).permissions as string[]).filter((p) => /^(maintenance|damage|transfers)\./.test(p)).sort()
-    expect(await perms('Sahip')).toHaveLength(11)
-    expect(await perms('Yönetici')).toHaveLength(11)
+    expect(await perms('Sahip')).toHaveLength(12)
+    expect(await perms('Yönetici')).toHaveLength(12)
+    expect(await perms('Sahip')).toContain('transfers.repair')
     expect(await perms('Operasyon')).toEqual(['damage.read', 'damage.report', 'maintenance.manage', 'maintenance.read', 'transfers.execute', 'transfers.read', 'transfers.request'])
   })
 
@@ -522,5 +523,193 @@ describe('concurrency: the shared vehicle lock serializes every module', () => {
     const res = await Promise.all([act(sacOnly, `/api/transfers/${t.id}/receive`, t, { km: km + 50, fuel: 'half' }), act(second, `/api/transfers/${t.id}/receive`, t, { km: km + 51, fuel: 'half' })])
     expect(res.map((r) => r.statusCode).sort()).toEqual([200, 409])
     expect(await one(`select count(*)::int n from vehicle_location_events where source_id = $1 and event_type = 'transfer_arrival'`, [t.id])).toEqual({ n: 1 })
+  })
+})
+
+describe('a vehicle marked not usable is never moved by a normal transfer (BHT1 revised)', () => {
+  it('normal transfer: requested is allowed, approval and departure are refused (API and database); the repair transport is separate', async () => {
+    const v = await vehicle('J27-K-615') // SAC, out of service, no reservations
+    const d = (await damage(adnan, v, { branchId: ids.sac, view: 'front', damageType: 'mechanical', severity: 'severe', usability: 'not_usable', blockReason: 'Motor çalışmıyor' })).json() as DamageDetail
+    expect(d.blocked).toBe(true)
+    const t = (await transfer(adnan, v, local(3, '09:00'), local(3, '13:00'), { fromBranchId: ids.sac, toBranchId: ids.sjj })).json() as TransferDetail
+    expect(t).toMatchObject({ status: 'requested', purpose: 'operational', conflicts: [{ kind: 'damage', refNo: d.damageNo }] })
+    const refused = await act(adnan, `/api/transfers/${t.id}/approve`, t)
+    expect(refused.json().error).toMatchObject({ code: 'VEHICLE_NOT_USABLE', details: { conflicts: [{ kind: 'damage' }] } })
+    await expect(asOwner(data.companies.drina, `update vehicle_transfers set status = 'approved', approved_at = now(), approved_by = created_by where id = $1`, [t.id])).rejects.toThrow(/not usable/)
+    expect((await adnan.get(`/api/transfers/${t.id}`)).json()).toMatchObject({ status: 'requested', can: { approve: true } })
+    await act(adnan, `/api/transfers/${t.id}/cancel`, t, { reason: 'Araç kullanılamaz' })
+  })
+
+  it('a block that appears after approval stops the departure of a normal transfer', async () => {
+    const v = await vehicle('T09-A-781') // SAC
+    let t = (await transfer(adnan, v, nowLocal(-5), nowLocal(240), { fromBranchId: ids.sac, toBranchId: ids.mst })).json() as TransferDetail
+    t = (await act(adnan, `/api/transfers/${t.id}/approve`, t)).json()
+    expect(t.status).toBe('approved')
+    const d = (await damage(adnan, v, { branchId: ids.sac, damageType: 'tire', severity: 'severe', usability: 'not_usable', blockReason: 'Lastik patladı, jant hasarlı' })).json() as DamageDetail
+    const dep = await act(adnan, `/api/transfers/${t.id}/depart`, t, { km: (await maxKm(v)) + 1, fuel: 'full' })
+    expect(dep.json().error.code).toBe('VEHICLE_NOT_USABLE')
+    expect((await adnan.get(`/api/transfers/${t.id}`)).json().status).toBe('approved')
+    expect(await one(`select count(*)::int n from odometer_readings where source_id = $1`, [t.id])).toEqual({ n: 0 }) // nothing half-done
+    await act(adnan, `/api/transfers/${t.id}/cancel`, t, { reason: 'Araç hasarlı' })
+    await act(adnan, `/api/damages/${d.id}/unblock`, d, { reason: 'Lastik değişti', usability: 'usable' })
+  })
+
+  it('repair transport: own permission, an open damage file, tow truck or carrier, a departure statement; afterwards the block, the file and every check stay', async () => {
+    const v = await vehicle('J27-K-615')
+    const d = (await adnan.post('/api/damages/search', { vehicleId: v, view: 'blocked' })).json().items[0] as DamageDetail
+    const body = { fromBranchId: ids.sac, toBranchId: ids.mst, purpose: 'repair', damageFileId: d.id, transportMethod: 'tow_truck', reason: 'Onarım için servise' }
+    // Operasyon has no transfers.repair.
+    expect((await transfer(selma, v, nowLocal(-5), nowLocal(300), { ...body, fromBranchId: ids.sjj, toBranchId: ids.sac })).statusCode).toBe(403)
+    expect((await transfer(adnan, v, nowLocal(-5), nowLocal(300), { ...body, transportMethod: undefined })).json().error.fields).toHaveProperty('transportMethod')
+    expect((await transfer(adnan, v, nowLocal(-5), nowLocal(300), { ...body, damageFileId: undefined })).json().error.fields).toHaveProperty('damageFileId')
+    const otherDamage = (await damage(adnan, await vehicle('A39-T-657'), { description: 'Başka araç bulgusu' })).json() as DamageDetail
+    expect((await transfer(adnan, v, nowLocal(-5), nowLocal(300), { ...body, damageFileId: otherDamage.id })).json().error.fields).toHaveProperty('damageFileId')
+    let t = (await transfer(adnan, v, nowLocal(-5), nowLocal(300), body)).json() as TransferDetail
+    expect(t).toMatchObject({ purpose: 'repair', transportMethod: 'tow_truck', damageFile: { id: d.id, blocked: true }, conflicts: [] })
+    // A Yönetici without transfers.repair (custom change) cannot approve or depart it.
+    await asOwner(data.companies.drina, `update roles set permissions = array_remove(permissions, 'transfers.repair') where name = 'Yönetici'`)
+    try {
+      expect((await act(kontrol, `/api/transfers/${t.id}/approve`, t)).statusCode).toBe(403)
+      expect((await kontrol.get(`/api/transfers/${t.id}`)).json().can.approve).toBe(false)
+    } finally {
+      await asOwner(data.companies.drina, `update roles set permissions = array_append(permissions, 'transfers.repair') where name = 'Yönetici'`)
+    }
+    t = (await act(kontrol, `/api/transfers/${t.id}/approve`, t)).json()
+    expect(t.status).toBe('approved')
+    const km = (await maxKm(v)) + 0
+    const noAck = await act(adnan, `/api/transfers/${t.id}/depart`, t, { km, fuel: 'quarter' })
+    expect(noAck.json().error.fields).toHaveProperty('transportAck')
+    await expect(asOwner(data.companies.drina, `update vehicle_transfers set status = 'in_transit' where id = $1`, [t.id])).rejects.toThrow()
+    t = (await act(adnan, `/api/transfers/${t.id}/depart`, t, { km, fuel: 'quarter', transportAck: true })).json()
+    expect(t).toMatchObject({ status: 'in_transit' })
+    expect(t.transportAckAt).not.toBeNull()
+    await expect(asOwner(data.companies.drina, `update vehicle_transfers set transport_method = 'car_carrier' where id = $1`, [t.id])).rejects.toThrow(/cannot change/)
+    t = (await act(adnan, `/api/transfers/${t.id}/receive`, t, { km, fuel: 'quarter' })).json()
+    expect(t.status).toBe('completed')
+    // Arrival changes nothing about the damage: still blocked, still open, still not available.
+    const after = (await adnan.get(`/api/damages/${d.id}`)).json() as DamageDetail
+    expect(after).toMatchObject({ blocked: true, reviewStatus: d.reviewStatus, usability: 'not_usable' })
+    const ops = (await adnan.get(`/api/vehicles/${v}/operations`)).json() as VehicleOperations
+    expect(ops.blockedNow.map((h) => h.kind)).toContain('damage')
+    await asOwner(data.companies.drina, `update vehicles set status = 'active' where id = $1`, [v]) // synthetic: only to show the block alone still refuses
+    try {
+      expect((await reservation(v, local(10, '10:00'), local(11, '10:00'), { pickupBranchId: ids.mst, returnBranchId: ids.mst })).json().error.details.conflicts[0].kind).toBe('damage')
+      const r = await adnan.post('/api/rentals', { customerId: ids.ajla, drivers: [{ customerId: ids.ajla, isPrimary: true }], vehicleClassId: cls[v], vehicleId: v, pickupBranchId: ids.mst, returnBranchId: ids.mst, pickupLocal: local(1, '10:00'), returnLocal: local(2, '10:00'), requestId: uuid() })
+      expect(r.json().error.details.conflicts[0].kind).toBe('damage')
+      // Lifting the block still needs its own permission and a reason.
+      expect((await act(selma, `/api/damages/${d.id}/unblock`, after, { reason: 'Kendiliğinden kalkmaz', usability: 'usable' })).statusCode).toBe(403)
+      expect((await act(adnan, `/api/damages/${d.id}/unblock`, after, { reason: 'x', usability: 'usable' })).statusCode).toBe(400)
+    } finally {
+      await asOwner(data.companies.drina, `update vehicles set status = 'out_of_service' where id = $1`, [v])
+    }
+  })
+})
+
+describe('concurrency, second round (every pair sees the other through the shared vehicle lock)', () => {
+  const pendingReservation = async (v: string, from: string, to: string, branch: string) =>
+    (await reservation(v, from, to, { confirm: false, pickupBranchId: branch, returnBranchId: branch })).json() as ReservationDetail
+
+  it('taking into service ↔ confirming a reservation in the same hours: exactly one', async () => {
+    const v = await vehicle('M87-J-529')
+    const m = (await plan(adnan, v, local(20, '08:00'), local(20, '16:00'))).json() as MaintenanceDetail
+    const r = await pendingReservation(v, nowLocal(120), nowLocal(240), ids.sjj)
+    const [start, confirm] = await Promise.all([act(kontrol, `/api/maintenance/${m.id}/start`, m, { expectedEndLocal: nowLocal(360) }), adnan.post(`/api/reservations/${r.id}/confirm`, { version: r.version })])
+    expect([start.statusCode, confirm.statusCode].sort(), `${start.body} ${confirm.body}`).toEqual([200, 409])
+  })
+
+  it('confirming a reservation ↔ a transfer departure: exactly one', async () => {
+    const v = await vehicle('E63-A-847') // at SAC after the first transfer test
+    let t = (await transfer(adnan, v, local(25, '09:00'), local(25, '15:00'), { fromBranchId: ids.sac, toBranchId: ids.mst })).json() as TransferDetail
+    t = (await act(adnan, `/api/transfers/${t.id}/approve`, t)).json()
+    const r = await pendingReservation(v, nowLocal(120), nowLocal(240), ids.sac)
+    const [dep, confirm] = await Promise.all([act(kontrol, `/api/transfers/${t.id}/depart`, t, { km: (await maxKm(v)) + 1, fuel: 'full' }), adnan.post(`/api/reservations/${r.id}/confirm`, { version: r.version })])
+    expect([dep.statusCode, confirm.statusCode].sort()).toEqual([200, 409])
+    if (dep.statusCode === 409) await act(adnan, `/api/transfers/${t.id}/cancel`, t, { reason: 'Test sonrası iptal' })
+  })
+
+  it('creating a rental ↔ taking into service: exactly one', async () => {
+    const v = await vehicle('K40-M-526') // home SJJ, located at SAC
+    const m = (await plan(adnan, v, local(30, '08:00'), local(30, '16:00'))).json() as MaintenanceDetail
+    const rent = adnan.post('/api/rentals', { customerId: ids.ajla, drivers: [{ customerId: ids.ajla, isPrimary: true }], vehicleClassId: cls[v], vehicleId: v, pickupBranchId: ids.sac, returnBranchId: ids.sac, pickupLocal: nowLocal(60), returnLocal: nowLocal(600), requestId: uuid() })
+    const [r, s] = await Promise.all([rent, act(kontrol, `/api/maintenance/${m.id}/start`, m, { expectedEndLocal: nowLocal(480) })])
+    expect([r.statusCode, s.statusCode].filter((c) => c === 409), `${r.body} ${s.body}`).toHaveLength(1)
+  })
+
+  it('two overlapping transfers of one vehicle approved at once: exactly one', async () => {
+    const v = await vehicle('T09-A-781')
+    const a = (await transfer(adnan, v, local(40, '09:00'), local(40, '15:00'), { fromBranchId: ids.sac, toBranchId: ids.mst })).json() as TransferDetail
+    const b = (await transfer(adnan, v, local(40, '10:00'), local(40, '16:00'), { fromBranchId: ids.sac, toBranchId: ids.sjj })).json() as TransferDetail
+    const res = await Promise.all([act(adnan, `/api/transfers/${a.id}/approve`, a), act(kontrol, `/api/transfers/${b.id}/approve`, b)])
+    expect(res.map((r) => r.statusCode).sort()).toEqual([200, 409])
+  })
+
+  it('the same maintenance taken into service twice at once: one start, one km reading', async () => {
+    const v = await vehicle('T48-K-276')
+    const m = (await plan(adnan, v, nowLocal(-10), nowLocal(300), { branchId: ids.mst })).json() as MaintenanceDetail
+    const km = (await maxKm(v)) + 3
+    const res = await Promise.all([act(adnan, `/api/maintenance/${m.id}/start`, m, { km }), act(kontrol, `/api/maintenance/${m.id}/start`, m, { km })])
+    expect(res.map((r) => r.statusCode).sort()).toEqual([200, 409])
+    expect(await one(`select count(*)::int n from odometer_readings where source_id = $1`, [m.id])).toEqual({ n: 1 })
+  })
+
+  it('in transit: no maintenance starts; receiving ↔ confirming a reservation at the destination never overlaps the trip', async () => {
+    const v = await vehicle('A39-T-657')
+    // Its later reservation starts at SJJ (it would refuse a move to SAC): taken out of the way first.
+    for (const r of (await adnan.post('/api/reservations/search', { vehicleId: v, status: 'confirmed' })).json().items as ReservationDetail[]) {
+      expect((await adnan.post(`/api/reservations/${r.id}/cancel`, { version: (await adnan.get(`/api/reservations/${r.id}`)).json().version, reason: 'customer_request' })).statusCode).toBe(200)
+    }
+    let t = (await transfer(adnan, v, nowLocal(-5), nowLocal(300))).json() as TransferDetail
+    t = (await act(adnan, `/api/transfers/${t.id}/approve`, t)).json()
+    expect(t.status, JSON.stringify(t)).toBe('approved')
+    t = (await act(adnan, `/api/transfers/${t.id}/depart`, t, { km: (await maxKm(v)) + 1, fuel: 'full' })).json()
+    expect(t.status, JSON.stringify(t)).toBe('in_transit')
+    const m = (await plan(adnan, v, local(45, '08:00'), local(45, '12:00'))).json() as MaintenanceDetail
+    expect((await act(adnan, `/api/maintenance/${m.id}/start`, m, { expectedEndLocal: nowLocal(120) })).json().error.details.conflicts[0].kind).toBe('transfer')
+    const r = await pendingReservation(v, nowLocal(60), nowLocal(120), ids.sac)
+    const [rec, confirm] = await Promise.all([act(sacOnly, `/api/transfers/${t.id}/receive`, t, { km: (await maxKm(v)) + 30, fuel: 'half' }), adnan.post(`/api/reservations/${r.id}/confirm`, { version: r.version })])
+    expect(rec.statusCode).toBe(200)
+    if (confirm.statusCode === 200) expect(Date.parse((rec.json() as TransferDetail).arrivedAt!)).toBeLessThanOrEqual(Date.parse(r.pickup.at))
+    else expect(confirm.json().error.code).toBe('VEHICLE_UNAVAILABLE')
+  })
+
+  it('two people lifting the same block at once: one lifts it, one block period ends once', async () => {
+    const v = await vehicle('A12-K-345')
+    const d = (await damage(adnan, v, { usability: 'not_usable', blockReason: 'Fren uyarısı yanıyor' })).json() as DamageDetail
+    const res = await Promise.all([act(adnan, `/api/damages/${d.id}/unblock`, d, { reason: 'Kontrol edildi A', usability: 'usable' }), act(kontrol, `/api/damages/${d.id}/unblock`, d, { reason: 'Kontrol edildi B', usability: 'usable' })])
+    expect(res.map((r) => r.statusCode).sort()).toEqual([200, 409])
+    expect((await one(`select count(*) filter (where ended_at is not null)::int as ended, count(*)::int as total from damage_blocks where damage_id = $1`, [d.id]))).toEqual({ ended: 1, total: 1 })
+    // The existing confirmed reservation R-000001 was never touched by the block.
+    expect((await one(`select status from reservations where reservation_no = 'R-000001'`)).status).toBe('confirmed')
+  })
+
+  it('a vehicle in an active rental is not sent on a transfer', async () => {
+    const v = (await one(`select vehicle_id from rentals where rental_no = 'K-000002'`)).vehicle_id // overdue, still with the customer
+    const t = (await transfer(adnan, v, nowLocal(0), nowLocal(300), { fromBranchId: ids.sac, toBranchId: ids.sjj })).json() as TransferDetail
+    const res = await act(adnan, `/api/transfers/${t.id}/approve`, t)
+    expect(res.json().error.details.conflicts[0]).toMatchObject({ kind: 'rental', endsAt: null })
+  })
+})
+
+describe('photo uploads stay closed without a malware scanner in production; infected files are refused', () => {
+  it('fail-closed in production, refused when infected', async () => {
+    const prod = await makeApp({ nodeEnv: 'production' })
+    try {
+      const c = new Client(prod)
+      expect((await c.login(EMAILS.adnan)).statusCode).toBe(200)
+      const d = (await adnan.post('/api/damages/search', { view: 'open' })).json().items[0]
+      const res = await c.upload(`/api/damages/${d.id}/photos`, jpeg)
+      expect(res.json().error.code).toBe('UPLOADS_CLOSED')
+    } finally {
+      await prod.close()
+    }
+    const infected = await makeApp({ scanner: { name: 'test', scan: async () => 'infected' } })
+    try {
+      const c = new Client(infected)
+      expect((await c.login(EMAILS.adnan)).statusCode).toBe(200)
+      const m = (await adnan.post('/api/maintenance/search', { view: 'open' })).json().items[0]
+      expect((await c.upload(`/api/maintenance/${m.id}/photos`, jpeg)).json().error.code).toBe('MALWARE_DETECTED')
+    } finally {
+      await infected.close()
+    }
   })
 })

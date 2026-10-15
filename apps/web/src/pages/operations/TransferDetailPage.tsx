@@ -8,7 +8,7 @@ import { Plate } from '@/components/Plate'
 import { ErrorState, ForbiddenState, StatePanel } from '@/components/states'
 import { toast } from '@/components/Toaster'
 import { ApiRequestError, transfersApi } from '@/lib/api'
-import { TRANSFER_STATUS_HINT, TRANSFER_STATUS_LABELS, TRANSFER_STATUS_TONE } from '@/lib/operation-labels'
+import { TRANSFER_PURPOSE_LABELS, TRANSFER_STATUS_HINT, TRANSFER_STATUS_LABELS, TRANSFER_STATUS_TONE, TRANSPORT_METHOD_LABELS } from '@/lib/operation-labels'
 import { formatMoment } from '@/lib/reservation-labels'
 import { FUEL_LEVEL_LABELS } from '@/lib/rental-labels'
 import { formatDateTime, formatKm, LOCATION_LABELS } from '@/lib/vehicle-labels'
@@ -35,8 +35,10 @@ function useMovement(t: TransferDetail, kind: 'depart' | 'receive') {
   const [note, setNote] = useState('')
   const [jump, setJump] = useState('')
   const [needJump, setNeedJump] = useState(false)
+  const [ack, setAck] = useState(false)
   const [fields, setFields] = useState<Record<string, string>>({})
   const body = () => ({
+    ...(kind === 'depart' && t.purpose === 'repair' ? { transportAck: ack } : {}),
     version: t.version,
     requestId,
     km,
@@ -83,6 +85,15 @@ function useMovement(t: TransferDetail, kind: 'depart' | 'receive') {
         <TimeField optional id="mv-time" label={kind === 'depart' ? 'Çıkış zamanı' : 'Varış zamanı'} value={local} onChange={setLocal} branch={branch} choice={choice} onChoice={setChoice} error={fields[timeKey]} />
         <p className="mt-1 text-[12.5px] text-ink-3">Boş bırakılırsa şu an kaydedilir; en fazla 72 saat öncesi girilebilir.</p>
       </div>
+      {kind === 'depart' && t.purpose === 'repair' && (
+        <div>
+          <label className="flex items-start gap-2.5 rounded-lg border border-alert/30 bg-alert-soft/50 px-3 py-2.5 text-[13.5px]">
+            <input type="checkbox" checked={ack} onChange={(e) => setAck(e.target.checked)} className="mt-0.5 size-4 accent-[var(--ac-blue)]" />
+            <span>Aracın {t.transportMethod ? TRANSPORT_METHOD_LABELS[t.transportMethod].toLocaleLowerCase('tr') : 'beyan edilen taşıma'} ile yola çıktığını, kendi gücüyle sürülmediğini beyan ederim.</span>
+          </label>
+          {fields.transportAck && <p className="mt-1.5 text-[13px] text-alert">{fields.transportAck}</p>}
+        </div>
+      )}
       <Field id="mv-note" label="Not (isteğe bağlı)" hint={kind === 'receive' ? 'Aracın durumu; yeni bir hasar görürseniz ayrıca hasar dosyası açın.' : undefined}>
         <Textarea id="mv-note" rows={2} value={note} maxLength={1000} onChange={(e) => setNote(e.target.value)} />
       </Field>
@@ -179,7 +190,7 @@ export function TransferDetailPage() {
         back="/araclar/transferler"
         backLabel="Araç Transferleri"
         number={t.transferNo}
-        title={`${t.fromBranch.name} → ${t.toBranch.name}`}
+        title={`${t.purpose === 'repair' ? 'Onarım taşıması · ' : ''}${t.fromBranch.name} → ${t.toBranch.name}`}
         status={{ label: t.late ? 'Yolda · gecikti' : TRANSFER_STATUS_LABELS[t.status], tone: t.late ? 'alert' : TRANSFER_STATUS_TONE[t.status] }}
         hint={TRANSFER_STATUS_HINT[t.status]}
         plate={t.vehicle.plate}
@@ -189,6 +200,20 @@ export function TransferDetailPage() {
       />
       <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_340px]">
         <div className="min-w-0 space-y-5">
+          {t.purpose === 'repair' && (
+            <Notice tone="alert">
+              Onarım amaçlı taşıma ({t.transportMethod ? TRANSPORT_METHOD_LABELS[t.transportMethod] : '—'}). Araç sürülmez; taşıma çıkışta yetkili kişinin beyanına dayanır, ACARVO tarafından doğrulanmaz.
+              {t.damageFile && (
+                <>
+                  {' '}Bağlı hasar dosyası{' '}
+                  <Link to="/hasar-kayitlari/$damageId" params={{ damageId: t.damageFile.id }} className="font-medium text-blue hover:underline">
+                    {t.damageFile.damageNo}
+                  </Link>
+                  {t.damageFile.blocked ? ' (araç kullanılamaz)' : ''}; varışta dosya ve engel olduğu gibi kalır.
+                </>
+              )}
+            </Notice>
+          )}
           {t.late && <Notice tone="alert">Planlanan varış ({formatMoment(t.plannedArrival)}) geçti ve araç teslim alınmadı. Gecikmiş transfer aracı müsait yapmaz; araç teslim alınana kadar ayrılı kalır.</Notice>}
           {t.status === 'in_transit' && !t.can.receive && <Notice tone="blue">Teslim alma yalnız varış şubesinin ({t.toBranch.code}) yetkili personeli tarafından yapılır.</Notice>}
           {(t.conflicts.length > 0 || t.nextCommitmentConflict) && (
@@ -220,6 +245,8 @@ export function TransferDetailPage() {
               rows={[
                 ['Planlanan çıkış', `${formatMoment(t.plannedDeparture)} (${t.fromBranch.code})`],
                 ['Planlanan varış', `${formatMoment(t.plannedArrival)} (${t.toBranch.code})`],
+                ['Tür', TRANSFER_PURPOSE_LABELS[t.purpose]],
+                ...(t.purpose === 'repair' ? ([['Taşıma yöntemi', t.transportMethod ? TRANSPORT_METHOD_LABELS[t.transportMethod] : null], ['Taşıma beyanı', t.transportAckAt ? formatDateTime(t.transportAckAt) : null]] as [string, ReactNode][]) : []),
                 ['Görevli / sürücü notu', t.driverNote],
                 ['Talep eden', `${t.requestedByName ?? '—'} · ${formatDateTime(t.createdAt)}`],
                 ['Onay', t.approvedAt ? `${formatDateTime(t.approvedAt)}${t.approvedByName ? ` · ${t.approvedByName}` : ''}` : null],
