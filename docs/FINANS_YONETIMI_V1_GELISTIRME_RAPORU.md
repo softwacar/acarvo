@@ -2,7 +2,7 @@
 
 Tarih: 14.10.2026 · Dal: `finans-v1` (çalışma kopyası `C:\Users\soena\Desktop\acarvo-fin1`) · Temel: main `67c0eb7` · Plan: `docs/FINANS_YONETIMI_V1_PLANI.md`
 
-Durum: **test ortamında tamamlandı.** Main'e birleştirilmedi, ana veritabanına migration uygulanmadı, GitHub'a gönderilmedi, `.env` değiştirilmedi. Gerçek para hareketi, kart verisi, ödeme sağlayıcısı, resmî fatura, vergi beyannamesi veya muhasebe entegrasyonu yok. Otomatik testler yalnız `acarvo_test` üzerinde, sentetik verilerle çalıştı.
+Durum: **main'e entegre edildi; ana veritabanı 37 migration** (ayrıntılar en sondaki "Son inceleme ve main entegrasyonu" bölümünde). GitHub'a gönderilmedi, `.env` değiştirilmedi. Gerçek para hareketi, kart verisi, ödeme sağlayıcısı, resmî fatura, vergi beyannamesi veya muhasebe entegrasyonu yok. Otomatik testler yalnız `acarvo_test` üzerinde, sentetik verilerle çalıştı.
 
 Finans modülünün tamamlanması gerçek işletme kullanımına hazır olunduğu anlamına gelmez: şube ülkeleri boş, M2 gerçek anahtarları kurulmadı, ülke belge kuralları etkin değil, dış sözleşme/fiyat modu kapalı, sözleşme metinleri hukuki onay ve vergi kuralları mali onay bekliyor. Bu engellere dokunulmadı.
 
@@ -261,4 +261,38 @@ Dört göz kuralı gevşetilmedi; kullanıcı veya rol eklenmedi; test kullanıc
 
 `0034_finance.sql`, `0035_finance_rls.sql`, `0036_finance_review.sql` (iki dört göz `CHECK`'i ve kapanış kuralının yeni hali). `acarvo_test` 37 migration; özetler dosyalarla aynı; boş/yarım migration yok; eski dosyalar değişmedi; yalnız eklemeler (mevcut tabloda tek değişiklik sıra türü kontrolünün genişletilmesi).
 
-MAIN_RESULTS
+### 8. Main entegrasyonu
+
+| Konu | Sonuç |
+|---|---|
+| Git | İki çalışma ağacı temizdi; main (`67c0eb7`) dalın atasıydı; yalnız fast-forward. Force, reset veya rebase yok; GitHub'a gönderilmedi; `finans-v1` ve `acarvo-fin1` korunuyor. |
+| Son main commit'i | Bu raporu güncelleyen commit (kod: `58c97d6`) |
+| Ana sunucular | Geçişten önce durduruldu, sonra main kodundan yeniden başlatıldı |
+| Geçiş öncesi | `safe-migrate --verify`: yalnız 3 bekleyen migration; `--dry-run`: 0034, 0035, 0036; uygulanmış 34 migration'ın özetleri dosyalarla aynı; satır sayıları ve içerik özetleri alındı (şirket bazında 62 tablo, kullanıcılar, şirketler, oturumlar, dosya deposu) |
+| Doğrulanmış yedek | `C:\Users\soena\Desktop\acarvo\backups\2026-10-15-01-48-40` |
+| Ana veritabanı | 34 → **37** migration; `safe-migrate --verify`: sorun yok (65 tablo, 61'i RLS'li) |
+| Güvenlik karşılaştırması | 24 yeni politika (6 tablo × 4), yeni yetkiler ve indeksler; kaldırılan politika/yetki/indeks yok; RLS ayarı değişen eski tablo yok; veritabanı rolleri aynı |
+| Rol izinleri | Yalnız hazır roller ve yalnız `finance.*`: Sahip +11, Yönetici +11, Operasyon +4 (görüntüleme, tahsilat ve depozito kaydı, iade talebi; doğrulama/onay/kapanış yok). Özel rol yok |
+| Mevcut gerçek veriler | **Korundu.** Müşteriler (gerçek müşteri dahil), kurumsal hesaplar, araçlar, rezervasyonlar (gerçek rezervasyon dahil), kiralamalar, fiyat listeleri ve teklifler, sözleşmeler ve dosyaları, belgeler, fotoğraflar, km/konum geçmişi, şubeler, üyelikler, kullanıcılar, şirketler, oturumlar, sıra sayaçları ve 16 dosyalık depo birebir aynı. Tek ekleme: şirket başına 3 `role.preset_upgrade` işlem geçmişi kaydı (sistem) |
+| Sentetik veri | Ana veritabanına finans dosyası, tahsilat, depozito, iade veya onay eklenmedi (6 finans tablosu boş) |
+| Main üzerinde testler (yalnız `acarvo_test`) | API **480 / 480**; tarayıcı **118 / 118** (+30 isteğe bağlı) |
+| TypeScript ve build | 4 proje hatasız; üretim derlemesi başarılı |
+| Çalışan uygulama | `/api/health` → veritabanı bağlı; web http://localhost:5173/finans yanıt veriyor; finans API'si oturumsuz isteği reddediyor. Finans ekranları gerçek hesapla açılmadı; içerik doğrulaması test veritabanındaki tarayıcı testleriyle yapıldı |
+
+**Finans ekranı:** http://localhost:5173/finans (Sahip ve Yönetici); kiralama finans sekmesi `/kiralamalar/<id>?sekme=finans`; müşteri/kurumsal cari `?sekme=cari`.
+
+### 9. Açık güvenlik ve ürün riskleri
+
+- Drina Rent a Car'da yalnız bir Sahip ve bir Operasyon kullanıcısı var: iç hesap kalemi onayı, kalem ters kaydı ve iade bildirimi sonrası ters kayıt için ikinci yetkili yok. Bu adımlar ikinci bir Sahip/Yönetici eklenene kadar yapılamaz (kural bilerek gevşetilmedi).
+- Ödeme sorumlusu düzeltme akışı yok (FN5); yanlış seçimde dosya düzeltilemez, yalnız durum raporlanabilir.
+- "Yetkili doğruladı" bir personel doğrulamasıdır; banka/POS mutabakatı yoktur.
+- Finans dosyaları listesi en fazla 500 dosyayı sıralar (V1 sınırı).
+- Tarayıcı testleri makine yükü altında zaman aşımına uğrayabiliyor (kod kaynaklı bulgu yok).
+
+### 10. Gerçek işletme kullanımı öncesi
+
+1. Her şirkette en az iki finans yetkilisi (Sahip + Yönetici) ve rollerin gözden geçirilmesi.
+2. Şube ülkeleri, M2 gerçek anahtarları, ülke belge kuralları, üretim dosya taraması (mevcut engeller değiştirilmedi).
+3. Sözleşme metinlerinin hukuki, vergi kurallarının mali onayı; dış sözleşme/fiyat modu kararı (kapalı).
+4. Kasa/vardiya mutabakatı, iç makbuz, resmî fatura ve muhasebe aktarımı kararları (FN7).
+5. Ödeme sorumlusu düzeltme ve depozito mahsup kuralları (FN4, FN5).
