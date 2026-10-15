@@ -1950,6 +1950,7 @@ export const financePayments = pgTable(
     ),
     check('finance_payments_note_check', sql`${t.note} is null or char_length(${t.note}) <= 300`),
     check('finance_payments_four_eyes', sql`${t.verifiedBy} is null or ${t.verifiedBy} <> ${t.createdBy}`),
+    check('finance_payments_reversal_four_eyes', sql`${t.reversedBy} is null or ${t.reversedBy} <> ${t.createdBy}`),
   ],
 )
 
@@ -2045,6 +2046,7 @@ export const financeDepositRefunds = pgTable(
     check('finance_deposit_refunds_cash_check', sql`${t.completedAt} is null or (${t.method} = 'cash') = ${t.cashAck}`),
     check('finance_deposit_refunds_reference_check', sql`${t.externalReference} is null or (char_length(${t.externalReference}) between 3 and 40 and ${t.externalReference} ~ '^[A-Za-z0-9][A-Za-z0-9 ./_-]*$')`),
     check('finance_deposit_refunds_four_eyes', sql`${t.approvedBy} is null or ${t.approvedBy} <> ${t.createdBy}`),
+    check('finance_deposit_refunds_reversal_four_eyes', sql`${t.reversedBy} is null or ${t.reversedBy} <> ${t.completedBy}`),
   ],
 )
 

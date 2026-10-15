@@ -140,7 +140,7 @@ export function RentalFinancePanel({ rentalId }: { rentalId: string }) {
                 <Figure label="İç hesap (kayıtlı kalemler)" hint={t.pendingChargesMinor ? `+ onay bekleyen ${fmt(t.pendingChargesMinor, t.currency)}` : t.taxIncomplete ? 'Vergi yapılandırılmamış kalem var: net tutar' : 'Onaylanmış kalemler'}>
                   <Money minor={t.postedChargesMinor} currency={t.currency} />
                 </Figure>
-                <Figure label="Doğrulanmış tahsilat" hint={t.recordedPaymentsMinor ? `+ doğrulama bekleyen ${fmt(t.recordedPaymentsMinor, t.currency)}` : 'İkinci yetkilinin doğruladığı kayıtlar'}>
+                <Figure label="Yetkilinin doğruladığı tahsilat" hint={t.recordedPaymentsMinor ? `+ doğrulama bekleyen ${fmt(t.recordedPaymentsMinor, t.currency)}` : 'Personel doğrulaması; banka veya sağlayıcı doğrulaması değildir'}>
                   <Money minor={t.verifiedPaymentsMinor} currency={t.currency} className="text-ok" />
                 </Figure>
                 <Figure label={t.overpaidMinor ? 'Fazla tahsilat (iade adayı)' : 'Kalan (kayıtlı kalemlere göre)'} hint="Kayıtlı kalemler − doğrulanmış tahsilat" tone={t.overpaidMinor ? 'alert' : t.outstandingMinor ? 'hold' : 'ok'}>
@@ -761,9 +761,9 @@ function FinanceDialogs({ dialog, v, rentalId, run, onClose }: { dialog: Dialog;
     case 'payment': {
       const { p, action } = dialog
       const copy = {
-        verify: ['Tahsilatı doğrula', 'Doğruladığınızda tutar bakiyeden düşer. Paranın gerçekten geldiğini (kasa, banka hesabı veya POS raporu) kontrol ettiyseniz doğrulayın. Kendi kaydınızı doğrulayamazsınız.', 'Doğrula'],
+        verify: ['Tahsilatı doğrula', 'Doğruladığınızda tutar bakiyeden düşer. Paranın gerçekten geldiğini (kasa, banka hesabı veya POS raporu) kendiniz kontrol ettiyseniz doğrulayın. Bu bir personel doğrulamasıdır; ACARVO banka veya ödeme sağlayıcısıyla doğrulama yapmaz. Kendi kaydınızı doğrulayamazsınız.', 'Doğrula'],
         reject: ['Tahsilatı reddet', 'Kayıt reddedildi olarak kalır; silinmez ve bakiyeye girmez.', 'Reddet'],
-        reverse: ['Tahsilatı ters kaydet', 'Doğrulanmış tahsilat bakiyeden çıkar. Kayıt ve geçmişi silinmez.', 'Ters kaydet'],
+        reverse: ['Tahsilatı ters kaydet', 'Doğrulanmış tahsilat bakiyeden çıkar. Kayıt ve geçmişi silinmez. Kendi kaydettiğiniz tahsilatı ters kaydedemezsiniz.', 'Ters kaydet'],
       }[action]
       return (
         <FinanceDialog
@@ -914,7 +914,7 @@ function FinanceDialogs({ dialog, v, rentalId, run, onClose }: { dialog: Dialog;
         reject: ['İadeyi reddet', 'Talep reddedildi olarak kalır.', 'Reddet'],
         cancel: ['İade talebini iptal et', 'Talep iptal edildi olarak kalır.', 'İptal et'],
         complete: ['İadenin yapıldığını bildir', 'Bu, iadenin ACARVO dışında yapıldığına dair personel bildirimidir; ACARVO para göndermedi ve banka/POS doğrulaması yapmadı.', 'Bildir'],
-        reverse: ['İadeyi ters kaydet', 'İade edildi kaydı geri alınır ve tutar yeniden tutulan depozitoya eklenir. Kayıt silinmez.', 'Ters kaydet'],
+        reverse: ['İadeyi ters kaydet', 'İade edildi kaydı geri alınır ve tutar yeniden tutulan depozitoya eklenir. Kayıt silinmez. İadeyi kendiniz bildirdiyseniz ters kaydedemezsiniz.', 'Ters kaydet'],
       }[action]
       return (
         <FinanceDialog

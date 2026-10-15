@@ -253,6 +253,13 @@
       "when": 1791937700000,
       "tag": "0035_finance_rls",
       "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1792026158160,
+      "tag": "0036_finance_review",
+      "breakpoints": true
     }
   ]
 }

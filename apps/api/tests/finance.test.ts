@@ -391,6 +391,7 @@ describe('isolation, scope and lists', () => {
     const vehicleId = (await one(`select id from vehicles where plate = 'K71-J-904'`)).id
     const ekonomi = (await one(`select id from vehicle_classes where name = 'Ekonomi'`)).id
     const r = (await adnan.post('/api/rentals', { customerId: ids.ajla, drivers: [{ customerId: ids.ajla, isPrimary: true }], vehicleClassId: ekonomi, vehicleId, pickupBranchId: ids.sac, returnBranchId: ids.sac, pickupLocal: local(5, '10:00'), returnLocal: local(6, '10:00'), requestId: uuid() })).json()
+    ids.sacRental = r.id
     expect((await selma.get(`/api/rentals/${r.id}/finance`)).statusCode).toBe(404)
     expect((await selma.post(`/api/rentals/${r.id}/finance/open`, { currency: 'EUR', responsibleType: 'customer', requestId: uuid() })).statusCode).toBe(404)
     expect((await selma.post('/api/finance/payments/search', {})).statusCode).toBe(403)
@@ -428,6 +429,109 @@ describe('isolation, scope and lists', () => {
     expect((await lejla.get(`/api/customers/${ids.ajla}/finance`)).statusCode).toBe(404)
   })
 
+})
+
+describe('integration review: decisions FN1–FN7 and security', () => {
+  it('an unpriced file (no posted line) is never closed as settled at zero', async () => {
+    const vehicleId = (await one(`select id from vehicles where plate = 'A12-K-345'`)).id
+    const r = (await adnan.post('/api/rentals', { customerId: ids.ajla, drivers: [{ customerId: ids.ajla, isPrimary: true }], vehicleClassId: ids.orta, vehicleId, pickupBranchId: ids.sjj, returnBranchId: ids.sjj, pickupLocal: local(30, '10:00'), returnLocal: local(31, '10:00'), requestId: uuid() })).json()
+    const v = (await adnan.post(`/api/rentals/${r.id}/finance/open`, { currency: 'EUR', responsibleType: 'customer', requestId: uuid() })).json() as RentalFinanceView
+    expect(v.totals).toMatchObject({ outstandingMinor: 0, overpaidMinor: 0 })
+    expect(v.closeBlockers).toEqual(['no_posted_charges'])
+    const res = await adnan.post(`/api/rentals/${r.id}/finance/close`, { version: v.finance!.version, requestId: uuid() })
+    expect(res.json().error.code).toBe('CLOSE_BLOCKED')
+    await expect(asOwner(data.companies.drina, `update rental_finances set status = 'closed', closed_at = now() where id = $1`, [v.finance!.id])).rejects.toThrow(/without a posted line/)
+  })
+
+  it('FN1: a payment is reversed only by someone other than its recorder; a deposit return only by someone other than its reporter', async () => {
+    let v = await fin(adnan, A.id)
+    v = (await adnan.post(`/api/rentals/${A.id}/finance/charges`, { kind: 'manual', description: 'Ek temizlik', amount: '10,00', reason: 'Gözden geçirme testi', requestId: uuid() })).json()
+    const ch = v.charges.find((c) => c.status === 'pending')!
+    v = (await kontrol.post(`/api/finance/charges/${ch.id}/approve`, { version: ch.version, requestId: uuid() })).json()
+    v = (await adnan.post(`/api/rentals/${A.id}/finance/payments`, { method: 'cash', cashAck: true, amount: '10,00', payerType: 'customer', payerCustomerId: ids.ajla, requestId: uuid() })).json()
+    const p = v.payments.find((x) => x.status === 'recorded')!
+    v = (await kontrol.post(`/api/finance/payments/${p.id}/verify`, { version: p.version, requestId: uuid() })).json()
+    const self = await adnan.post(`/api/finance/payments/${p.id}/reverse`, { version: p.version + 1, requestId: uuid(), reason: 'Kendi kaydımı geri alıyorum' })
+    expect(self.json().error.code).toBe('FOUR_EYES')
+    await expect(asOwner(data.companies.drina, `update finance_payments set status = 'reversed', reversal_reason = 'x x x', reversed_at = now(), reversed_by = created_by where id = $1`, [p.id])).rejects.toThrow()
+    expect((await kontrol.post(`/api/finance/payments/${p.id}/reverse`, { version: p.version + 1, requestId: uuid(), reason: 'İkinci yetkili düzeltmesi' })).statusCode).toBe(200)
+    // Close the file again (settled) for the next tests.
+    v = await fin(adnan, A.id)
+    const again = v.charges.find((c) => c.id === ch.id)!
+    v = (await adnan.post(`/api/finance/charges/${again.id}/reversal-request`, { version: again.version, requestId: uuid(), reason: 'Test kalemi geri alınıyor' })).json()
+    v = (await kontrol.post(`/api/finance/charges/${again.id}/reversal-approve`, { version: again.version + 1, requestId: uuid() })).json()
+    expect(v.closeBlockers).toEqual([])
+  })
+
+  it('a permission removed while working stops the next step at once (checked on every request)', async () => {
+    let v = (await adnan.post(`/api/rentals/${A.id}/finance/payments`, { method: 'other_external', amount: '0,01', payerType: 'customer', payerCustomerId: ids.ajla, requestId: uuid() })).json() as RentalFinanceView
+    if ((v as unknown as { error?: unknown }).error) {
+      // The file is fully paid: add a small line first.
+      v = (await adnan.post(`/api/rentals/${A.id}/finance/charges`, { kind: 'manual', description: 'Yetki testi', amount: '0,01', reason: 'Yetki testi kalemi', requestId: uuid() })).json()
+      v = (await adnan.post(`/api/rentals/${A.id}/finance/payments`, { method: 'other_external', amount: '0,01', payerType: 'customer', payerCustomerId: ids.ajla, requestId: uuid() })).json()
+    }
+    const p = v.payments.find((x) => x.status === 'recorded')!
+    await asOwner(data.companies.drina, `update roles set permissions = array_remove(permissions, 'finance.payments.verify') where name = 'Yönetici'`)
+    try {
+      expect((await kontrol.post(`/api/finance/payments/${p.id}/verify`, { version: p.version, requestId: uuid() })).statusCode).toBe(403)
+    } finally {
+      await asOwner(data.companies.drina, `update roles set permissions = array_append(permissions, 'finance.payments.verify') where name = 'Yönetici'`)
+    }
+    expect((await kontrol.post(`/api/finance/payments/${p.id}/verify`, { version: p.version, requestId: uuid() })).statusCode).toBe(200)
+  })
+
+  it('branch scope on every finance mutation: a SJJ-only approver cannot act on a SAC rental', async () => {
+    // A synthetic user with the Yönetici permissions, limited to SJJ.
+    const perms = (await one(`select permissions from roles where name = 'Yönetici'`)).permissions
+    const role = (await asOwner(data.companies.drina, `insert into roles (company_id, name, permissions) values ($1, 'Finans SJJ', $2) returning id`, [data.companies.drina, perms])).rows[0].id
+    const user = (await asOwner(null, `insert into users (email, name, password_hash) select 'sjjfinans@drina-demo.ba', 'SJJ Finans', password_hash from users where email = $1 returning id`, [EMAILS.adnan])).rows[0].id
+    const m = (await asOwner(data.companies.drina, `insert into memberships (company_id, user_id, all_branches) values ($1, $2, 'no') returning id`, [data.companies.drina, user])).rows[0].id
+    await asOwner(data.companies.drina, `insert into membership_roles (company_id, membership_id, role_id) values ($1, $2, $3)`, [data.companies.drina, m, role])
+    await asOwner(data.companies.drina, `insert into membership_branches (company_id, membership_id, branch_id) values ($1, $2, $3)`, [data.companies.drina, m, ids.sjj])
+    const sjj = await login('sjjfinans@drina-demo.ba')
+    // The SAC rental: file, a pending line, a recorded payment, a reported and verified deposit with a return.
+    const rid = ids.sacRental
+    let v = (await adnan.post(`/api/rentals/${rid}/finance/open`, { currency: 'EUR', responsibleType: 'customer', requestId: uuid() })).json() as RentalFinanceView
+    v = (await adnan.post(`/api/rentals/${rid}/finance/charges`, { kind: 'manual', description: 'Kapsam testi', amount: '50,00', reason: 'Şube kapsamı testi', requestId: uuid() })).json()
+    v = (await adnan.post(`/api/rentals/${rid}/finance/payments`, { method: 'cash', cashAck: true, amount: '20,00', payerType: 'customer', payerCustomerId: ids.ajla, requestId: uuid() })).json()
+    v = (await adnan.post(`/api/rentals/${rid}/finance/deposits`, { currency: 'EUR', amount: '100,00', received: true, method: 'cash', cashAck: true, requestId: uuid() })).json()
+    const d0 = v.deposits[0]!
+    v = (await kontrol.post(`/api/finance/deposits/${d0.id}/verify`, { version: d0.version, requestId: uuid() })).json()
+    v = (await adnan.post(`/api/finance/deposits/${d0.id}/refunds`, { amount: '10,00', method: 'cash', reason: 'Kapsam testi iadesi', requestId: uuid() })).json()
+    const [c, p, d, r] = [v.charges[0]!, v.payments[0]!, v.deposits[0]!, v.deposits[0]!.refunds[0]!]
+    const attempts = [
+      sjj.get(`/api/rentals/${rid}/finance`),
+      sjj.post(`/api/finance/charges/${c.id}/approve`, { version: c.version, requestId: uuid() }),
+      sjj.post(`/api/finance/payments/${p.id}/verify`, { version: p.version, requestId: uuid() }),
+      sjj.post(`/api/finance/payments/${p.id}/reverse`, { version: p.version, requestId: uuid(), reason: 'Kapsam dışı deneme' }),
+      sjj.post(`/api/finance/deposits/${d.id}/review`, { version: d.version, requestId: uuid(), inReview: true, reason: 'Kapsam dışı deneme' }),
+      sjj.post(`/api/finance/deposits/${d.id}/refunds`, { amount: '1,00', method: 'cash', reason: 'Kapsam dışı deneme', requestId: uuid() }),
+      sjj.post(`/api/finance/refunds/${r.id}/approve`, { version: r.version, requestId: uuid() }),
+      sjj.post(`/api/rentals/${rid}/finance/close`, { version: v.finance!.version, requestId: uuid() }),
+      sjj.post(`/api/rentals/${rid}/finance/reopen`, { version: v.finance!.version, requestId: uuid(), reason: 'Kapsam dışı deneme' }),
+      sjj.post(`/api/rentals/${rid}/finance/charges`, { kind: 'manual', description: 'Kapsam dışı', amount: '1,00', reason: 'Kapsam dışı deneme', requestId: uuid() }),
+    ]
+    for (const res of await Promise.all(attempts)) expect([403, 404], res.body).toContain(res.statusCode)
+    // Nothing changed.
+    const after = await fin(adnan, rid)
+    expect(after.charges[0]!.status).toBe('pending')
+    expect(after.payments[0]!.status).toBe('recorded')
+    expect(after.deposits[0]!.refunds[0]!.status).toBe('requested')
+    expect(after.finance!.status).toBe('open')
+  })
+
+  it('FN5: the responsible party of a file cannot be changed or moved (database); FN6: no automatic extra charges', async () => {
+    const v = await fin(adnan, A.id)
+    await expect(asOwner(data.companies.drina, `update rental_finances set responsible_type = 'corporate', responsible_customer_id = null, responsible_corporate_id = $2 where id = $1`, [v.finance!.id, ids.corp])).rejects.toThrow(/identity/)
+    await expect(asOwner(data.companies.drina, `update finance_payments set finance_id = (select id from rental_finances where id <> $1 limit 1) where finance_id = $1`, [v.finance!.id])).rejects.toThrow()
+    // Only lines made by people exist: no late, mileage, fuel or damage line was ever created by the system.
+    const kinds = (await asOwner(data.companies.drina, `select distinct kind, created_by is not null as by_person from finance_charges`)).rows
+    expect(kinds.every((k) => k.by_person)).toBe(true)
+    expect(kinds.map((k) => k.kind).sort()).toEqual(['manual', 'quote'])
+  })
+})
+
+describe('personal data', () => {
   it('no personal or card data in history, audit log or server logs', async () => {
     const events = JSON.stringify((await asOwner(data.companies.drina, `select data from finance_events`)).rows)
     const audits = JSON.stringify((await asOwner(data.companies.drina, `select summary from audit_log where action like 'finance.%'`)).rows)

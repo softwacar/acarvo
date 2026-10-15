@@ -244,7 +244,7 @@ function Overview({ filters }: { filters: Filters }) {
 function CurrencyCard({ r }: { r: FinanceSummaryRow }) {
   const c = r.currency
   const rows: [string, number, string?][] = [
-    ['Doğrulanmış tahsilat', r.verifiedPaymentsMinor, 'text-ok'],
+    ['Yetkilinin doğruladığı tahsilat', r.verifiedPaymentsMinor, 'text-ok'],
     ['Doğrulama bekleyen tahsilat', r.recordedPaymentsMinor, 'text-hold'],
     ['Kayıtlı iç hesap kalemleri', r.postedChargesMinor],
     ['Onay bekleyen kalemler', r.pendingChargesMinor, 'text-hold'],

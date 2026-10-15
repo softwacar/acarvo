@@ -191,6 +191,8 @@ export function closeBlockers(totals: FinanceTotals | null, charges: FinanceChar
   if (deposits.some((d) => d.inReview)) out.push('deposit_in_review')
   if (deposits.some((d) => d.refundOpenMinor > 0)) out.push('refunds_pending')
   if (deposits.some((d) => d.heldMinor > 0)) out.push('deposit_held')
+  // An unpriced file (no posted line) is never closed as "settled at zero".
+  if (!charges.some((c) => c.status === 'posted')) out.push('no_posted_charges')
   if (totals.outstandingMinor > 0) out.push('outstanding')
   if (totals.overpaidMinor > 0) out.push('overpaid')
   return out

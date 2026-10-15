@@ -30,14 +30,14 @@ export const CHARGE_STATUS_LABEL: Record<ChargeStatus, string> = {
 }
 export const PAYMENT_STATUS_LABEL: Record<PaymentStatus, string> = {
   recorded: 'Doğrulama bekliyor',
-  verified: 'Doğrulandı',
+  verified: 'Yetkili doğruladı',
   rejected: 'Reddedildi',
   reversed: 'Ters kaydedildi',
 }
 export const DEPOSIT_STATUS_LABEL: Record<DepositStatus, string> = {
   requested: 'Talep edildi',
   reported: 'Alındığı bildirildi',
-  verified: 'Doğrulandı (tutuluyor)',
+  verified: 'Yetkili doğruladı (tutuluyor)',
   rejected: 'Reddedildi',
   cancelled: 'İptal edildi',
 }
@@ -74,6 +74,7 @@ export const CLOSE_BLOCKER_LABEL: Record<string, string> = {
   deposit_held: 'Hâlâ tutulan depozito var',
   outstanding: 'Kalan bakiye var',
   overpaid: 'Fazla tahsilat var (iade veya düzeltme gerekli)',
+  no_posted_charges: 'Onaylanmış iç hesap kalemi yok (fiyatlandırılmamış dosya sıfır borçla kapanmaz)',
 }
 
 export const EVENT_LABEL: Record<string, string> = {
@@ -85,13 +86,13 @@ export const EVENT_LABEL: Record<string, string> = {
   charge_reversal_approve: 'Ters kayıt onaylandı',
   charge_reversal_withdraw: 'Ters kayıt isteği geri çekildi',
   payment_recorded: 'Tahsilat kaydedildi',
-  payment_verify: 'Tahsilat doğrulandı',
+  payment_verify: 'Tahsilat yetkili tarafından doğrulandı',
   payment_reject: 'Tahsilat reddedildi',
   payment_reverse: 'Tahsilat ters kaydedildi',
   deposit_requested: 'Depozito talep edildi',
   deposit_reported: 'Depozitonun alındığı bildirildi',
   deposit_report: 'Depozitonun alındığı bildirildi',
-  deposit_verify: 'Depozito doğrulandı',
+  deposit_verify: 'Depozito yetkili tarafından doğrulandı',
   deposit_reject: 'Depozito reddedildi',
   deposit_cancel: 'Depozito talebi iptal edildi',
   deposit_review_opened: 'Depozito incelemeye alındı',

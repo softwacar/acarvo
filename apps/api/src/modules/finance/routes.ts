@@ -68,6 +68,7 @@ function mapGuard(e: unknown): never {
     rental_finances_closed: [409, 'FINANCE_CLOSED', 'Finans dosyası kapalı. Değişiklik için önce gerekçeyle yeniden açın.'],
     rental_finances_close_pending: [409, 'CLOSE_BLOCKED', 'Bekleyen kalem, tahsilat, depozito veya iade varken dosya kapatılamaz.'],
     rental_finances_close_balance: [409, 'CLOSE_BLOCKED', 'Dosya yalnız kalan bakiye sıfırken kapatılabilir.'],
+    rental_finances_close_unpriced: [409, 'CLOSE_BLOCKED', 'Onaylanmış iç hesap kalemi olmayan dosya kapatılamaz; fiyatlandırılmamış dosya "sıfır borçla kapandı" sayılmaz.'],
     finance_charges_quote: [409, 'QUOTE_NOT_CURRENT', 'Teklif güncel değil veya bu kiralamaya ait değil. Teklifi yeniden hesaplayın.'],
     finance_charges_quote_key: [409, 'QUOTE_ALREADY_CHARGED', 'Bu teklif bu dosyada zaten iç hesap kalemine dönüştürüldü.'],
     finance_charges_delivered: [409, 'NOT_DELIVERED', 'İç hesap kalemi yalnız araç teslim edildikten sonra onaylanabilir.'],
@@ -341,6 +342,7 @@ export async function financeRoutes(app: FastifyInstance) {
     return { to: 'rejected' }
   })
   paymentAction('reverse', 'finance.charges.approve', financeReasonSchema, async (tx, x, userId, body) => {
+    if (x.created_by === userId) throw new AppError(409, 'FOUR_EYES', 'Kendi kaydettiğiniz tahsilatı ters kaydedemezsiniz; başka bir yetkili gerekli.')
     await tx.execute(sql`update finance_payments set status = 'reversed', reversal_reason = ${body.reason as string}, reversed_at = now(), reversed_by = ${userId}, version = version + 1 where id = ${x.id as string}`).catch(mapGuard)
     return { to: 'reversed', data: { reason: 'given' } }
   })
@@ -481,6 +483,7 @@ export async function financeRoutes(app: FastifyInstance) {
     return { to: 'completed', data: { statement: 'external_refund_reported' } }
   })
   refundAction('reverse', 'finance.refunds.approve', financeReasonSchema, async (tx, x, userId, b) => {
+    if (x.completed_by === userId) throw new AppError(409, 'FOUR_EYES', 'İadenin yapıldığını kendiniz bildirdiyseniz ters kaydedemezsiniz; başka bir yetkili gerekli.')
     await tx.execute(sql`update finance_deposit_refunds set status = 'reversed', reversal_reason = ${b.reason as string}, reversed_at = now(), reversed_by = ${userId}, version = version + 1 where id = ${x.id as string}`).catch(mapGuard)
     return { to: 'reversed', data: { reason: 'given' } }
   })
