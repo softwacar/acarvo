@@ -299,6 +299,12 @@ export const damageReviewSchema = z
   .refine((v) => v.reviewStatus !== 'closed' || (v.note?.length ?? 0) >= 5, { message: 'Kapatma gerekçesini yazın (en az 5 karakter)', path: ['note'] })
 export const damageRepairSchema = z.object({ version, requestId, repairStatus: z.enum(DAMAGE_REPAIR_STATUSES, { error: 'Onarım durumunu seçin' }) })
 export const damageBlockSchema = z.object({ version, requestId, reason: reason('Engel gerekçesini yazın (en az 5 karakter)') })
+export const damageUnblockSchema = z.object({
+  version,
+  requestId,
+  reason: reason('Engeli kaldırma gerekçesini yazın (en az 5 karakter)'),
+  usability: z.enum(['usable', 'restricted'], { error: 'Aracın yeni kullanılabilirliğini seçin' }),
+})
 
 export const DAMAGE_SORTS = ['detected', 'created', 'number'] as const
 export const damageSearchSchema = z.object({
@@ -496,6 +502,8 @@ export interface VehicleOperations {
   serviceDue: ServiceDue | null
   /** Confirmed reservations at risk because a damage block is open. */
   atRisk: AllocationConflict[]
+  /** Which parts this user may see (each needs its own read permission). */
+  access: { maintenance: boolean; damage: boolean; transfers: boolean }
 }
 
 /** "Bakım B-000012", "Hasar engeli H-000003" ... for messages and lists (no personal data). */

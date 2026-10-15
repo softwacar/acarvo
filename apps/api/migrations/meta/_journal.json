@@ -274,6 +274,13 @@
       "when": 1792076658479,
       "tag": "0038_operations_rls",
       "breakpoints": true
+    },
+    {
+      "idx": 39,
+      "version": "7",
+      "when": 1792076659479,
+      "tag": "0039_operations_history_guard_fix",
+      "breakpoints": true
     }
   ]
 }

@@ -29,6 +29,10 @@ import { createStorage } from './lib/storage'
 import { corporateRoutes, customerCorporateLinkRoutes } from './modules/corporate/routes'
 import { relatedReservationRoutes, reservationRoutes } from './modules/reservations/routes'
 import { relatedRentalRoutes, rentalRoutes } from './modules/rentals/routes'
+import { damageRoutes } from './modules/operations/damage'
+import { maintenanceRoutes } from './modules/operations/maintenance'
+import { transferRoutes } from './modules/operations/transfers'
+import { vehicleOperationRoutes } from './modules/operations/vehicle-ops'
 import { registerAuth } from './plugins/auth'
 import { registerSecurity } from './plugins/security'
 
@@ -104,6 +108,10 @@ export async function buildApp({
   await app.register(quoteRoutes, { prefix: '/api' })
   await app.register(contractTemplateRoutes, { prefix: '/api/settings' })
   await app.register(contractRoutes, { prefix: '/api' })
+  await app.register(maintenanceRoutes, { prefix: '/api/maintenance' })
+  await app.register(damageRoutes, { prefix: '/api/damages' })
+  await app.register(transferRoutes, { prefix: '/api/transfers' })
+  await app.register(vehicleOperationRoutes, { prefix: '/api/vehicles' })
   await app.register(financeRoutes, { prefix: '/api' })
   return app
 }

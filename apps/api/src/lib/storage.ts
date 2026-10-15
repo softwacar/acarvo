@@ -10,7 +10,7 @@ import path from 'node:path'
  * route to S3-compatible storage later.
  */
 const KEY_PATTERN =
-  /^(?:[0-9a-f-]{36}\/\d{4}\/[0-9a-f-]{36}(-thumb)?\.webp|documents\/[0-9a-f-]{36}\/\d{4}\/[0-9a-f-]{36}\.(?:pdf|jpg|png)|customers\/[0-9a-f-]{36}\/\d{4}\/[0-9a-f-]{36}\.bin|rentals\/[0-9a-f-]{36}\/\d{4}\/[0-9a-f-]{36}(-thumb)?\.webp|contracts\/[0-9a-f-]{36}\/\d{4}\/[0-9a-f-]{36}\.pdf)$/
+  /^(?:[0-9a-f-]{36}\/\d{4}\/[0-9a-f-]{36}(-thumb)?\.webp|documents\/[0-9a-f-]{36}\/\d{4}\/[0-9a-f-]{36}\.(?:pdf|jpg|png)|customers\/[0-9a-f-]{36}\/\d{4}\/[0-9a-f-]{36}\.bin|(?:rentals|maintenance|damages)\/[0-9a-f-]{36}\/\d{4}\/[0-9a-f-]{36}(-thumb)?\.webp|contracts\/[0-9a-f-]{36}\/\d{4}\/[0-9a-f-]{36}\.pdf)$/
 
 export function createStorage(root: string) {
   const resolve = (key: string) => {
@@ -30,6 +30,12 @@ export function createStorage(root: string) {
     newRentalPhotoKeys(companyId: string) {
       const id = randomUUID()
       const dir = `rentals/${companyId}/${new Date().getUTCFullYear()}`
+      return { main: `${dir}/${id}.webp`, thumb: `${dir}/${id}-thumb.webp` }
+    },
+    /** Maintenance and damage evidence photos: own prefixes, apart from every other file. */
+    newOperationPhotoKeys(companyId: string, kind: 'maintenance' | 'damages') {
+      const id = randomUUID()
+      const dir = `${kind}/${companyId}/${new Date().getUTCFullYear()}`
       return { main: `${dir}/${id}.webp`, thumb: `${dir}/${id}-thumb.webp` }
     },
     /** Vehicle documents live under their own prefix, apart from promotional photos. */
