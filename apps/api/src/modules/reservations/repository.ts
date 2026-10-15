@@ -1,4 +1,5 @@
 import {
+  type AllocationConflict,
   type AvailabilityResponse,
   formatPhone,
   normalizeName,
@@ -283,7 +284,8 @@ async function warningsFor(tx: Tx, d: ReservationDetail, accountId: string | nul
 }
 
 /**
- * Vehicles of a class for a period, as far as ACARVO can tell (R1, R2): status, confirmed reservations and rentals, from
+ * Vehicles of a class for a period, as far as ACARVO can tell (R1, R2): status, confirmed reservations, rentals,
+ * maintenance, damage blocks and transfers, from
  * the database function the guards use (vehicle_busy), so reservations and rentals never disagree about a vehicle.
  */
 export async function availability(
@@ -312,7 +314,7 @@ export async function availability(
   ).rows[0] as Row
   return {
     vehicles: rows.map((r) => {
-      const conflicts = (r.conflicts as { kind: 'reservation' | 'rental'; refNo: string; startsAt: string; endsAt: string | null }[]).map((c) => ({
+      const conflicts = (r.conflicts as { kind: AllocationConflict['kind']; refNo: string; startsAt: string; endsAt: string | null }[]).map((c) => ({
         ...c,
         startsAt: toIso(c.startsAt),
         endsAt: c.endsAt == null ? null : toIso(c.endsAt),
@@ -330,7 +332,7 @@ export async function availability(
       }
     }),
     classSummary: { activeVehicles: Number(summary.active_vehicles), overlappingConfirmed: Number(summary.overlapping), estimateOnly: true },
-    notChecked: ['maintenance', 'transfer', 'external_sourcing', 'vehicle_location'],
+    notChecked: ['external_sourcing', 'vehicle_location'],
   }
 }
 
@@ -368,6 +370,22 @@ export async function timeline(tx: Tx, access: CompanyAccess, input: { from: str
           order by 5`)
       ).rows as Row[])
     : []
+  // Maintenance, damage blocks and transfers of these vehicles (the vehicle list is already branch-scoped).
+  const holdBars = ids.length
+    ? ((
+        await tx.execute(sql`select m.id, 'maintenance' as kind, m.maintenance_no as ref_no, m.vehicle_id, m.status, lower(o.span) as starts_at, upper(o.span) as ends_at from maintenance_records m
+            cross join lateral (select maintenance_hold(m.status, m.planned_start_at, m.planned_end_at, m.actual_start_at, m.completed_at) as span) o
+            where m.vehicle_id in ${ids} and m.status in ('planned', 'in_service', 'awaiting_check', 'completed') and o.span && tstzrange(${start}::timestamptz, ${stop}::timestamptz, '[)')
+          union all
+          select d.id, 'damage', d.damage_no, b.vehicle_id, 'blocked', b.started_at, b.ended_at from damage_blocks b join damage_files d on d.company_id = b.company_id and d.id = b.damage_id
+            where b.vehicle_id in ${ids} and tstzrange(b.started_at, b.ended_at, '[)') && tstzrange(${start}::timestamptz, ${stop}::timestamptz, '[)')
+          union all
+          select t.id, 'transfer', t.transfer_no, t.vehicle_id, t.status, lower(o.span), upper(o.span) from vehicle_transfers t
+            cross join lateral (select transfer_hold(t.status, t.planned_departure_at, t.planned_arrival_at, t.departed_at, t.arrived_at) as span) o
+            where t.vehicle_id in ${ids} and t.status in ('approved', 'in_transit', 'completed') and o.span && tstzrange(${start}::timestamptz, ${stop}::timestamptz, '[)')
+          order by 6`)
+      ).rows as Row[])
+    : []
   const unassigned = (
     await tx.execute(sql`select count(*)::int n from reservations r where r.vehicle_id is null and r.status = 'pending' and r.return_at > ${start} and r.pickup_at < ${stop} and ${scopeSql(access)}
       ${input.vehicleClassId ? sql`and r.vehicle_class_id = ${input.vehicleClassId}` : sql``}`)
@@ -385,6 +403,15 @@ export async function timeline(tx: Tx, access: CompanyAccess, input: { from: str
       rentalNo: b.rental_no as string,
       vehicleId: b.vehicle_id as string,
       status: b.status as TimelineResponse['rentalBars'][number]['status'],
+      startsAt: toIso(b.starts_at),
+      endsAt: b.ends_at == null ? null : toIso(b.ends_at),
+    })),
+    holdBars: holdBars.map((b) => ({
+      kind: b.kind as TimelineResponse['holdBars'][number]['kind'],
+      id: b.id as string,
+      refNo: b.ref_no as string,
+      vehicleId: b.vehicle_id as string,
+      status: b.status as string,
       startsAt: toIso(b.starts_at),
       endsAt: b.ends_at == null ? null : toIso(b.ends_at),
     })),

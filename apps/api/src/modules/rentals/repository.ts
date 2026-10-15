@@ -1,4 +1,5 @@
 import {
+  allocationConflictText,
   CHECKLIST_ITEMS,
   INSPECTION_MAX_PHOTOS,
   INSPECTION_MIN_PHOTOS,
@@ -366,8 +367,22 @@ export async function deliveryGates(
     gates.push({ code: 'availability', state: 'blocked', detail: { reason: 'return_passed' } })
   } else {
     const conflicts = await vehicleBusy(tx, companyId, k.vehicleId, at, k.plannedReturnAt, { reservationId: k.reservationId, rentalId: k.id })
-    gates.push({ code: 'availability', state: conflicts.length ? 'blocked' : 'ok', detail: conflicts.length ? { refs: conflicts.map((c) => c.refNo).join(', ') } : undefined })
+    gates.push({ code: 'availability', state: conflicts.length ? 'blocked' : 'ok', detail: conflicts.length ? { refs: conflicts.map((c) => (c.kind === 'reservation' || c.kind === 'rental' ? c.refNo : allocationConflictText(c))).join(', ') } : undefined })
   }
+  // Maintenance and damage facts that do not block on their own: a finished maintenance is not "ready for handover"
+  // (spec §59N), and an open, non-blocking damage file is shown to the staff handing the vehicle over.
+  const ops = (
+    await tx.execute(sql`select
+        (select count(*)::int from damage_files d where d.vehicle_id = ${k.vehicleId} and d.review_status <> 'closed') as open_damages,
+        (select m.maintenance_no from maintenance_records m where m.vehicle_id = ${k.vehicleId} and m.status = 'completed'
+           and m.completed_at > coalesce((select max(x.delivered_at) from rentals x where x.vehicle_id = ${k.vehicleId} and x.delivered_at is not null), '-infinity')
+           order by m.completed_at desc limit 1) as after_maintenance`)
+  ).rows[0] as Row
+  gates.push({
+    code: 'vehicle_operations',
+    state: Number(ops.open_damages) || ops.after_maintenance ? 'attention' : 'ok',
+    detail: { openDamages: Number(ops.open_damages), maintenanceNo: str(ops.after_maintenance) },
+  })
   const open = (await tx.execute(sql`select rental_no from rentals where vehicle_id = ${k.vehicleId} and status = 'returned' and id <> ${k.id} limit 1`)).rows[0] as Row | undefined
   gates.push({ code: 'previous_return_open', state: open ? 'blocked' : 'ok', detail: open ? { rentalNo: open.rental_no as string } : undefined })
   const loc = (

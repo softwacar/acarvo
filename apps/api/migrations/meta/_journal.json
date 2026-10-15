@@ -260,6 +260,20 @@
       "when": 1792026158160,
       "tag": "0036_finance_review",
       "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "7",
+      "when": 1792076657479,
+      "tag": "0037_operations",
+      "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "7",
+      "when": 1792076658479,
+      "tag": "0038_operations_rls",
+      "breakpoints": true
     }
   ]
 }

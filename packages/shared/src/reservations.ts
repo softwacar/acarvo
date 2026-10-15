@@ -231,11 +231,12 @@ export interface ReservationDetail extends Omit<ReservationListItem, 'customer'>
 }
 
 /**
- * Something holding a vehicle (one definition for reservations and rentals, database function vehicle_busy): a confirmed
- * reservation or a rental. An open end (null) = handed over, planned return passed and not back yet (K2).
+ * Something holding a vehicle (one definition for every module, database function vehicle_busy): a confirmed
+ * reservation, a rental, a maintenance record, a damage block or a transfer. An open end (null) = running late and not
+ * finished yet (K2), or a damage block not lifted yet.
  */
 export interface AllocationConflict {
-  kind: 'reservation' | 'rental'
+  kind: 'reservation' | 'rental' | 'maintenance' | 'damage' | 'transfer'
   refNo: string
   startsAt: string
   endsAt: string | null
@@ -275,6 +276,8 @@ export interface TimelineResponse {
   bars: { id: string; reservationNo: string; vehicleId: string; status: ReservationStatus; pickupAt: string; returnAt: string }[]
   /** Rentals holding a vehicle in the window; endsAt null = handed over, overdue and not back yet (K2). */
   rentalBars: { id: string; rentalNo: string; vehicleId: string; status: 'prepared' | 'delivered' | 'returned' | 'closed'; startsAt: string; endsAt: string | null }[]
+  /** Maintenance, damage blocks and transfers holding a vehicle in the window (same rule as vehicle_busy). */
+  holdBars: { kind: 'maintenance' | 'damage' | 'transfer'; id: string; refNo: string; vehicleId: string; status: string; startsAt: string; endsAt: string | null }[]
   unassigned: number
 }
 

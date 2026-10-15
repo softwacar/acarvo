@@ -51,6 +51,17 @@ export const PERMISSIONS = [
   'finance.refunds.approve',
   'finance.reports.read',
   'finance.close',
+  'maintenance.read',
+  'maintenance.manage',
+  'maintenance.approve',
+  'damage.read',
+  'damage.report',
+  'damage.review',
+  'damage.unblock',
+  'transfers.read',
+  'transfers.request',
+  'transfers.approve',
+  'transfers.execute',
   'users.read',
   'roles.read',
   'audit.read',
@@ -101,3 +112,4 @@ export * from './pricing-engine'
 export * from './pricing'
 export * from './contracts'
 export * from './finance'
+export * from './operations'

@@ -1,8 +1,8 @@
 import {
+  allocationConflictText,
   CHECKLIST_ITEMS,
   HANDOVER_BACKDATE_HOURS,
   inspectionDraftSchema,
-  largeJump,
   type Permission,
   RENTAL_MAX_DAYS,
   RESERVATION_PAST_TOLERANCE_MINUTES,
@@ -19,16 +19,17 @@ import {
   rentalReturnSchema,
   rentalSearchSchema,
   rentalUpdateSchema,
-  resolveWallTime,
 } from '@acarvo/shared'
 import { sql } from 'drizzle-orm'
 import type { FastifyInstance, FastifyRequest } from 'fastify'
 import { z } from 'zod'
 import type { Tx } from '../../db/client'
 import { audit } from '../../lib/audit'
+import { actualTime, branchRow, resolveLocal } from '../../lib/branch-time'
 import { AppError, forbidden, notFound } from '../../lib/errors'
 import { processPromoPhoto } from '../../lib/images'
 import { documentUploadPolicy } from '../../lib/malware'
+import { assertOdometer } from '../../lib/odometer-check'
 import { toIso } from '../../lib/timestamps'
 import { lockVehicleAllocation, vehicleBusy } from '../../lib/vehicle-allocation'
 import { withCompany } from '../../plugins/auth'
@@ -69,47 +70,9 @@ const need = (access: CompanyAccess, permission: Permission) => {
   if (!access.permissions.has(permission)) throw forbidden()
 }
 const invalid = (fields: Record<string, string>, message = 'Bazı alanlar geçersiz.') => new AppError(400, 'VALIDATION', message, fields)
-const shown = (local: string) => `${local.slice(8, 10)}.${local.slice(5, 7)}.${local.slice(0, 4)} ${local.slice(11)}`
 const kmText = (n: number) => `${n.toLocaleString('tr-TR')} km`
 
-interface BranchRow {
-  id: string
-  name: string
-  code: string
-  timezone: string
-  status: string
-  country: string | null
-}
-async function branch(tx: Tx, id: string): Promise<BranchRow | null> {
-  return ((await tx.execute(sql`select id, name, code, timezone, status, country from branches where id = ${id}`)).rows[0] as unknown as BranchRow | undefined) ?? null
-}
-
-/** A wall time in a branch's zone: a skipped time is refused, a doubled time needs a choice (same rule as reservations). */
-function resolveLocal(local: string, b: BranchRow, choice: 'earlier' | 'later' | undefined, field: string, choiceField: string): string {
-  const r = resolveWallTime(local, b.timezone)
-  if (!r) throw invalid({ [field]: 'Geçerli bir tarih ve saat girin' })
-  if (r.kind === 'nonexistent') throw invalid({ [field]: `${shown(local)} ${b.name} saatinde (${b.timezone}) yaşanmadı: yaz saatine geçişte saatler ileri alındı. Gerçek saati girin.` })
-  if (r.kind === 'ambiguous') {
-    if (!choice) {
-      throw new AppError(400, 'AMBIGUOUS_TIME', `${shown(local)} ${b.name} saatinde (${b.timezone}) iki kez yaşandı. Hangisi olduğunu seçin.`, { [choiceField]: 'Saatin hangisi olduğunu seçin' }, {
-        field,
-        earlier: r.earlier,
-        later: r.later,
-      })
-    }
-    return r[choice].iso
-  }
-  return r.iso
-}
-
-/** K8: a real handover or return time is never in the future and at most `hours` back. Empty = now. */
-function actualTime(local: string | undefined, b: BranchRow, choice: 'earlier' | 'later' | undefined, field: string, choiceField: string, hours: number) {
-  if (!local) return new Date().toISOString()
-  const at = resolveLocal(local, b, choice, field, choiceField)
-  if (Date.parse(at) > Date.now() + 2 * 60_000) throw invalid({ [field]: 'Gerçekleşen zaman gelecekte olamaz' })
-  if (Date.parse(at) < Date.now() - hours * 3_600_000) throw invalid({ [field]: `En fazla ${hours} saat öncesi girilebilir` })
-  return at
-}
+const branch = branchRow
 
 async function resolvePlan(
   tx: Tx,
@@ -168,7 +131,7 @@ async function assertVehicleFree(tx: Tx, companyId: string, vehicle: { id: strin
   if (vehicle.status !== 'active') throw new AppError(409, 'VEHICLE_NOT_ACTIVE', `${vehicle.plate} şu anda hizmet dışı; kiralanamaz.`, { vehicleId: 'Araç hizmet dışı' })
   const conflicts = await vehicleBusy(tx, companyId, vehicle.id, from, to, except)
   if (conflicts.length) {
-    throw new AppError(409, 'VEHICLE_UNAVAILABLE', `${vehicle.plate} bu dönemde dolu: ${conflicts.map((c) => c.refNo).join(', ')}.`, { vehicleId: 'Araç bu dönemde dolu' }, { conflicts })
+    throw new AppError(409, 'VEHICLE_UNAVAILABLE', `${vehicle.plate} bu dönemde dolu: ${conflicts.map(allocationConflictText).join(', ')}.`, { vehicleId: 'Araç bu dönemde dolu' }, { conflicts })
   }
 }
 
@@ -178,6 +141,11 @@ function mapGuard(e: unknown): never {
   const pg = ((e as { cause?: unknown }).cause ?? e) as { code?: string; constraint?: string; message?: string }
   const c = pg.constraint
   if (c === 'rentals_vehicle_reserved' || c === 'rentals_vehicle_overlap') throw new AppError(409, 'VEHICLE_UNAVAILABLE', 'Araç bu dönemde başka bir rezervasyonda veya kiralamada.', { vehicleId: 'Araç bu dönemde dolu' })
+  if (c === 'rentals_vehicle_maintenance') throw new AppError(409, 'VEHICLE_UNAVAILABLE', 'Araç bu dönemde bakımda veya bakım için planlanmış.', { vehicleId: 'Araç bu dönemde bakımda' })
+  if (c === 'rentals_vehicle_damage') throw new AppError(409, 'VEHICLE_UNAVAILABLE', 'Araç bir hasar nedeniyle kullanılamaz olarak işaretli; kiralanamaz veya teslim edilemez.', { vehicleId: 'Araç hasar nedeniyle kullanılamaz' })
+  if (c === 'rentals_vehicle_transfer') throw new AppError(409, 'VEHICLE_UNAVAILABLE', 'Araç bu dönemde şubeler arası transferde.', { vehicleId: 'Araç bu dönemde transferde' })
+  if (c === 'rentals_vehicle_transfer_location')
+    throw new AppError(409, 'VEHICLE_ELSEWHERE', 'Onaylı bir transfer aracı alıştan önce başka bir şubeye götürüyor; bu şubeden kiralama hazırlanamaz.', { vehicleId: 'Araç alış zamanında başka şubede olacak' })
   if (c === 'rentals_vehicle_not_active') throw new AppError(409, 'VEHICLE_NOT_ACTIVE', 'Araç hizmet dışı; kiralanamaz veya teslim edilemez.', { vehicleId: 'Araç hizmet dışı' })
   if (c === 'rentals_vehicle_class') throw invalid({ vehicleId: 'Araç seçilen sınıftan değil' })
   if (c === 'rentals_lifecycle' || c === 'rentals_final' || c === 'reservations_lifecycle' || c === 'reservations_final') throw new AppError(409, 'INVALID_TRANSITION', 'Kaydın durumu bu işleme izin vermiyor.')
@@ -262,34 +230,6 @@ async function lockRental(tx: Tx, access: CompanyAccess, id: string) {
 
 const requirePickupScope = (access: CompanyAccess, r: Row, what: string) => {
   if (!inScope(access, r.pickup_branch_id as string)) throw new AppError(403, 'BRANCH_FORBIDDEN', `Bu kiralamanın başlangıç şubesinde ${what} yetkiniz yok.`)
-}
-
-/** Effective odometer readings around a moment (same rule as the database guard). */
-async function odometerAround(tx: Tx, vehicleId: string, at: string) {
-  const eff = sql`not exists (select 1 from odometer_corrections c where c.company_id = r.company_id and c.reading_id = r.id)`
-  const prev = (await tx.execute(sql`select r.km, r.occurred_at from odometer_readings r where r.vehicle_id = ${vehicleId} and r.occurred_at <= ${at} and ${eff} order by r.km desc limit 1`)).rows[0] as Row | undefined
-  const next = (await tx.execute(sql`select r.km, r.occurred_at from odometer_readings r where r.vehicle_id = ${vehicleId} and r.occurred_at > ${at} and ${eff} order by r.km asc limit 1`)).rows[0] as Row | undefined
-  return {
-    previous: prev ? { km: Number(prev.km), occurredAt: toIso(prev.occurred_at) } : null,
-    next: next ? { km: Number(next.km), occurredAt: toIso(next.occurred_at) } : null,
-  }
-}
-
-async function assertOdometer(tx: Tx, vehicleId: string, km: number, at: string, jumpReason: string | undefined) {
-  const n = await odometerAround(tx, vehicleId, at)
-  if (n.previous && km < n.previous.km) {
-    throw new AppError(422, 'ODOMETER_OUT_OF_ORDER', `Kilometre, aracın kayıtlı son değerinden (${kmText(n.previous.km)}) düşük olamaz.`, { km: `En az ${kmText(n.previous.km)}` }, { previous: n.previous })
-  }
-  if (n.next && km > n.next.km) {
-    throw new AppError(422, 'ODOMETER_OUT_OF_ORDER', `Kilometre, daha sonraki bir kayıttan (${kmText(n.next.km)}) yüksek olamaz.`, { km: `En fazla ${kmText(n.next.km)}` }, { next: n.next })
-  }
-  const jump = largeJump(n.previous, km, at)
-  if (jump && !jumpReason) {
-    throw new AppError(422, 'LARGE_JUMP_REASON_REQUIRED', `Bu değer bir öncekinden ${kmText(jump.deltaKm)} fazla (günlük ortalama ${kmText(jump.perDay)}). Doğruysa gerekçe girerek onaylayın.`, {
-      largeJumpReason: 'Büyük artış için gerekçe girin',
-    }, { ...jump, previous: n.previous })
-  }
-  return jump
 }
 
 export async function rentalRoutes(app: FastifyInstance) {
@@ -894,7 +834,7 @@ export async function rentalRoutes(app: FastifyInstance) {
       await lockVehicleAllocation(tx, access.companyId, cur.vehicle_id as string)
       const conflicts = await vehicleBusy(tx, access.companyId, cur.vehicle_id as string, start, newReturn, { reservationId: cur.reservation_id as string | null, rentalId: id })
       if (conflicts.length) {
-        throw new AppError(409, 'VEHICLE_UNAVAILABLE', `Yeni iade zamanı ${cur.plate as string} için başka bir kayıtla çakışıyor: ${conflicts.map((c) => c.refNo).join(', ')}. Uzatma uygulanmadı.`, { returnLocal: 'Bu tarihe uzatılamaz' }, { conflicts })
+        throw new AppError(409, 'VEHICLE_UNAVAILABLE', `Yeni iade zamanı ${cur.plate as string} için başka bir kayıtla çakışıyor: ${conflicts.map(allocationConflictText).join(', ')}. Uzatma uygulanmadı.`, { returnLocal: 'Bu tarihe uzatılamaz' }, { conflicts })
       }
       const userId = req.auth!.user.id
       await guarded(

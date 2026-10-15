@@ -241,7 +241,7 @@ describe('vehicle availability and double booking', () => {
     expect(octavia).toMatchObject({ available: false, conflicts: [expect.objectContaining({ kind: 'reservation', refNo: 'R-000001' })] })
     expect(res.vehicles.filter((v) => v.available).length).toBeGreaterThan(0)
     expect(res.classSummary.estimateOnly).toBe(true)
-    expect(res.notChecked).toEqual(['maintenance', 'transfer', 'external_sourcing', 'vehicle_location'])
+    expect(res.notChecked).toEqual(['external_sourcing', 'vehicle_location'])
     expect(JSON.stringify(res)).not.toMatch(/Ajla|Testović|customer/i)
     // The reservation being edited does not conflict with itself.
     const own = (await adnan.post('/api/reservations/availability', { vehicleClassId: ids.orta, pickupBranchId: ids.sjj, returnBranchId: ids.sjj, pickupLocal: local(3, '10:00'), returnLocal: local(4, '10:00'), excludeReservationId: ids['R-000001'] })).json() as AvailabilityResponse

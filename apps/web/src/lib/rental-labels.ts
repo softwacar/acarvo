@@ -67,6 +67,7 @@ export const GATE_LABELS: Record<RentalGateCode, string> = {
   vehicle_active: 'Araç hizmette',
   availability: 'Araç bu dönemde boş',
   previous_return_open: 'Aracın önceki iade kontrolü',
+  vehicle_operations: 'Bakım ve hasar kayıtları',
   vehicle_location: 'Aracın kayıtlı konumu',
   handover_record: 'Teslim kaydı (km, yakıt, kontrol listesi, teslim alan)',
   photos: 'Teslim fotoğrafları (4–5)',
@@ -92,11 +93,19 @@ export function gateText(code: RentalGateCode, state: string, d: Record<string, 
     case 'vehicle_active':
       return state === 'ok' ? 'Araç hizmette.' : `${d.plate ?? 'Araç'} hizmet dışı; teslim edilemez.`
     case 'availability':
-      if (state === 'ok') return 'Teslimden planlanan iadeye kadar başka rezervasyon veya kiralama yok.'
+      if (state === 'ok') return 'Teslimden planlanan iadeye kadar başka rezervasyon, kiralama, bakım, hasar engeli veya transfer yok.'
       if (d.reason === 'return_passed') return 'Planlanan iade zamanı geçti. Önce iade zamanını güncelleyin.'
       return `Bu sürede araç dolu: ${d.refs ?? ''}.`
     case 'previous_return_open':
       return state === 'ok' ? 'Aracın açık iade kontrolü yok.' : `Aracın önceki kiralamasının (${d.rentalNo}) iade kontrolü tamamlanmadı.`
+    case 'vehicle_operations':
+      if (state === 'ok') return 'Açık hasar dosyası yok; son teslimden sonra tamamlanan bakım yok.'
+      return [
+        d.openDamages ? `${plural(d.openDamages, 'açık hasar dosyası')} var (aracı engellemiyor); teslimden önce aracın durumunu kontrol edin` : '',
+        d.maintenanceNo ? `Bakım ${d.maintenanceNo} tamamlandı; bakımın bitmesi aracın teslime hazır olduğu anlamına gelmez, hazırlığı kontrol edin` : '',
+      ]
+        .filter(Boolean)
+        .join(' · ') + '.'
     case 'vehicle_location':
       if (state === 'ok') return 'Araç başlangıç şubesinde kayıtlı.'
       if (!d.locationType) return 'Aracın konum kaydı yok. Teslimden önce aracın şubede olduğunu kontrol edin.'

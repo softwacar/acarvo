@@ -333,6 +333,7 @@ export type RentalGateCode =
   | 'vehicle_active'
   | 'availability'
   | 'previous_return_open'
+  | 'vehicle_operations'
   | 'vehicle_location'
   | 'handover_record'
   | 'photos'

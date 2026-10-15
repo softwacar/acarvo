@@ -1,5 +1,6 @@
 import {
   addDays,
+  allocationConflictText,
   type Permission,
   RESERVATION_MAX_DAYS,
   RESERVATION_PAST_TOLERANCE_MINUTES,
@@ -151,10 +152,15 @@ async function assertVehicleFree(tx: Tx, companyId: string, vehicle: { id: strin
   const conflicts = await vehicleBusy(tx, companyId, vehicle.id, pickupAt, returnAt, { reservationId: exceptId })
   if (conflicts.length) {
     const rented = conflicts.some((c) => c.kind === 'rental')
+    const other = conflicts.filter((c) => c.kind !== 'reservation' && c.kind !== 'rental')
     throw new AppError(
       409,
       'VEHICLE_UNAVAILABLE',
-      rented ? `${vehicle.plate} bu dönemde kirada veya kiralama için ayrılmış (${conflicts.map((c) => c.refNo).join(', ')}).` : `${vehicle.plate} bu dönemde başka bir onaylı rezervasyonda.`,
+      other.length
+        ? `${vehicle.plate} bu dönemde müsait değil: ${conflicts.map(allocationConflictText).join(', ')}.`
+        : rented
+          ? `${vehicle.plate} bu dönemde kirada veya kiralama için ayrılmış (${conflicts.map((c) => c.refNo).join(', ')}).`
+          : `${vehicle.plate} bu dönemde başka bir onaylı rezervasyonda.`,
       { vehicleId: 'Araç bu dönemde dolu' },
       { conflicts },
     )
@@ -166,6 +172,11 @@ function mapGuard(e: unknown): never {
   const pg = ((e as { cause?: unknown }).cause ?? e) as { code?: string; constraint?: string }
   if (pg.constraint === 'reservations_vehicle_overlap') throw new AppError(409, 'VEHICLE_UNAVAILABLE', 'Araç bu dönemde başka bir onaylı rezervasyonda.', { vehicleId: 'Araç bu dönemde dolu' })
   if (pg.constraint === 'reservations_vehicle_rented') throw new AppError(409, 'VEHICLE_UNAVAILABLE', 'Araç bu dönemde kirada veya kiralama için ayrılmış.', { vehicleId: 'Araç bu dönemde dolu' })
+  if (pg.constraint === 'reservations_vehicle_maintenance') throw new AppError(409, 'VEHICLE_UNAVAILABLE', 'Araç bu dönemde bakımda veya bakım için planlanmış.', { vehicleId: 'Araç bu dönemde bakımda' })
+  if (pg.constraint === 'reservations_vehicle_damage') throw new AppError(409, 'VEHICLE_UNAVAILABLE', 'Araç bir hasar nedeniyle kullanılamaz olarak işaretli; onaylı rezervasyon yapılamaz.', { vehicleId: 'Araç hasar nedeniyle kullanılamaz' })
+  if (pg.constraint === 'reservations_vehicle_transfer') throw new AppError(409, 'VEHICLE_UNAVAILABLE', 'Araç bu dönemde şubeler arası transferde.', { vehicleId: 'Araç bu dönemde transferde' })
+  if (pg.constraint === 'reservations_vehicle_transfer_location')
+    throw new AppError(409, 'VEHICLE_ELSEWHERE', 'Onaylı bir transfer aracı alıştan önce başka bir şubeye götürüyor; bu şubeden onaylı rezervasyon yapılamaz.', { vehicleId: 'Araç alış zamanında başka şubede olacak' })
   if (pg.constraint === 'reservations_vehicle_not_active') throw new AppError(409, 'VEHICLE_NOT_ACTIVE', 'Araç hizmet dışı; onaylı rezervasyon yapılamaz.', { vehicleId: 'Araç hizmet dışı' })
   if (pg.constraint === 'reservations_vehicle_class') throw invalid({ vehicleId: 'Araç seçilen sınıftan değil' })
   if (pg.constraint === 'reservations_lifecycle' || pg.constraint === 'reservations_final') throw new AppError(409, 'INVALID_TRANSITION', 'Bu rezervasyonun durumu bu işleme izin vermiyor.')

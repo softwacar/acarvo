@@ -537,7 +537,7 @@ export function Rental360Page() {
   const end = r.returned ?? r.plannedReturn
   const minutes = Math.round((Date.parse(end.at) - Date.parse(start.at)) / 60_000)
   const docGates = r.deliveryGates.filter((g) => ['drivers', 'branch_country', 'documents'].includes(g.code))
-  const vehicleGates = r.deliveryGates.filter((g) => ['vehicle_active', 'availability', 'previous_return_open', 'vehicle_location', 'handover_record', 'photos'].includes(g.code))
+  const vehicleGates = r.deliveryGates.filter((g) => ['vehicle_active', 'availability', 'previous_return_open', 'vehicle_operations', 'vehicle_location', 'handover_record', 'photos'].includes(g.code))
   const active = r.status === 'prepared' || r.status === 'delivered' || r.status === 'returned'
 
   return (
