@@ -16,6 +16,7 @@ import { validateCorporateSearch } from './pages/corporate/search'
 import { validateReservationSearch } from './pages/reservations/search'
 import { validateRentalSearch } from './pages/rentals/search'
 import { validateFinanceSearch } from './pages/finance/search'
+import { validateCreateSearch, validateDamageSearch, validateMaintenanceSearch, validateTransferSearch } from './pages/operations/search'
 import { sessionQuery } from './session'
 
 const rootRoute = createRootRouteWithContext<{ queryClient: QueryClient }>()({
@@ -176,6 +177,17 @@ const financeRoute = createRoute({
   validateSearch: validateFinanceSearch,
   component: lazyRouteComponent(() => import('./pages/finance/FinanceCenterPage'), 'FinanceCenterPage'),
 })
+// Maintenance, damage and transfers (docs/BAKIM_HASAR_TRANSFER_V1_PLANI.md), loaded on demand.
+const maintenanceRoute = createRoute({ getParentRoute: () => appRoute, path: '/bakim-servis', validateSearch: validateMaintenanceSearch, component: lazyRouteComponent(() => import('./pages/operations/MaintenancePage'), 'MaintenancePage') })
+const maintenanceNewRoute = createRoute({ getParentRoute: () => appRoute, path: '/bakim-servis/yeni', validateSearch: validateCreateSearch, component: lazyRouteComponent(() => import('./pages/operations/MaintenanceFormPage'), 'MaintenanceFormPage') })
+const maintenanceDetailRoute = createRoute({ getParentRoute: () => appRoute, path: '/bakim-servis/$maintenanceId', component: lazyRouteComponent(() => import('./pages/operations/MaintenanceDetailPage'), 'MaintenanceDetailPage') })
+const damagesRoute = createRoute({ getParentRoute: () => appRoute, path: '/hasar-kayitlari', validateSearch: validateDamageSearch, component: lazyRouteComponent(() => import('./pages/operations/DamagesPage'), 'DamagesPage') })
+const damageNewRoute = createRoute({ getParentRoute: () => appRoute, path: '/hasar-kayitlari/yeni', validateSearch: validateCreateSearch, component: lazyRouteComponent(() => import('./pages/operations/DamageFormPage'), 'DamageFormPage') })
+const damageDetailRoute = createRoute({ getParentRoute: () => appRoute, path: '/hasar-kayitlari/$damageId', component: lazyRouteComponent(() => import('./pages/operations/DamageDetailPage'), 'DamageDetailPage') })
+const transfersRoute = createRoute({ getParentRoute: () => appRoute, path: '/araclar/transferler', validateSearch: validateTransferSearch, component: lazyRouteComponent(() => import('./pages/operations/TransfersPage'), 'TransfersPage') })
+const transferNewRoute = createRoute({ getParentRoute: () => appRoute, path: '/araclar/transferler/yeni', validateSearch: validateCreateSearch, component: lazyRouteComponent(() => import('./pages/operations/TransferFormPage'), 'TransferFormPage') })
+const transferDetailRoute = createRoute({ getParentRoute: () => appRoute, path: '/araclar/transferler/$transferId', component: lazyRouteComponent(() => import('./pages/operations/TransferDetailPage'), 'TransferDetailPage') })
+const transferReceiveRoute = createRoute({ getParentRoute: () => appRoute, path: '/araclar/transferler/$transferId/teslim-al', component: lazyRouteComponent(() => import('./pages/operations/TransferDetailPage'), 'TransferReceivePage') })
 const settingsRoute = createRoute({
   getParentRoute: () => appRoute,
   path: '/ayarlar',
@@ -191,7 +203,7 @@ const moduleRoute = createRoute({
   },
 })
 
-const routeTree = rootRoute.addChildren([loginRoute, appRoute.addChildren([indexRoute, branchesRoute, vehiclesRoute, vehicleNewRoute, vehicle360Route, vehicleEditRoute, customersRoute, customer360Route, corporateRoute, corporate360Route, reservationsRoute, reservationNewRoute, reservation360Route, reservationEditRoute, rentalsRoute, rentalNewRoute, rental360Route, rentalEditRoute, rentalHandoverRoute, rentalReturnRoute, pricingRoute, priceListNewRoute, priceListRoute, financeRoute, settingsRoute, profileRoute, moduleRoute])])
+const routeTree = rootRoute.addChildren([loginRoute, appRoute.addChildren([indexRoute, branchesRoute, vehiclesRoute, vehicleNewRoute, vehicle360Route, vehicleEditRoute, customersRoute, customer360Route, corporateRoute, corporate360Route, reservationsRoute, reservationNewRoute, reservation360Route, reservationEditRoute, rentalsRoute, rentalNewRoute, rental360Route, rentalEditRoute, rentalHandoverRoute, rentalReturnRoute, pricingRoute, priceListNewRoute, priceListRoute, financeRoute, maintenanceRoute, maintenanceNewRoute, maintenanceDetailRoute, damagesRoute, damageNewRoute, damageDetailRoute, transfersRoute, transferNewRoute, transferDetailRoute, transferReceiveRoute, settingsRoute, profileRoute, moduleRoute])])
 
 export function createAppRouter(queryClient: QueryClient) {
   return createRouter({ routeTree, context: { queryClient }, defaultPreload: 'intent', scrollRestoration: true })

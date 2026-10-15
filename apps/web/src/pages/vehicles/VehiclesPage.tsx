@@ -1,5 +1,5 @@
 import { FUEL_TYPES, PAGE_SIZES, TRANSMISSIONS, VEHICLE_STATUSES, type VehicleListItem, type VehicleSort } from '@acarvo/shared'
-import { FileText, CaretDown, CaretLeft, CaretRight, CaretUp, CaretUpDown, CarProfile, Info, MagnifyingGlass, PencilSimple, Plus, Wrench, X } from '@phosphor-icons/react'
+import { FileText, CaretDown, CaretLeft, CaretRight, CaretUp, CaretUpDown, CarProfile, Info, MagnifyingGlass, PencilSimple, Plus, Truck, Wrench, X } from '@phosphor-icons/react'
 import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import { Link, useNavigate, useSearch } from '@tanstack/react-router'
 import { type ReactNode, useEffect, useState } from 'react'
@@ -195,6 +195,12 @@ export function VehiclesPage() {
         title="Araçlar"
         description={session.company ? `${session.company.name} filosu${session.allBranches ? '' : ` · ${session.branches.map((b) => b.name).join(', ')}`}` : undefined}
       >
+        {can(session, 'transfers.read') && (
+          <Link to="/araclar/transferler" className="flex h-10 items-center gap-2 rounded-lg border border-line bg-surface px-4 font-medium text-ink transition-colors hover:bg-line-soft">
+            <Truck size={16} />
+            Transferler
+          </Link>
+        )}
         {canCreate && (
           <Link to="/araclar/yeni" className="flex h-10 items-center gap-2 rounded-lg bg-blue px-4 font-medium text-white transition-colors hover:bg-blue-ink">
             <Plus size={16} weight="bold" />

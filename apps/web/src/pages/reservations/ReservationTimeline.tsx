@@ -162,6 +162,31 @@ export function ReservationTimeline({ branches, classes, today }: { branches: Re
                             </Link>
                           )
                         })}
+                      {(t.holdBars ?? [])
+                        .filter((b) => b.vehicleId === v.id)
+                        .map((b) => {
+                          const left = Math.max(0, pos(b.startsAt))
+                          // Open end: a running maintenance or transfer past its planned end, or a damage block not lifted.
+                          const width = Math.max(1.2, (b.endsAt ? pos(b.endsAt) : 100) - left)
+                          const label = { maintenance: 'bakım', damage: 'hasar engeli', transfer: 'transfer' }[b.kind]
+                          const to = { maintenance: '/bakim-servis/$maintenanceId', damage: '/hasar-kayitlari/$damageId', transfer: '/araclar/transferler/$transferId' }[b.kind]
+                          const params = b.kind === 'maintenance' ? { maintenanceId: b.id } : b.kind === 'damage' ? { damageId: b.id } : { transferId: b.id }
+                          return (
+                            <Link
+                              key={`${b.kind}${b.id}`}
+                              to={to}
+                              params={params as never}
+                              aria-label={`${b.refNo}, ${label}${b.endsAt ? '' : ', bitişi belirsiz'}`}
+                              className={cn(
+                                'absolute top-2 bottom-2 flex items-center overflow-hidden rounded-md px-1.5 text-[11px] font-semibold whitespace-nowrap',
+                                b.kind === 'damage' ? 'border border-alert/60 bg-alert-soft text-alert' : b.kind === 'maintenance' ? 'bg-hold/85 text-white hover:bg-hold' : 'bg-ink-2/80 text-white hover:bg-ink-2',
+                              )}
+                              style={{ left: `${left}%`, width: `${width}%` }}
+                            >
+                              {b.refNo} · {label}
+                            </Link>
+                          )
+                        })}
                     </div>
                   </li>
                 ))}

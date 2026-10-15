@@ -903,7 +903,7 @@ function CloseDesk({ r, dirty, saveDraft, onDone, navigate, onUpdated }: { r: Re
             <input type="checkbox" checked={ack} onChange={(e) => setAck(e.target.checked)} className="mt-0.5 size-4 accent-[var(--ac-blue)]" />
             <span>
               <span className="font-medium text-ink">Yeni hasar bulgularını gördüm</span>
-              <span className="block text-[12.5px] text-ink-2">Bulgular kiralamada kalıcı kalır. Hasar dosyası, sorumluluk, muafiyet veya ücret oluşturulmaz; bunlar Hasar ve Finans modülleriyle gelecek.</span>
+              <span className="block text-[12.5px] text-ink-2">Bulgular kiralamada kalıcı kalır. Kapatmadan sonra her bulgu için Hasar Kayıtları’nda dosya açılabilir; sorumluluk, muafiyet veya ücret kendiliğinden oluşmaz.</span>
             </span>
           </label>
         )}

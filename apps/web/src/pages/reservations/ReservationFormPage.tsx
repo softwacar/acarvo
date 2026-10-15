@@ -1,4 +1,5 @@
 import {
+  allocationConflictText,
   type AvailabilityVehicle,
   type CorporateListItem,
   type CustomerListItem,
@@ -212,13 +213,13 @@ export function AccountSearch({ onPick }: { onPick: (a: Account) => void }) {
 }
 
 /** Wall-time check in the branch's zone (R4): never happened → error; happened twice → explicit choice. */
-export function TimeField({ id, label, value, onChange, branch, choice, onChoice, error }: { id: string; label: string; value: string; onChange: (v: string) => void; branch?: ReservationBranch; choice?: 'earlier' | 'later'; onChoice: (c?: 'earlier' | 'later') => void; error?: string }) {
+export function TimeField({ id, label, value, onChange, branch, choice, onChoice, error, optional }: { id: string; label: string; value: string; onChange: (v: string) => void; branch?: ReservationBranch; choice?: 'earlier' | 'later'; onChoice: (c?: 'earlier' | 'later') => void; error?: string; optional?: boolean }) {
   const res = branch && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(value) ? resolveWallTime(value, branch.timeZone) : null
   const own = res?.kind === 'nonexistent' ? `${formatLocal(value)} ${branch!.name} saatinde yaşanmadı: yaz saatine geçişte saatler ileri alındı. Gerçek saati girin.` : undefined
   const shownError = error ?? own
   return (
     <div>
-      <Field id={id} label={label} required error={shownError} hint={branch ? `${branch.name} yerel saati (${branch.timeZone})` : undefined}>
+      <Field id={id} label={label} required={!optional} error={shownError} hint={branch ? `${branch.name} yerel saati (${branch.timeZone})` : undefined}>
         <Input type="datetime-local" step={300} {...describe(id, shownError, !!branch)} value={value} onChange={(e) => onChange(e.target.value)} />
       </Field>
       {res?.kind === 'ambiguous' && (
@@ -257,7 +258,7 @@ export function VehicleOption({ v, selected, onSelect, zone }: { v: Availability
         {v.status !== 'active' ? (
           <span className="block text-[12.5px] font-medium text-alert">Hizmet dışı</span>
         ) : v.conflicts.length ? (
-          <span className="block text-[12.5px] font-medium text-alert">Dolu: {v.conflicts.map((c) => (c.endsAt ? c.refNo : `${c.refNo} (iade gecikti)`)).join(', ')}</span>
+          <span className="block text-[12.5px] font-medium text-alert">Dolu: {v.conflicts.map(allocationConflictText).join(', ')}</span>
         ) : (
           <span className="inline-flex items-center gap-1 text-[12.5px] font-medium text-ok">
             <CheckCircle size={13} weight="fill" /> Seçili dönemde onaylı rezervasyonu veya kiralaması yok
@@ -624,7 +625,7 @@ function ReservationForm({ mode, existing }: { mode: 'create' | 'edit'; existing
                     ))}
                     <p className="flex items-start gap-1.5 text-[12.5px] text-ink-2">
                       <ShieldCheck size={14} className="mt-[2px] shrink-0 text-ink-3" />
-                      Uygunluk araç durumu, onaylı rezervasyonlar ve kiralamalara göre denetlendi. Henüz denetlenemeyen: {avail.data.notChecked.map((k) => NOT_CHECKED_LABELS[k]).join(', ')}.
+                      Uygunluk araç durumu, onaylı rezervasyonlar, kiralamalar, bakımlar, hasar engelleri ve transferlere göre denetlendi. Henüz denetlenemeyen: {avail.data.notChecked.map((k) => NOT_CHECKED_LABELS[k]).join(', ')}.
                     </p>
                     <p className="flex items-start gap-1.5 text-[12.5px] text-ink-2">
                       <Info size={14} className="mt-[2px] shrink-0 text-ink-3" />

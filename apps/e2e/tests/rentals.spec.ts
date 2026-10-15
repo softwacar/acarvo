@@ -130,7 +130,7 @@ test('return and close: km and fuel compared with the handover; new damage is a 
   await desk.getByRole('button', { name: 'Kontrolü tamamla ve kapat' }).click()
   await expect(page.getByText('K-000001 kapatıldı.')).toBeVisible()
   await expect(page.getByText(/İadede 1 yeni bulgu var/)).toBeVisible()
-  await expect(page.getByText(/Hasar dosyası, sorumluluk kararı, muafiyet veya ücret oluşturulmadı/)).toBeVisible()
+  await expect(page.getByText(/her bulgu için hasar dosyası açılabilir; sorumluluk kararı, muafiyet veya ücret kendiliğinden oluşmaz/)).toBeVisible()
   await page.getByRole('tab', { name: 'Genel' }).click()
   await expect(page.getByRole('table')).toContainText('320 km kullanıldı')
 })

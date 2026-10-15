@@ -303,7 +303,7 @@ export function AppLayout() {
       </aside>
       <div className="flex min-w-0 flex-1 flex-col">
         <TopBar onMenu={() => setOpen(true)} />
-        {/^\/araclar\/(?!yeni$)[^/]+$/.test(pathname) ? (
+        {/^\/araclar\/(?!yeni$|transferler$)[^/]+$/.test(pathname) ? (
           // Araç 360° is a full-width workspace with its own sticky bars, like the V5 design.
           <main className="min-w-0 flex-1">
             <Outlet />

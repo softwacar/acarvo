@@ -1,4 +1,4 @@
-import type { FinanceDepositListItem, FinanceFileListItem, FinanceListPage, FinancePaymentListItem, FinancePendingResponse, FinanceRefundListItem, FinanceSummaryRow, PartyFinanceView, RentalFinanceView, ContractDetail, ContractTemplate, PriceListDetail, PriceListSummary, PriceQuote, PricingResult, ApiError,AvailabilityResponse, RentalActivityItem, RentalSettings, RentalDetail, RentalListItem, RentalListResponse, ReservationActivityItem, ReservationBranch, ReservationDetail, ReservationListItem, ReservationListResponse, TimelineResponse, CorporateActivityItem, CorporateDetail, CorporateDuplicateMatch, CorporateListResponse, CorporatePeopleResponse, CustomerCorporateLink, CustomerActivityItem, CustomerDocument, CustomerDocumentsResponse, CustomerDocumentStatus, RequirementItem, RequirementPolicy, CustomerDetail, CustomerDuplicateResponse, CustomerListResponse, HistoryWriteResult, SessionInfo, VehicleActivityItem, VehicleDocumentDetail, VehicleDocumentsResponse, VehiclePhoto, VehiclePhotoList, VehicleClassSummary, VehicleDetail, VehicleHistory, VehicleListResponse } from '@acarvo/shared'
+import type { DamageCandidate, DamageDetail, DamageListResponse, MaintenanceDetail, MaintenanceListResponse, ServiceDue, TransferDetail, TransferListResponse, VehicleOperations, FinanceDepositListItem, FinanceFileListItem, FinanceListPage, FinancePaymentListItem, FinancePendingResponse, FinanceRefundListItem, FinanceSummaryRow, PartyFinanceView, RentalFinanceView, ContractDetail, ContractTemplate, PriceListDetail, PriceListSummary, PriceQuote, PricingResult, ApiError,AvailabilityResponse, RentalActivityItem, RentalSettings, RentalDetail, RentalListItem, RentalListResponse, ReservationActivityItem, ReservationBranch, ReservationDetail, ReservationListItem, ReservationListResponse, TimelineResponse, CorporateActivityItem, CorporateDetail, CorporateDuplicateMatch, CorporateListResponse, CorporatePeopleResponse, CustomerCorporateLink, CustomerActivityItem, CustomerDocument, CustomerDocumentsResponse, CustomerDocumentStatus, RequirementItem, RequirementPolicy, CustomerDetail, CustomerDuplicateResponse, CustomerListResponse, HistoryWriteResult, SessionInfo, VehicleActivityItem, VehicleDocumentDetail, VehicleDocumentsResponse, VehiclePhoto, VehiclePhotoList, VehicleClassSummary, VehicleDetail, VehicleHistory, VehicleListResponse } from '@acarvo/shared'
 
 export class ApiRequestError extends Error {
   constructor(
@@ -414,4 +414,47 @@ export const financeApi = {
   summary: (body: unknown) => api<{ rows: FinanceSummaryRow[] }>('/finance/summary', { method: 'POST', body }),
   customer: (id: string) => api<PartyFinanceView>(`/customers/${id}/finance`),
   corporate: (id: string) => api<PartyFinanceView>(`/corporate-accounts/${id}/finance`),
+}
+
+// Maintenance, damage and vehicle transfers (docs/BAKIM_HASAR_TRANSFER_V1_PLANI.md). Lists are POST: plates and notes
+// never travel in a URL.
+export interface OperationBranch {
+  id: string
+  name: string
+  code: string
+  timeZone: string
+  inScope: boolean
+}
+export const maintenanceApi = {
+  branches: () => api<{ branches: OperationBranch[] }>('/maintenance/branches'),
+  search: (body: Record<string, unknown>) => api<MaintenanceListResponse>('/maintenance/search', { method: 'POST', body }),
+  get: (id: string) => api<MaintenanceDetail>(`/maintenance/${id}`),
+  create: (body: unknown) => api<MaintenanceDetail>('/maintenance', { method: 'POST', body }),
+  update: (id: string, body: unknown) => api<MaintenanceDetail>(`/maintenance/${id}`, { method: 'PUT', body }),
+  step: (id: string, step: 'approve' | 'start' | 'work-done' | 'return-to-work' | 'complete' | 'cancel', body: unknown) => api<MaintenanceDetail>(`/maintenance/${id}/${step}`, { method: 'POST', body }),
+  uploadPhoto: (id: string, file: File, onProgress?: (f: number) => void) => uploadFile<MaintenanceDetail>(`/maintenance/${id}/photos`, file, onProgress),
+  removePhoto: (id: string, photoId: string) => api<MaintenanceDetail>(`/maintenance/${id}/photos/${photoId}`, { method: 'DELETE' }),
+}
+export const damagesApi = {
+  branches: () => api<{ branches: OperationBranch[] }>('/damages/branches'),
+  search: (body: Record<string, unknown>) => api<DamageListResponse>('/damages/search', { method: 'POST', body }),
+  get: (id: string) => api<DamageDetail>(`/damages/${id}`),
+  candidates: (rentalId: string) => api<{ items: DamageCandidate[] }>(`/damages/candidates?rentalId=${rentalId}`),
+  create: (body: unknown) => api<DamageDetail>('/damages', { method: 'POST', body }),
+  update: (id: string, body: unknown) => api<DamageDetail>(`/damages/${id}`, { method: 'PUT', body }),
+  step: (id: string, step: 'review' | 'repair' | 'block' | 'unblock', body: unknown) => api<DamageDetail>(`/damages/${id}/${step}`, { method: 'POST', body }),
+  uploadPhoto: (id: string, file: File, onProgress?: (f: number) => void) => uploadFile<DamageDetail>(`/damages/${id}/photos`, file, onProgress),
+  removePhoto: (id: string, photoId: string) => api<DamageDetail>(`/damages/${id}/photos/${photoId}`, { method: 'DELETE' }),
+}
+export const transfersApi = {
+  branches: () => api<{ branches: OperationBranch[] }>('/transfers/branches'),
+  search: (body: Record<string, unknown>) => api<TransferListResponse>('/transfers/search', { method: 'POST', body }),
+  get: (id: string) => api<TransferDetail>(`/transfers/${id}`),
+  create: (body: unknown) => api<TransferDetail>('/transfers', { method: 'POST', body }),
+  update: (id: string, body: unknown) => api<TransferDetail>(`/transfers/${id}`, { method: 'PUT', body }),
+  step: (id: string, step: 'approve' | 'depart' | 'receive' | 'cancel', body: unknown) => api<TransferDetail>(`/transfers/${id}/${step}`, { method: 'POST', body }),
+}
+export const vehicleOpsApi = {
+  get: (vehicleId: string) => api<VehicleOperations>(`/vehicles/${vehicleId}/operations`),
+  saveSchedule: (vehicleId: string, body: unknown) => api<ServiceDue>(`/vehicles/${vehicleId}/maintenance-schedule`, { method: 'PUT', body }),
 }

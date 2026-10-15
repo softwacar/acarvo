@@ -105,6 +105,18 @@ export type LocationCorrectInput = z.output<typeof locationCorrectSchema>
 // ---------------------------------------------------------------------------
 // Pure rules, shared by the API (authoritative) and the forms (early explanation).
 
+/** Where an odometer reading or a location event came from (each module writes its own kind; append-only). */
+export type HistoryEventType =
+  | 'initial'
+  | 'manual'
+  | 'correction'
+  | 'rental_handover'
+  | 'rental_return'
+  | 'maintenance_start'
+  | 'maintenance_end'
+  | 'transfer_departure'
+  | 'transfer_arrival'
+
 export interface OdometerPoint {
   id: string
   km: number
@@ -178,7 +190,7 @@ export interface HistoryCorrection {
 export interface OdometerEntry {
   id: string
   km: number
-  eventType: 'initial' | 'manual' | 'correction'
+  eventType: HistoryEventType
   sourceType: string | null
   occurredAt: string
   recordedAt: string
@@ -206,7 +218,7 @@ export interface LocationPlace {
 
 export interface LocationEntry extends LocationPlace {
   id: string
-  eventType: 'initial' | 'manual' | 'correction'
+  eventType: HistoryEventType
   sourceType: string | null
   reason: string | null
   occurredAt: string

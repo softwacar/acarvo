@@ -365,7 +365,7 @@ function RentalForm({ mode, existing }: { mode: 'create' | 'edit'; existing?: Re
                     ))}
                     <p className="flex items-start gap-1.5 text-[12.5px] text-ink-2">
                       <ShieldCheck size={14} className="mt-[2px] shrink-0 text-ink-3" />
-                      Uygunluk araç durumu, onaylı rezervasyonlar ve kiralamalara göre denetlendi. Henüz denetlenemeyen: {avail.data.notChecked.map((k) => NOT_CHECKED_LABELS[k]).join(', ')}.
+                      Uygunluk araç durumu, onaylı rezervasyonlar, kiralamalar, bakımlar, hasar engelleri ve transferlere göre denetlendi. Henüz denetlenemeyen: {avail.data.notChecked.map((k) => NOT_CHECKED_LABELS[k]).join(', ')}.
                     </p>
                   </>
                 )}

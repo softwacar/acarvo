@@ -37,6 +37,8 @@ import {
   formatKm,
   formatMoney,
   LOCATION_LABELS,
+  LOCATION_SOURCE_LABELS,
+  ODOMETER_SOURCE_LABELS,
   STATUS_LABELS,
   TRANSMISSION_LABELS,
 } from '@/lib/vehicle-labels'
@@ -47,6 +49,7 @@ import { VehicleGallery } from './VehicleGallery'
 import { OdometerLocationSection, placeText } from './VehicleHistory'
 import { RelatedReservations } from '../reservations/RelatedReservations'
 import { RelatedRentals } from '../rentals/RelatedRentals'
+import { VehicleDamagePanel, VehicleHoldsPanel, VehicleMaintenanceTab, VehicleTransfersPanel } from '../operations/VehicleOperations'
 
 // ---------------------------------------------------------------------------
 // Tabs (spec §13.3: 8 fixed tabs inside the vehicle, never sidebar links)
@@ -64,15 +67,6 @@ const TAB_LABELS: Record<VehicleTab, string> = {
 
 /** What each not-yet-built tab will hold, from spec §13.3, and which module brings it. */
 const PENDING: Partial<Record<VehicleTab, { icon: Icon; module: string; will: string[] }>> = {
-  musaitlik: {
-    icon: CalendarCheck,
-    module: 'Rezervasyonlar ve Kiralamalar',
-    will: [
-      '7, 30 ve 90 günlük müsaitlik çizelgesi; şube yerel saatiyle',
-      'Onaylı rezervasyon, kiralama, bakım ve transfer blokları',
-      'Tarih aralığı için müsaitlik kontrolü ve rezervasyon başlatma',
-    ],
-  },
   kiralamalar: {
     icon: Key,
     module: 'Kiralamalar',
@@ -82,11 +76,6 @@ const PENDING: Partial<Record<VehicleTab, { icon: Icon; module: string; will: st
     icon: ClipboardText,
     module: 'Teslim, iade ve hazırlık akışları',
     will: ['Teslime hazırlık maddeleri ve nedenleri', 'Teslim ve iade kontrolleri: fotoğraf, kilometre, yakıt, hasar notu', 'Anahtar ve ekipman durumu'],
-  },
-  bakim: {
-    icon: Wrench,
-    module: 'Bakım ve Servis',
-    will: ['Geçmiş, açık, planlı ve geciken bakım kayıtları', 'Kilometre veya süreye bağlı bakım planı', 'Lastik setleri ve değişim geçmişi'],
   },
   finans: {
     icon: Coins,
@@ -406,8 +395,8 @@ function Hero({ v, canEdit, onTab }: { v: VehicleDetail; canEdit: boolean; onTab
 // ---------------------------------------------------------------------------
 // Tab contents
 
-const ODOMETER_EVENT_LABELS: Record<string, string> = { initial: 'Başlangıç kaydı', manual: 'Elle girildi', correction: 'Düzeltme' }
-const LOCATION_EVENT_LABELS: Record<string, string> = { initial: 'Başlangıç konumu', manual: 'Konum kaydı (elle)', correction: 'Düzeltme' }
+const ODOMETER_EVENT_LABELS: Record<string, string> = { ...ODOMETER_SOURCE_LABELS, initial: 'Başlangıç kaydı' }
+const LOCATION_EVENT_LABELS: Record<string, string> = LOCATION_SOURCE_LABELS
 
 const FIELD_LABELS: Record<string, string> = {
   plate: 'Plaka',
@@ -668,6 +657,7 @@ function Overview({
       </div>
 
       <div className="min-w-0 space-y-5">
+        <VehicleHoldsPanel vehicleId={v.id} />
         <Panel title="Filoya giriş" action={canEdit ? <TextLink onClick={edit}>Düzenle</TextLink> : undefined}>
           {v.acquisitionType || v.acquisitionDate || v.acquisitionSeller || v.acquisitionCost || v.acquisitionReference ? (
             <dl className="divide-y divide-line-soft">
@@ -709,7 +699,7 @@ function Overview({
                 <button type="button" onClick={() => onTab(tab)} className="flex h-10 w-full items-center gap-3 rounded-lg px-2 text-left hover:bg-ground">
                   <Ico size={17} className="shrink-0 text-ink-3" />
                   <span className="flex-1 truncate text-ink">{label}</span>
-                  <span className="text-[12.5px] text-ink-3">Henüz bağlı değil</span>
+                  {tab === 'kontroller' || tab === 'finans' ? <span className="text-[12.5px] text-ink-3">Henüz bağlı değil</span> : <ArrowRight size={14} className="text-ink-3" />}
                 </button>
               </li>
             ))}
@@ -883,7 +873,26 @@ export function Vehicle360Page() {
         {tab === 'genel' && <Overview v={v} history={history.data} historyError={history.isError} onRetry={() => history.refetch()} onTab={onTab} canEdit={canEdit} />}
         {tab === 'belgeler' && <VehicleDocuments vehicleId={v.id} plate={v.plate} />}
         {tab === 'gecmis' && <HistoryTab v={v} history={history.data} isLoading={history.isPending} error={history.error} onRetry={() => history.refetch()} />}
-        {tab === 'musaitlik' && can(session, 'reservations.read') && <div className="mb-5"><RelatedReservations kind="vehicle" id={vehicleId} /></div>}
+        {tab === 'belgeler' && <div className="mt-5"><VehicleDamagePanel vehicleId={v.id} /></div>}
+        {tab === 'musaitlik' && (
+          <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_380px]">
+            <div className="min-w-0 space-y-5">
+              {can(session, 'reservations.read') && <RelatedReservations kind="vehicle" id={vehicleId} />}
+              <VehicleTransfersPanel vehicleId={v.id} />
+            </div>
+            <div className="min-w-0">
+              <VehicleHoldsPanel vehicleId={v.id} />
+            </div>
+          </div>
+        )}
+        {tab === 'bakim' &&
+          (can(session, 'maintenance.read') ? (
+            <VehicleMaintenanceTab vehicleId={v.id} />
+          ) : (
+            <StatePanel icon={LockSimple} title="Bakım kayıtlarını görme yetkiniz yok">
+              <p>Bakım ve servis kayıtları için yetki gerekir.</p>
+            </StatePanel>
+          ))}
         {tab === 'kiralamalar' && can(session, 'rentals.read') ? <RelatedRentals kind="vehicle" id={vehicleId} /> : PENDING[tab] && <Pending tab={tab} />}
       </div>
     </>

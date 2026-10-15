@@ -28,7 +28,7 @@ import { Sheet } from '@/components/Sheet'
 import { toast } from '@/components/Toaster'
 import { ApiRequestError, historyApi } from '@/lib/api'
 import { cn } from '@/lib/utils'
-import { formatDateTime, formatKm, getDisplayTimeZone, LOCATION_LABELS } from '@/lib/vehicle-labels'
+import { formatDateTime, formatKm, getDisplayTimeZone, LOCATION_LABELS, LOCATION_SOURCE_LABELS, ODOMETER_SOURCE_LABELS } from '@/lib/vehicle-labels'
 import { can, useSession } from '@/session'
 
 // Araç 360° → Konum ve geçmiş: odometer and physical location records (spec §13.3 tab 8, §59CY, §59CG; docs §8.5).
@@ -135,8 +135,8 @@ export function placeText(p: Pick<LocationPlace, 'type' | 'branchName' | 'descri
   return LOCATION_LABELS[p.type]
 }
 
-const ODOMETER_SOURCE: Record<OdometerEntry['eventType'], string> = { initial: 'Araç kaydı', manual: 'Elle girildi', correction: 'Düzeltme' }
-const LOCATION_SOURCE: Record<LocationEntry['eventType'], string> = { initial: 'Başlangıç konumu', manual: 'Konum kaydı (elle)', correction: 'Düzeltme' }
+const ODOMETER_SOURCE: Record<OdometerEntry['eventType'], string> = ODOMETER_SOURCE_LABELS
+const LOCATION_SOURCE: Record<LocationEntry['eventType'], string> = LOCATION_SOURCE_LABELS
 const CORRECTABLE = new Set([null, 'vehicle_create', 'manual', 'correction'])
 
 function useApplyResult(vehicleId: string) {

@@ -1,3 +1,4 @@
+import type { HistoryEventType } from '@acarvo/shared'
 import { type AcquisitionType, type FuelType, type LocationSummary, type Transmission, type VehicleStatus, formatDateOnly, isDateOnly } from '@acarvo/shared'
 
 export const FUEL_LABELS: Record<FuelType, string> = {
@@ -57,3 +58,17 @@ export const formatDateTime = (iso: string) =>
 
 export const formatMoney = (amount: string, currency: string) =>
   `${new Intl.NumberFormat('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Number(amount))} ${currency}`
+
+/** Source of an odometer reading or a location event, as shown in the vehicle history. */
+export const ODOMETER_SOURCE_LABELS: Record<HistoryEventType, string> = {
+  initial: 'Araç kaydı',
+  manual: 'Elle girildi',
+  correction: 'Düzeltme',
+  rental_handover: 'Kiralama teslimi',
+  rental_return: 'Kiralama iadesi',
+  maintenance_start: 'Bakıma alındı',
+  maintenance_end: 'Bakım tamamlandı',
+  transfer_departure: 'Transfer çıkışı',
+  transfer_arrival: 'Transfer varışı',
+}
+export const LOCATION_SOURCE_LABELS: Record<HistoryEventType, string> = { ...ODOMETER_SOURCE_LABELS, initial: 'Başlangıç konumu', manual: 'Konum kaydı (elle)' }

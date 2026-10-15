@@ -14,6 +14,8 @@ test('tabs live in the address and unknown vehicles are handled', async ({ page 
   await page.reload()
   await expect(page.getByRole('tab', { name: /Konum ve geçmiş/ })).toHaveAttribute('aria-selected', 'true')
   await page.getByRole('tab', { name: 'Bakım ve lastikler' }).click()
+  await expect(page.getByRole('region', { name: 'Periyodik bakım' })).toBeVisible()
+  await page.getByRole('tab', { name: 'Durum ve kontroller' }).click()
   await expect(page.getByText('henüz bağlı değil').first()).toBeVisible()
   await page.goto('/araclar/00000000-0000-4000-8000-000000000000')
   await expect(page.getByRole('heading', { name: 'Araç bulunamadı' })).toBeVisible()

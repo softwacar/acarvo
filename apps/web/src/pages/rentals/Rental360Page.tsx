@@ -42,6 +42,7 @@ import { cn } from '@/lib/utils'
 import { formatDateTime, formatKm } from '@/lib/vehicle-labels'
 import { can, useSession } from '@/session'
 import { TimeField } from '../reservations/ReservationFormPage'
+import { RentalDamageFiles } from '../operations/RentalDamageFiles'
 import { ContractPanel } from '../contracts/ContractPanel'
 import { RentalFinancePanel } from '../finance/RentalFinancePanel'
 import { QuotePanel, QuoteSummary } from '../pricing/QuotePanel'
@@ -945,9 +946,10 @@ export function Rental360Page() {
                 <p className="flex items-start gap-2 rounded-lg border border-hold/35 bg-hold-soft px-3.5 py-2.5 text-[13px] text-ink">
                   <WarningCircle size={16} className="mt-px shrink-0 text-hold" />
                   İadede {r.return.marks.filter((m) => !m.existingMarkId).length} yeni bulgu var
-                  {r.return.findingsAcknowledgedAt ? ` (${formatDateTime(r.return.findingsAcknowledgedAt)} tarihinde görüldüğü onaylandı)` : ''}. Hasar dosyası, sorumluluk kararı, muafiyet veya ücret oluşturulmadı; bunlar Hasar ve Finans modülleriyle gelecek.
+                  {r.return.findingsAcknowledgedAt ? ` (${formatDateTime(r.return.findingsAcknowledgedAt)} tarihinde görüldüğü onaylandı)` : ''}. Kontrol kesinleşince her bulgu için hasar dosyası açılabilir; sorumluluk kararı, muafiyet veya ücret kendiliğinden oluşmaz.
                 </p>
               )}
+              <RentalDamageFiles rentalId={r.id} />
               <Panel title="Fotoğraflar">
                 <div className="grid gap-5 lg:grid-cols-2">
                   {(['handover', 'return'] as const).map((k) => {
