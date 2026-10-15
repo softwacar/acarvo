@@ -155,7 +155,9 @@ test('overdue rental: the 360° says the vehicle stays held and no late fee is c
   await openRental(page, 'K-000002')
   await expect(page.getByRole('status').filter({ hasText: 'gecikti' })).toContainText('Araç fiilen iade edilene kadar bu kiralamada sayılır')
   await expect(page.getByRole('status').filter({ hasText: 'gecikti' })).toContainText('gecikme ücreti hesaplanmaz')
-  await expect(page.getByRole('region', { name: 'Kiralama özeti' })).toContainText('Hesaplanmadı')
+  // The header shows the price as a quote (or not calculated); a late fee is never added to it.
+  await expect(page.getByRole('region', { name: 'Kiralama özeti' })).toContainText('Fiyat teklifi')
+  await expect(page.getByRole('region', { name: 'Kiralama özeti' })).not.toContainText('Gecikme ücreti')
 })
 
 test.describe('branch scope', () => {

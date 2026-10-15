@@ -617,8 +617,10 @@ describe('return and close', () => {
     // A later rental of the same vehicle sees these return marks as the existing damage reference.
     const next = await create(adnan, { vehicleId: ids.vito, vehicleClassId: ids.minivan, pickupLocal: local(60, '10:00'), returnLocal: local(61, '10:00') })
     expect(next.previousReturnMarks).toHaveLength(2)
-    // Nothing financial exists: no charge, payment or damage case tables, and the audit says nothing about money.
-    expect((await one(`select count(*)::int n from information_schema.tables where table_schema = 'public' and table_name ~ '(charge|payment|invoice|damage_case)'`, [])).n).toBe(0)
+    // Closing creates nothing financial (Finance V1 records are only made by explicit finance steps): no charge,
+    // payment or deposit row, no invoice or damage case table, and the audit says nothing about money.
+    expect((await one(`select count(*)::int n from information_schema.tables where table_schema = 'public' and table_name ~ '(invoice|damage_case)'`, [])).n).toBe(0)
+    expect((await one(`select (select count(*) from rental_finances where rental_id = $1) + (select count(*) from finance_charges) + (select count(*) from finance_payments) as n`, [c.id])).n).toBe('0')
     expect(JSON.stringify(c.events)).not.toMatch(/paid|ödendi|charge/i)
   })
 

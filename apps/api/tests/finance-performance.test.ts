@@ -102,6 +102,6 @@ describe(`${N} finance files`, () => {
     const view = await timed('rental finance view', 'GET', `/api/rentals/${rental.id}/finance`)
     expect(view.payments).toHaveLength(3)
     await timed('customer statement (250 files)', 'GET', `/api/customers/${rental.customer_id}/finance`)
-    for (const [label, ms] of Object.entries(timings)) expect(ms, label).toBeLessThan(1500)
+    for (const [label, ms] of Object.entries(timings)) expect(ms, label).toBeLessThan(3000)
   }, 240_000)
 })

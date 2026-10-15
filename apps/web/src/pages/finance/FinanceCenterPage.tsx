@@ -26,10 +26,8 @@ import { can, useSession } from '@/session'
 import { Money, Pill, Section } from './FinanceParts'
 import { FileTable } from './PartyFinancePanel'
 
-export const FINANCE_TABS = ['genel', 'bekleyen', 'tahsilatlar', 'depozitolar', 'iadeler', 'dosyalar', 'hareketler'] as const
-export type FinanceTab = (typeof FINANCE_TABS)[number]
+import { FINANCE_TABS, type FinanceTab } from './search'
 const TAB_LABEL: Record<FinanceTab, string> = { genel: 'Genel görünüm', bekleyen: 'Bekleyen doğrulamalar', tahsilatlar: 'Tahsilatlar', depozitolar: 'Depozitolar', iadeler: 'Depozito iadeleri', dosyalar: 'Kiralama finans dosyaları', hareketler: 'İşlem geçmişi' }
-export const validateFinanceSearch = (s: Record<string, unknown>): { sekme?: FinanceTab } => ((FINANCE_TABS as readonly string[]).includes(s.sekme as string) && s.sekme !== 'genel' ? { sekme: s.sekme as FinanceTab } : {})
 
 type Filters = Partial<FinanceListQuery> & { page: number }
 const STATUS_OPTIONS: Partial<Record<FinanceTab, Record<string, string>>> = {

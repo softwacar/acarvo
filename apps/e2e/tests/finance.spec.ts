@@ -33,7 +33,7 @@ async function prepare(page: Page) {
     const l = await apiCall<{ id: string }>(page, 'POST', '/pricing/price-lists', {
       name: 'E2E Finans EUR',
       currency: 'EUR',
-      priority: 90,
+      priority: 1,
       dayMethod: 'calendar_day',
       graceMinutes: 0,
       minDays: 1,

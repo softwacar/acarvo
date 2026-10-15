@@ -15,7 +15,7 @@ import { validateCustomerSearch } from './pages/customers/search'
 import { validateCorporateSearch } from './pages/corporate/search'
 import { validateReservationSearch } from './pages/reservations/search'
 import { validateRentalSearch } from './pages/rentals/search'
-import { validateFinanceSearch } from './pages/finance/FinanceCenterPage'
+import { validateFinanceSearch } from './pages/finance/search'
 import { sessionQuery } from './session'
 
 const rootRoute = createRootRouteWithContext<{ queryClient: QueryClient }>()({

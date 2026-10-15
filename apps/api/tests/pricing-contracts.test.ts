@@ -331,11 +331,13 @@ describe('integration review: decisions and concurrency', () => {
 
   it('quotes never touch vehicle availability, payments or the reservation itself', async () => {
     const before = (await one('select version, status, vehicle_id from reservations where id = $1', [reservationId])) as Record<string, unknown>
-    const tables = (await ownerPool.query(`select table_name from information_schema.tables where table_schema = 'public' and table_name ~ '(payment|invoice|deposit|debt|ledger)'`)).rows
+    // No invoice, debt or ledger tables; finance records (Finance V1) appear only through explicit finance steps.
+    const tables = (await ownerPool.query(`select table_name from information_schema.tables where table_schema = 'public' and table_name ~ '(invoice|debt|ledger)'`)).rows
     expect(tables).toEqual([])
     const p = (await adnan.post(`/api/reservations/${reservationId}/quotes/preview`, {})).json() as PricingResult
     expect((await adnan.post(`/api/reservations/${reservationId}/quotes`, { requestId: uuid(), expectedNetMinor: p.netMinor, expectedGrossMinor: p.grossMinor, selectedExtras: [] })).statusCode).toBe(201)
     expect(await one('select version, status, vehicle_id from reservations where id = $1', [reservationId])).toEqual(before)
+    expect(Number((await one('select (select count(*) from rental_finances) + (select count(*) from finance_payments) + (select count(*) from finance_charges) as n')).n)).toBe(0)
   })
 })
 
