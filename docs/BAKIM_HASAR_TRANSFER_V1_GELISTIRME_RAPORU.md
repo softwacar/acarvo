@@ -4,7 +4,7 @@
 - **Çalışma ağacı:** `C:\Users\soena\Desktop\acarvo-bht1`.
 - **Başlangıç:** `ceace28`.
 
-**Durum: test ortamında tamamlandı.**
+**Durum: main'e entegre edildi; ana veritabanı 43 migration** (ayrıntılar en sondaki "Son inceleme ve main entegrasyonu" bölümünde).
 
 Bu çalışmada aşağıdakiler yapılmadı:
 - main'e birleştirme;
@@ -53,7 +53,7 @@ Exit code 4 bir uygulama hatası değildi.
 
 **Veritabanı guard'ları.** Değiştirilen rezervasyon ve kiralama araç guard'ları yeni türleri görür ve her neden için ayrı bir kısıt adıyla hata verir.
 
-Hasar engeli bakım planını ve transferi engellemez, çünkü onarım için aracın servise veya başka şubeye gitmesi gerekir.
+Hasar engeli bakım planını engellemez. Kullanılamaz araç normal transferle onaylanamaz ve yola çıkarılamaz; fiziksel taşıma yalnız ayrı "onarım amaçlı taşıma" ile yapılır (son bölüm, B).
 
 **Konum sürekliliği**
 - Transfer, aracın varıştan sonraki ilk onaylı rezervasyonu veya hazırlanan kiralaması başka bir şubede başlıyorsa onaylanmaz ve yola çıkarılamaz.
@@ -306,7 +306,7 @@ Ana sunucular main kodundan çalışmaya devam ediyor.
 
 ## 21. Kararlar (bu sprintte verilen teknik kararlar)
 
-- **BHT1:** Hasar engeli bakım planını ve transferi engellemez (onarım için gerekir); rezervasyon onayını, kiralamayı ve teslimi engeller.
+- **BHT1 (revize edildi):** Hasar engeli bakım planını engellemez. Normal transferi, rezervasyon onayını, kiralamayı ve teslimi engeller. Onarım için yalnız ayrı onarım amaçlı taşıma kullanılır (son bölüm, B).
 - **BHT2:** Çakışan bakım planı reddedilir. Açık seçimle "onay bekleyen" kaydedilebilir; bu kayıt aracı tutmaz.
 - **BHT3:** Gecikmiş bakım ve yoldaki gecikmiş transfer, kiralamadaki K2 kuralı gibi açık uçlu tutar.
 - **BHT4:** Konum sürekliliği iki yönde uygulanır: transfer ile sonraki kayıt arasında ve rezervasyon/kiralama ile önceki transfer arasında. Yalnız transfer varsa devreye girer.
@@ -340,3 +340,241 @@ Bu dal onaylanırsa izlenecek sıra:
 4. FN5 uygulaması.
 
 Başka büyük modüle kendiliğinden geçilmedi.
+
+---
+
+# Son inceleme ve main entegrasyonu
+
+## A. BHT1–BHT8: kararlar ve uygulanma durumu
+
+| # | Karar | Spec ile ilişki | Güvenlik etkisi | Operasyonel etkisi | Mevcut rezervasyon/kiralama etkisi | V1 sonucu |
+|---|---|---|---|---|---|---|
+| BHT1 | **Revize edildi.** Hasar engeli bakım planını engellemez. Kullanılamaz araç **normal transferle** onaylanamaz ve yola çıkarılamaz (API ve PostgreSQL, 0041/0042). Fiziksel taşıma yalnız ayrı **onarım amaçlı taşıma** ile yapılır (B bölümü). | §59R'de transfer bir taşıma kaydıdır; spec "kullanılamaz araç sürülür" demez. İlke 4 ve onarım ihtiyacı birlikte gözetildi. | Kullanılamaz aracın trafikte sürülüyormuş gibi kaydedilmesi engellendi. | Onarıma götürmek yetki, hasar dosyası, taşıma yöntemi ve çıkış beyanı ister. | Yok: taşıma onaylı kayıtlarla çakışırsa yine reddedilir; hiçbir şey iptal edilmez. | Uygulandı ve test edildi. |
+| BHT2 | Çakışan bakım planı reddedilir. Kullanıcı açıkça isterse "onay bekleyen" kaydedilir; aracı tutmaz. Onayda çakışma yeniden denetlenir. | İlke 1; §13.3 bakım bloğu yalnız gerçek tutuştur. | Sessiz çakışma oluşamaz. | Plan kaybolmaz; onaylanmayı bekler. | Onaylı rezervasyon korunur, iptal edilmez. | Korundu. |
+| BHT3 | Gecikmiş bakım ve yoldaki gecikmiş transfer açık uçlu tutar (K2'nin aynısı). | İlke 5; §13.3. | Gecikme aracı müsait yapmaz. | Beklenen bitişin güncellenmesi gerekir. | Gecikme süresince yeni onay alınamaz; mevcut onaylılar iptal edilmez. | Korundu. |
+| BHT4 | Konum sürekliliği: transfer ile sonraki kayıt arasında ve rezervasyon/kiralama ile önceki transfer arasında. Yalnız transfer varsa devreye girer. | §13.3: "gelecekteki beklenen fiziksel konum dikkate alınır". | Başka şubeye götürülen araç için yanlış şubeden onay engellenir. | Transfer, sonraki kaydı başka şubede başlayan aracı taşıyamaz. | Ana veritabanında transfer yok, etkisi yok. Değişmeyen mevcut kayıtlar yeniden denetlenmez. | Korundu. |
+| BHT5 | Varışta teslim alma = tamamlanma. | §59R: Planned → In Transit → Completed. | Teslim alma yalnız varış şubesinde. | Ara "varışta bekliyor" durumu yok. | Yok. | Korundu. |
+| BHT6 | Ana şube transferle değişmez. | §59R: "home branch'i otomatik değiştirmez"; ilke 8. | Yok. | Fiziksel konum değişir, ana şube aynı kalır. | Yok. | Korundu. |
+| BHT7 | Operasyon için araç görünürlüğü: ana şubesi veya şu anki şubesi kullanıcının kapsamındaki araç. Araç 360° yalnız ana şube kuralını korur. | Spec şube kapsamında fiziksel işleme yer vermiyor; araç fiilen şubedeyken personel işlem yapabilmeli. | Yalnız şu an kullanıcının şubesinde kayıtlı araç görünür: plaka ve model. Kişisel veri yok. | Şubedeki araç için bakım/hasar/transfer başlatılabilir. | Yok. | Korundu (düşük risk, raporlandı). |
+| BHT8 | Gerçek işlem zamanı geriye 72 saate kadar girilebilir; hasar tespiti 30 güne kadar. Gelecek zaman yok. | K8 (kiralama) ile aynı yaklaşım. | Sınırlı geriye tarihleme; km kronolojisi korunur. | Geç kayıt mümkün. | Yok. | Korundu. |
+
+Ek düzeltme: Planlanandan **erken servise alınan** bakımda planlanan başlangıç gerçek başlangıca çekilir; eski plan olay geçmişinde saklanır. Eşzamanlılık testi bu kusuru buldu; önceden kayıt kısıtına takılıyordu.
+
+## B. Hasarlı aracın transferi: son kural
+
+**A) Bakım planı:** Kullanılamaz araç için bakım planlanabilir. Plan engeli kaldırmaz ve aracı uygun yapmaz.
+
+**B) Normal transfer:**
+- Talep oluşturulabilir; talep aracı tutmaz ve ayrıntıda "Hasar engeli" çakışması gösterilir.
+- **Onay, yola çıkış ve onaylı planın değiştirilmesi** aşağıdaki düzeylerde reddedilir:
+  - API: `VEHICLE_NOT_USABLE`;
+  - PostgreSQL: `transfers_vehicle_damaged`.
+- Onaydan sonra eklenen engel de çıkışı durdurur ve yarım kayıt oluşmaz.
+- Daha önce kaldırılmış bir engel geçmişte kaldığı için transferi engellemez (0042).
+
+**C) Onarım amaçlı taşıma (ayrı akış):**
+- Ayrı yetki: `transfers.repair`. Sahip ve Yönetici'de var, Operasyon'da yok; özel roller değişmedi.
+- Aracın **açık bir hasar dosyasına** bağlanır.
+- **Taşıma yöntemi zorunludur:** çekici veya araç taşıyıcı. "Kendi gücüyle sürülerek" seçeneği yok.
+- Onay ve çıkış da `transfers.repair` ister.
+- Çıkışta yetkili kişi aracın beyan edilen taşımayla yola çıktığını ve kendi gücüyle sürülmediğini **beyan eder**. Beyan olmadan çıkış hem API'de hem veritabanında reddedilir. Beyanın zamanı ve kişisi kaydedilir, sonradan değiştirilemez.
+- ACARVO taşımayı doğrulamaz; arayüz ve rapor bunu açıkça söyler.
+- Diğer bütün kurallar geçerlidir: onaylı rezervasyon, kiralama, bakım ve başka transfer çakışması; şube kapsamı; km; konum geçmişi.
+
+**D) Varıştan sonra:**
+- Hasar dosyası kapanmaz.
+- Kullanım engeli kalkmaz.
+- Araç müsait olmaz.
+- Rezervasyon onayı ve doğrudan kiralama hasar engeliyle reddedilmeye devam eder.
+- Engeli kaldırmak `damage.unblock` yetkisi, en az 5 karakter gerekçe ve denetim kaydı ister.
+
+Bunların hepsi testle doğrulandı (API, veritabanı ve tarayıcı).
+
+## C. Ortak uygunluk denetimi
+
+PostgreSQL kataloğundan salt okunur denetim yapıldı.
+
+**Tetikleyiciler:** Aşağıdaki tablolarda guard'lar `BEFORE INSERT OR UPDATE` ile çalışır; hangi API yolundan veya doğrudan SQL'den gelinirse gelinsin her yazma bu guard'lardan geçer:
+- `reservations`, `rentals`, `maintenance_records`, `damage_files`, `damage_blocks`, `vehicle_transfers`;
+- km ve konum geçmişinde ekleme guard'ları.
+
+**Kilit:** Aynı araç kilidini (`vehicle_allocation_lock`) alan guard'lar:
+- `reservations_vehicle_guard`, `rentals_vehicle_guard`, `maintenance_records_guard`, `damage_blocks_guard`, `vehicle_transfers_guard`.
+
+**Tek tanım:**
+- `vehicle_busy`'nin tek gerçek tanımı 8 parametreli sürümdür; 6 parametreli sürüm yalnız sarmalayıcıdır.
+- Onu kullananlar: dört guard ve API'nin tek yardımcısı (`lib/vehicle-allocation.ts`).
+- İkinci bir uygunluk motoru yok.
+
+| İşlem | Koruma |
+|---|---|
+| Rezervasyon onayı, tarih değişikliği, araç değişikliği | Rezervasyon guard'ı (şube değişikliği de yeniden denetlenir) |
+| Kiralama oluşturma, rezervasyondan dönüşüm, teslim, uzatma | Kiralama guard'ı |
+| İade | Tutuşu kısaltır; denetim gerekmez |
+| Bakım başlatma ve beklenen bitiş değişikliği | Bakım guard'ı |
+| Bakım tamamlama | Tutuşu bitirir |
+| Hasar engeli koyma ve kaldırma | Kilit; engel bir olgudur |
+| Transfer onayı, çıkışı, plan değişikliği | Transfer guard'ı (hasar, rezervasyon, kiralama, bakım, transfer, sonraki kayıt) |
+| Transfer varışı | Tutuşu bitirir |
+
+## D. Eşzamanlılık
+
+**İlk tur:**
+- rezervasyon onayı ↔ bakım planı;
+- transfer onayı ↔ rezervasyon onayı;
+- teslim ↔ hasar engeli;
+- transfer çıkışı ↔ teslim;
+- bakıma alma ↔ teslim;
+- iki ayrı teslim alma.
+
+**İkinci tur (bu inceleme):**
+
+| Senaryo | Sonuç |
+|---|---|
+| Bakıma alma ↔ rezervasyon onayı | Tam olarak biri başarılı. |
+| Rezervasyon onayı ↔ transfer çıkışı | Tam olarak biri başarılı. |
+| Kiralama oluşturma ↔ bakıma alma | Tam olarak biri başarılı. |
+| Aynı araca çakışan iki transfer onayı | Tam olarak biri başarılı. |
+| Aynı bakımın iki kez başlatılması | Biri başarılı; tek km kaydı. |
+| Yoldaki araca bakım başlatma | Reddedildi. |
+| Transfer varışı ↔ varış şubesinde rezervasyon onayı | Rezervasyon ancak varıştan sonra başlıyorsa onaylanır. |
+| Aynı hasar engelini iki kişinin kaldırması | Biri kaldırır; engel dönemi tek kez kapanır; mevcut onaylı R-000001 değişmez. |
+| Aktif (gecikmiş) kiralamadaki aracın transferi | Reddedildi. |
+| Hasar engelli araçla doğrudan kiralama | Reddedildi. |
+
+Her senaryoda şirket izolasyonu korundu. Araç iki yerde kullanılmadı, yarım işlem oluşmadı, geçmiş bozulmadı.
+
+## E. RLS ve RBAC
+
+**RLS ve FK:**
+- 10 yeni tablonun hepsinde zorunlu RLS ve 4 politika var.
+- 67 FK'nin hepsi şirket bağlantılı (bileşik) ya da yalnız `users` tablosuna işaret ediyor.
+- Çalışma zamanı rolüne DELETE yetkisi verilmedi; olay tabloları yalnız SELECT ve INSERT alır.
+
+**Kapsam:**
+- Başka şirketin kayıtları kimlik bilinse bile 404 döner.
+- Başka şirketin şubesi hedef olarak kullanılamaz; bileşik FK buna izin vermez.
+- Varış şubesi kapsamı olmayan kullanıcı teslim alamaz.
+
+**Yetki:**
+- Yetki kaldırıldığında bir sonraki istek reddedilir; bu, `transfers.repair` ile test edildi.
+- Hazır roller: Sahip ve Yönetici'ye +12, Operasyon'a +7 yetki (onay, inceleme, engel kaldırma ve onarım taşıması yok).
+- Özel roller değişmez.
+
+## F. Fotoğraf ve dosya güvenliği
+
+Bakım ve hasar fotoğrafları kiralama kanıt fotoğraflarıyla aynı yapıyı kullanır:
+- İçerik doğrulanır; görsel yeniden kodlanıp meta veri silinir.
+- Zararlı dosya taramasından geçer. Üretimde tarayıcı yoksa yükleme kapalıdır (`UPLOADS_CLOSED`, testli). Zararlı dosya reddedilir (`MALWARE_DETECTED`, testli).
+- Özel önekle saklanır.
+- Her istekte şirket (RLS), yetki ve şube kapsamı denetlenir; `no-store` başlıkları gönderilir.
+
+Belge erişim izni modeli (tek seferlik erişim kaydı) belgelere özeldir; kanıt fotoğraflarında, kiralama fotoğraflarında olduğu gibi kullanılmaz. Fotoğraf görüntüleme geçmişi tutulmaz (mevcut kanıt fotoğraflarıyla aynı). Bu durum açık risk olarak aşağıda yer alıyor.
+
+M2 anahtarlarına ve `.env` dosyasına dokunulmadı.
+
+## G. Finans
+
+Finans V1 testlerinin tamamı geçti: dört göz, doğrulama, depozito iadesi, kapanış, değişmez kayıtlar, geçmiş.
+
+Hasar dosyaları borç, depozito kesintisi, sigorta talebi veya fatura oluşturmaz; testte finans tablo sayıları değişmedi.
+
+FN5 tasarımı 11. bölümde korunuyor; finans hareketi taşınmadı.
+
+## H. Migration'lar
+
+| Dosya | İçerik |
+|---|---|
+| `0037_operations.sql` | Tablolar |
+| `0038_operations_rls.sql` | RLS, guard'lar, `vehicle_busy` |
+| `0039_operations_history_guard_fix.sql` | Geçmiş guard'ının iç içe düzeni |
+| `0040_transfer_purpose.sql` | Transfer amacı, hasar dosyası, taşıma yöntemi ve beyan sütunları |
+| `0041_transfer_purpose_guard.sql` | BHT1 revizyonu |
+| `0042_transfer_damage_window.sql` | Hasar kontrolü "şimdiden itibaren" |
+
+Tutarlılık denetimi:
+- Hepsi tam içerikli; boş dosya yok.
+- Eski migration dosyaları değişmedi; journal'a yalnız ekleme yapıldı.
+- Test veritabanında 43 uygulanmış migration var ve özetleri dosyalarla eşleşiyor (`verify`: sorun yok).
+- Mevcut tablolarda yalnız izin listesi genişletmeleri ve fonksiyon değişimleri var:
+  - dosya türleri;
+  - km ve konum türleri;
+  - sıra türleri;
+  - rezervasyon ve kiralama araç guard'ları.
+- Hiçbir mevcut satır için UPDATE, DELETE veya dönüşüm yok.
+- Düzeltmeler yeni dosyalarla yapıldı; uygulanmış dosyalar değiştirilmedi, test veritabanı sıfırlanmadı.
+
+## I. Ana veritabanındaki gerçek kayıtların ön kontrolü (salt okunur)
+
+**Drina Rent a Car:**
+- 1 onaylı rezervasyon: R-000001, gerçek kayıt. Aracı aktif; başka bir kayıtla çakışmıyor.
+- 0 kiralama.
+- 23 aktif araç.
+- Konum kaydı: 25 olay (23 başlangıç, 2 elle).
+- Km kaydı: 24 okuma (22 başlangıç, 1 elle, 1 düzeltme).
+- 6 tanıtım fotoğrafı.
+
+**Neretva Rent:**
+- Rezervasyon ve kiralama yok.
+- 4 aktif araç.
+
+**Değerlendirme:**
+- Bütün mevcut değerler yeni izin listelerine uyuyor.
+- Yeni tablolar ana veritabanında yoktu.
+- Transfer olmadığı için konum sürekliliği kuralı mevcut kayıtları etkilemez.
+- Değişmeyen onaylı kayıtlar yeniden denetlenmez; R-000001'in tarihsel anlamı değişmez.
+- Migration hiçbir satırı değiştirmez.
+
+**Sonuç:** Çözülmemiş bir çelişki bulunmadı.
+
+## J. Main entegrasyonu
+
+| Konu | Sonuç |
+|---|---|
+| Git | İki çalışma ağacı temizdi. Main (`ceace28`) dalın atasıydı; yalnız fast-forward yapıldı. Force, reset veya rebase kullanılmadı. GitHub'a gönderilmedi. `operasyon-bht-v1` dalı ve `acarvo-bht1` çalışma ağacı korunuyor. |
+| Son main commit'i | Bu raporu güncelleyen commit. Kod: `ae556bf`. |
+| Ana sunucular | Geçişten önce durduruldu. Görev durdurulduktan sonra açık kalan iki alt süreç de kapatıldı; amaç, migration sırasında eski ve yeni şemanın karışmamasıydı. Geçişten sonra main kodundan yeniden başlatıldı. |
+| Geçiş öncesi | `safe-migrate --verify` yalnız 6 bekleyen migration buldu. `--dry-run` 0037–0042'yi listeledi. Satır sayıları ve içerik özetleri alındı: şirket bazında tablolar, finans, kullanıcılar, şirketler, oturumlar, roller, şubeler ve 16 dosyalık depo. Güvenlik nesnelerinin anlık görüntüsü de alındı. |
+| Doğrulanmış yedek | `C:\Users\soena\Desktop\acarvo\backups\2026-10-15-22-21-34` |
+| Ana veritabanı | 37 → **43** migration. `safe-migrate --verify`: sorun yok (75 tablo, 71'i RLS'li). |
+| Güvenlik karşılaştırması | Eklenenler: 40 politika (10 tablo × 4), yeni yetkiler ve indeksler. Kaldırılan politika, yetki, indeks veya rol özelliği yok. 67 yeni FK'nin hepsi şirket bağlantılı; çalışma zamanı rolünde DELETE yetkisi yok. |
+| Rol izinleri | Yalnız hazır roller değişti. Sahip ve Yönetici +12 yetki (`transfers.repair` dahil); Operasyon +7 (onay, inceleme, engel kaldırma ve onarım taşıması yok). Özel rol yok. |
+| Mevcut gerçek veriler | **Korundu.** Birebir aynı kalanlar: müşteriler (gerçek müşteri dahil), kurumsal hesaplar, araçlar, rezervasyonlar (gerçek R-000001 dahil), kiralamalar, km ve konum geçmişi, fotoğraflar ve belgeler, fiyat listeleri ve teklifler, sözleşmeler, finans tabloları, şubeler, üyelikler, kullanıcılar, şirketler, oturumlar, sıra sayaçları, dosya deposu. Tek ek: şirket başına 3 `role.preset_upgrade` işlem geçmişi kaydı. |
+| Sentetik veri | Ana veritabanına bakım, hasar veya transfer eklenmedi; 10 yeni tablo boş. |
+| Main üzerinde testler (yalnız `acarvo_test`) | API **518 / 518**; tarayıcı **127 / 127** (+33 isteğe bağlı test atlandı). |
+| TypeScript ve build | 4 proje hatasız. Üretim derlemesi başarılı; büyük paket uyarısı önceden de vardı. |
+| Çalışan uygulama | `/api/health` "veritabanı bağlı" döndü. Web `http://localhost:5173/bakim-servis` 200 verdi. Bakım API'si oturumsuz isteği reddetti. Ekranlar gerçek hesapla açılmadı; içerik doğrulaması test veritabanındaki tarayıcı testleriyle yapıldı. |
+
+## K. Ekran adresleri
+
+| Ekran | Adres |
+|---|---|
+| Bakım & Servis | http://localhost:5173/bakim-servis (yeni: `/bakim-servis/yeni`) |
+| Hasar Kayıtları | http://localhost:5173/hasar-kayitlari (yeni: `/hasar-kayitlari/yeni`) |
+| Araç Transferleri | http://localhost:5173/araclar/transferler (talep: `/araclar/transferler/yeni`; varışta teslim alma: `/araclar/transferler/<id>/teslim-al`) |
+| Araç 360° | Genel bakış, Müsaitlik, Bakım ve Belgeler ve riskler sekmeleri |
+| Kiralama 360° | Hasar sekmesi |
+
+## L. Açık ürün kararları
+
+1. **Taşıma doğrulaması:** Onarım taşıması personel beyanına dayanıyor. Çekici veya taşıyıcı firmasının kendi kaydı veya belgesi isteniyorsa ayrı karar gerekir.
+2. **Fotoğraf erişimi:** Kanıt fotoğraflarının görüntülenme geçmişi tutulmuyor (kiralama fotoğraflarıyla aynı). İsteniyorsa belge erişim izni modeli fotoğraflara da uygulanabilir.
+3. **İkinci kontrol kişisi:** Bakım tamamlama ve hasar engeli kaldırma için dört göz şartı yok. Drina'da tek Sahip ve tek Operasyon var.
+4. **Kapsam dışı kalanlar:** Lastik sezon ve set takibi, bakım maliyeti (Masraflar), hazırlık ve temizlik kontrol listesi.
+5. **FN5:** Tasarım raporda (11. bölüm); uygulama ayrı sprintte.
+
+## M. Güvenlik ve operasyonel riskler
+
+- **Ayrı kapı:** Onarım taşıması doğru kullanılmazsa (yanlış beyan) kullanılamaz araç yine hareket ettirilebilir. Bunu ayrı yetki, hasar dosyası bağlantısı, değiştirilemez beyan kaydı ve işlem geçmişi sınırlıyor.
+- **BHT7:** Araç şu an kullanıcının şubesinde kayıtlıysa, ana şubesi kullanıcının yetki alanında olmasa da plakası ve modeli görünür.
+- **Teslim kapısı:** Ana veritabanındaki 4 şubenin ülkesi tanımlı değil ve dış sözleşme modu kapalı. Teslim bu nedenle zaten mümkün değil; değişmedi.
+- **Tarayıcı testleri:** Makine yükü altında yavaşlayabiliyor. Bu turda tam çalıştırmalarda zaman aşımı olmadı; finans performans testi iki tam çalıştırmada da geçti.
+
+## N. Gerçek işletme kullanımına engeller
+
+1. Şube ülkelerinin ve dış sözleşme modunun şirket sahibince ayarlanması (teslim için; mevcut koşul).
+2. Her şirkette en az iki yetkili (Sahip ve Yönetici): finans dört göz kuralı ve operasyon kontrolü için.
+3. Üretim için zararlı dosya taraması: yoksa fotoğraf yükleme kapalı kalır.
+4. M2 gerçek anahtarları ve ülke belge kuralları: kullanıcı kararı; değiştirilmedi.
+5. Onarım taşıması için işletmenin taşıma sağlayıcısı kuralının belirlenmesi (L-1).
+
