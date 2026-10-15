@@ -205,3 +205,60 @@ Ana veritabanına bağlanılmadı; migration uygulanmadı (34'te); örnek finans
 ## 22. Gelecekteki ödeme sağlayıcısı entegrasyonları
 
 Mimari hazır: tahsilat yöntemi, harici referans ve "kaydedildi → doğrulandı" ayrımı bir sağlayıcı webhook'unun doğrulamayı otomatik vermesine uygun; kart verisi hiçbir zaman ACARVO'ya gelmemeli (sağlayıcının barındırılan ödeme sayfası / tokenizasyon). Sırası: sağlayıcı seçimi ve sözleşmesi → PCI kapsamı değerlendirmesi → test ortamında webhook imza doğrulaması → idempotent "sağlayıcı doğruladı" durumu → iade API'si (depozito iadesi tamamlandı bildiriminin yerine) → mutabakat raporu. Bu sprintte hiçbir entegrasyon yapılmadı ve arayüzde varmış gibi gösterilmiyor.
+
+---
+
+## Son inceleme ve main entegrasyonu (15.10.2026)
+
+### 1. FN1–FN7 kararları
+
+| Karar | Durum |
+|---|---|
+| FN1 Tahsilat doğrulama | Uygulandı. Nakit dahil her tahsilatı kaydedenden farklı bir yetkili doğrular (API + PostgreSQL `CHECK`). Nakitte kaydedenin açık beyanı; kayıt ve doğrulama ayrı kullanıcı ve zamanla saklanır. Durum adı "Yetkili doğruladı"dır; doğrulama penceresi bunun personel doğrulaması olduğunu, ACARVO'nun banka veya sağlayıcıyla doğrulama yapmadığını yazar. "Banka tarafından doğrulandı" ifadesi yok. Bu incelemede eklendi: doğrulanmış tahsilatın ters kaydı da kaydedenden farklı biri tarafından yapılır (0036). |
+| FN2 İç hesap onayı | Uygulandı. Teslim öncesi teklif görülür, dosya açılır, kalem hazırlanır ve onay bekleyen kalem tutarına kadar ödeme bildirimi kaydedilir; kalem yalnız teslimden sonra ikinci yetkiliyle onaylanır. Teklif ve iç hesap resmî fatura veya kesin borç olarak gösterilmez. |
+| FN3 Para birimleri | Uygulandı. Tahsilat dosya para biriminde; depozito kendi para biriminde; dönüşüm yok; toplamlar para birimi başına; 0/2/3 küsurat testli. |
+| FN4 Depozito kesintisi | Uygulandı. Otomatik kesinti/mahsup yok; bakiye ve eşzamanlı iade koruması korunuyor. |
+| FN5 Ödeme sorumlusu | V1'de güvenli düzeltme akışı yok: sorumlu ve dosyanın hareketleri veritabanında değiştirilemez/taşınamaz (testli). Yanlış sorumlu seçilmişse hareketler başka hesaba taşınamaz; düzeltmenin hukuki/muhasebe sonucu belirlenince ayrı, onaylı bir akış gerekir. |
+| FN6 Ek ücretler | Uygulandı. Otomatik ücret yok; iade bilgileri ve "Finansal değerlendirme gerekli" gösteriliyor; sistemin oluşturduğu kalem olmadığı testli. |
+| FN7 Ertelenenler | Taksit, şube kasası, iç makbuz PDF, ödeme sağlayıcısı, banka mutabakatı, resmî fatura, muhasebe entegrasyonu yapılmadı ve arayüzde varmış gibi gösterilmiyor. |
+
+### 2. Son finansal doğruluk denetimi
+
+- **Bulunan ve düzeltilen:** Hiç onaylı kalemi olmayan (fiyatlandırılmamış) bir dosya bakiye "sıfır" olduğu için kapatılabiliyordu. Artık en az bir kayıtlı kalem olmadan finansal kapanış yok (API engeli "Onaylanmış iç hesap kalemi yok" + veritabanı kuralı `rental_finances_close_unpriced`).
+- **Bulunan ve düzeltilen:** Tahsilat ve depozito iadesi ters kayıtlarında dört göz yoktu; artık ters kaydı ilk kaydı yapan/iadeyi bildiren kişi yapamaz (API + `CHECK`).
+- Tahsilat: çift kayıt (`requestId`), harici referans tekrarı, eşzamanlı çift doğrulama, kendi kaydını doğrulama, işlem sırasında yetki kaldırma (yeni test), bekleyenin doğrulanmış toplama girmemesi, kısmi tahsilat ve fazla tahsilat engeli testli.
+- Depozito: alınmamış depozitonun iadesi, fazla iade, eşzamanlı iade, inceleme sırasında iade, talep / onay / bildirim ayrımı, "onay = para gönderildi" varsayılmaması, tam iade edilmişin "tutuluyor" görünmemesi testli veya ekranda doğrulandı.
+- İç hesap: teklif otomatik borca dönüşmez; onay bekleyen kalemler kayıtlı tutardan ayrı gösterilir; ters kayıt ilk kaydı silmez ve ikinci yetkili ister; aynı kalem iki kez onaylanamaz; kapalı dosya değişmez; yeniden açma gerekçe ve yetki ister.
+- Kapanış: bakiye = kayıtlı kalemler − doğrulanmış tahsilat; bekleyen tahsilatlar ve iadeler kapanışı engeller; depozito gelir sayılmaz; fiyatlandırılmamış dosya kapanmaz.
+- Para birimi: tamsayı küsurat birimi + BigInt; karışma yok; negatif depozito/bakiye oluşmaz (fazla tahsilat ayrı gösterilir); yuvarlama yalnız fiyatlandırmada, kayıtlar arasında yeniden hesaplanmaz.
+
+### 3. Şirket, şube ve yetki
+
+- Yeni test: yalnız SJJ şubesine bağlı, Yönetici izinli sentetik bir kullanıcı, SAC kiralamasında **her** finans işlemini (görüntüleme, kalem onayı, tahsilat doğrulama, ters kayıt, depozito incelemesi, iade talebi ve onayı, kapanış, yeniden açma, kalem hazırlama) deniyor: hepsi 403/404, hiçbir kayıt değişmiyor.
+- Başka şirket: kimlik bilmek erişim vermez (testli); RLS ve bileşik yabancı anahtarlar eksiksiz; Operasyon onay yetkisi almıyor; özel rollere dokunulmadı.
+
+### 4. Gerçek yetkili kullanıcı sayısı (ana veritabanı, yalnız okuma)
+
+| Şirket | Üyeler | Finans adımları |
+|---|---|---|
+| Drina Rent a Car | 1 Sahip, 1 Operasyon | Tahsilat ve depozito doğrulaması mümkün (Operasyon kaydeder, Sahip doğrular); depozito iadesi talep/onay mümkün. **İç hesap kalemi onayı, kalem ters kaydı ve iade bildirimi sonrası ters kayıt için ikinci yetkili yok** → gerçek kullanımdan önce ikinci bir Sahip/Yönetici gerekir. |
+| Neretva Rent | 1 Sahip, 1 Yönetici | Tüm dört göz adımları mümkün. |
+
+Dört göz kuralı gevşetilmedi; kullanıcı veya rol eklenmedi; test kullanıcısı ana veritabanına taşınmadı.
+
+### 5. Tarayıcı zaman aşımı
+
+İki ayrı tam çalıştırmada farklı testlerde zaman aşımı görüldü (önce `company.spec`, sonra üç `a11y.spec` testi); hepsi gezinme/sayfa yükleme beklemesinde ve makine yük altındayken (ikincisinde eşzamanlı üretim derlemesi çalışıyordu). Önceki testlerle birlikte iki kez tekrar üretme denemesi 29/29 geçti; ortak bir kod yolu veya yarış durumu bulunmadı; zaman aşımı süreleri artırılmadı. Yanında başka iş yokken baştan çalıştırılan tam paket **118/118 geçti**. Ayrıca tam API takımı bir kez geç bitti (639 sn) ama 480/480 geçti; Vitest çalıştırıcı sorunu gözlenmedi.
+
+### 6. Son test sayıları ve kontroller
+
+- API: **480 / 480** (inceleme testleri dahil).
+- Tarayıcı: **118 / 118** temiz tam çalıştırma (+30 isteğe bağlı ekran görüntüsü testi).
+- TypeScript (4 proje) ve üretim derlemesi: hatasız.
+- Ekranlar 1440 / 768 / 390'da yeniden üretildi ve incelendi.
+
+### 7. Migration'lar
+
+`0034_finance.sql`, `0035_finance_rls.sql`, `0036_finance_review.sql` (iki dört göz `CHECK`'i ve kapanış kuralının yeni hali). `acarvo_test` 37 migration; özetler dosyalarla aynı; boş/yarım migration yok; eski dosyalar değişmedi; yalnız eklemeler (mevcut tabloda tek değişiklik sıra türü kontrolünün genişletilmesi).
+
+MAIN_RESULTS
