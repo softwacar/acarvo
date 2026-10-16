@@ -391,6 +391,9 @@ describe('handover', () => {
     const sixth = await adnan.upload(`/api/rentals/${r.id}/inspections/handover/photos?angle=other`, jpeg)
     expect(sixth.statusCode).toBe(409)
     const photo = d.handover!.photos[0]!
+    // Evidence photos need a photo access grant first (one per record and session; the GET records nothing).
+    expect((await adnan.get(photo.url)).json().error.code).toBe('PHOTO_ACCESS_REQUIRED')
+    expect((await adnan.post('/api/photo-access', { kind: 'rental', id: r.id })).statusCode).toBe(200)
     const img = await adnan.get(photo.url)
     expect(img.statusCode).toBe(200)
     expect(img.headers['content-type']).toBe('image/webp')
@@ -673,7 +676,7 @@ describe('permissions and history', () => {
 
   it('history: who, when, which rental; no names, contacts, document numbers or notes', async () => {
     const rows = (await asOwner(data.companies.drina, `select action, summary::text s from audit_log where entity = 'rental'`)).rows as { action: string; s: string }[]
-    expect(new Set(rows.map((r) => r.action))).toEqual(new Set(['rental.create', 'rental.update', 'rental.cancel', 'rental.document_check', 'rental.photo.add', 'rental.photo.remove', 'rental.deliver', 'rental.extend', 'rental.return', 'rental.close']))
+    expect(new Set(rows.map((r) => r.action))).toEqual(new Set(['rental.create', 'rental.update', 'rental.cancel', 'rental.document_check', 'rental.photo.add', 'rental.photo.remove', 'rental.deliver', 'rental.extend', 'rental.return', 'rental.close', 'photo.access_granted']))
     for (const r of rows) {
       expect(r.s).not.toMatch(/Ajla|Mirza|Testović|Uzorak|Beispiel|@example|\+387|TEST-BA|Gizli|göçük|Pasaport gördüm|çizik/i)
     }

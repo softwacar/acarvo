@@ -14,7 +14,10 @@ export const DOCUMENT_ACCESS_TTL_MS = 2 * 60 * 1000
 const MAX_GRANTS = 20_000
 
 /** Which file table a grant opens. Vehicle and customer document files and contract PDFs are separate record types. */
-export type DocumentAccessKind = 'vehicle_document' | 'customer_document' | 'contract_pdf'
+export type DocumentAccessKind = 'vehicle_document' | 'customer_document' | 'contract_pdf' | 'evidence_photos'
+
+/** Evidence photos (handover, return, maintenance, damage, transport): one grant opens all photos of one record. */
+export const PHOTO_ACCESS_TTL_MS = 10 * 60 * 1000
 
 interface Grant {
   kind: DocumentAccessKind
@@ -27,7 +30,9 @@ interface Grant {
 }
 
 export interface DocumentAccessGrants {
-  issue(g: Omit<Grant, 'expiresAt' | 'kind'> & { kind?: DocumentAccessKind }): { expiresAt: number }
+  issue(g: Omit<Grant, 'expiresAt' | 'kind'> & { kind?: DocumentAccessKind }, ttlMs?: number): { expiresAt: number }
+  /** The expiry of an unexpired grant of this session, company, kind, file and purpose, or null. */
+  expiry(q: { sessionId: string; companyId: string; fileId: string; mode: DocumentAccessMode; kind?: DocumentAccessKind }): number | null
   /** True only for an unexpired grant of this session, company, file kind, file and purpose. Not consumed: the PDF viewer may ask again. */
   allows(q: { sessionId: string; companyId: string; fileId: string; mode: DocumentAccessMode; kind?: DocumentAccessKind }): boolean
   revokeSession(sessionId: string): void
@@ -43,10 +48,10 @@ export function createDocumentAccessGrants(ttlMs = DOCUMENT_ACCESS_TTL_MS, now: 
     for (const [k, g] of grants) if (g.expiresAt <= t) grants.delete(k)
   }
   return {
-    issue(g) {
+    issue(g, ttl = ttlMs) {
       if (grants.size >= MAX_GRANTS) sweep()
       if (grants.size >= MAX_GRANTS) grants.delete(grants.keys().next().value!)
-      const expiresAt = now() + ttlMs
+      const expiresAt = now() + ttl
       const kind = g.kind ?? 'vehicle_document'
       grants.set(key(g.sessionId, g.fileId, g.mode, kind), { ...g, kind, expiresAt })
       return { expiresAt }
@@ -61,6 +66,10 @@ export function createDocumentAccessGrants(ttlMs = DOCUMENT_ACCESS_TTL_MS, now: 
       }
       // A company switch keeps the session but changes the active company: the old grant no longer applies.
       return g.companyId === q.companyId
+    },
+    expiry(q) {
+      const g = grants.get(key(q.sessionId, q.fileId, q.mode, q.kind))
+      return g && g.expiresAt > now() && g.companyId === q.companyId ? g.expiresAt : null
     },
     revokeSession(sessionId) {
       for (const [k, g] of grants) if (g.sessionId === sessionId) grants.delete(k)

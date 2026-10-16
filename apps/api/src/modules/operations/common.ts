@@ -198,6 +198,12 @@ export function mapOperationGuard(e: unknown): never {
   if (c === 'damage_files_source') throw invalid({ sourceMarkId: 'Bulgu bu kiralamanın kesinleşmiş bir kontrolüne ait değil' })
   if (c === 'damage_files_source_mark_key') throw new AppError(409, 'DUPLICATE_FINDING', 'Bu bulgu için zaten bir hasar dosyası var.')
   if (c === 'damage_files_future') throw invalid({ detectedLocal: 'Tespit zamanı gelecekte olamaz' })
+  if (c === 'damage_blocks_four_eyes' || c.endsWith('_four_eyes')) throw new AppError(403, 'FOUR_EYES', 'Bu işlem ikinci bir yetkilinin onayını gerektirir; kendi talebinizi onaylayamazsınız.')
+  if (c === 'damage_block_release_requests_open_key') throw new AppError(409, 'RELEASE_PENDING', 'Bu engel için zaten onay bekleyen bir kaldırma talebi var.')
+  if (c === 'damage_block_release_requests_block') throw new AppError(409, 'NOT_BLOCKED', 'Engel artık açık değil.')
+  if (c === 'vehicle_transfers_carrier_required') throw invalid({ carrierName: 'Taşıyıcı adını ve dış taşıma referansını girin' }, 'Onarım amaçlı taşımada taşıyıcı ve dış referans zorunludur.')
+  if (c === 'transfer_photos_limit') throw new AppError(409, 'PHOTO_LIMIT', 'Bir kayıtta en fazla 10 fotoğraf olabilir.')
+  if (c === 'transfer_photos_frozen') throw new AppError(409, 'RECORD_CLOSED', 'Yalnız açık onarım taşımasına fotoğraf eklenebilir.')
   if (c === 'damage_blocks_open_key') throw new AppError(409, 'ALREADY_BLOCKED', 'Bu hasar dosyası aracı zaten engelliyor.')
   if (c === 'damage_blocks_file') throw new AppError(409, 'RECORD_CLOSED', 'Kapanmış hasar dosyası aracı engelleyemez.')
   if (c === 'odometer_chronology') throw new AppError(422, 'ODOMETER_OUT_OF_ORDER', 'Kilometre aracın kayıtlı km geçmişiyle çelişiyor (geriye gidemez).', { km: 'Kilometre geçmişle çelişiyor' })
@@ -217,7 +223,7 @@ export function uploadPolicy(app: FastifyInstance) {
 }
 
 /** Reads, cleans and scans the uploaded image outside any transaction, then stores it under the module's prefix. */
-export async function receivePhoto(app: FastifyInstance, req: FastifyRequest, kind: 'maintenance' | 'damages') {
+export async function receivePhoto(app: FastifyInstance, req: FastifyRequest, kind: 'maintenance' | 'damages' | 'transfers') {
   const policy = uploadPolicy(app)
   if (!policy.enabled) throw new AppError(409, 'UPLOADS_CLOSED', policy.reason!)
   if (!req.isMultipart()) throw new AppError(400, 'NO_FILE', 'Yüklenecek fotoğraf bulunamadı.')
@@ -233,7 +239,7 @@ export async function receivePhoto(app: FastifyInstance, req: FastifyRequest, ki
   return { image, keys }
 }
 
-export async function insertFile(tx: Tx, companyId: string, kind: 'maintenance_photo' | 'damage_photo', p: Awaited<ReturnType<typeof receivePhoto>>, userId: string) {
+export async function insertFile(tx: Tx, companyId: string, kind: 'maintenance_photo' | 'damage_photo' | 'transfer_photo', p: Awaited<ReturnType<typeof receivePhoto>>, userId: string) {
   const r = (
     await tx.execute(sql`insert into files (company_id, kind, storage_key, thumb_key, mime_type, size_bytes, width, height, sha256, uploaded_by)
       values (${companyId}, ${kind}, ${p.keys.main}, ${p.keys.thumb}, 'image/webp', ${p.image.main.length}, ${p.image.width}, ${p.image.height}, ${p.image.sha256}, ${userId}) returning id`)
@@ -241,7 +247,7 @@ export async function insertFile(tx: Tx, companyId: string, kind: 'maintenance_p
   return r.id as string
 }
 
-export async function loadPhotos(tx: Tx, table: 'maintenance_photos' | 'damage_photos', fk: 'maintenance_id' | 'damage_id', recordId: string, base: string): Promise<OperationPhoto[]> {
+export async function loadPhotos(tx: Tx, table: 'maintenance_photos' | 'damage_photos' | 'transfer_photos', fk: 'maintenance_id' | 'damage_id' | 'transfer_id', recordId: string, base: string): Promise<OperationPhoto[]> {
   const rows = (
     await tx.execute(sql`select p.id, p.created_at, u.name as by_name from ${sql.identifier(table)} p left join users u on u.id = p.created_by
       where p.${sql.identifier(fk)} = ${recordId} and p.removed_at is null order by p.created_at`)

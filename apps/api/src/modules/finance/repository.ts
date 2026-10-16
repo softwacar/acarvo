@@ -8,6 +8,7 @@ import type {
   FinanceRefund,
   FinanceTotals,
   RentalFinanceView,
+  ResponsibleCorrection,
   ReturnFacts,
 } from '@acarvo/shared'
 import { type SQL, sql } from 'drizzle-orm'
@@ -283,6 +284,23 @@ export async function rentalFinanceView(tx: Tx, access: CompanyAccess, k: Row): 
   const deposits = f ? await depositsOf(tx, sql`d.finance_id = ${f.id as string}`) : []
   const totals = f ? totalsOf(f.currency as string, charges, payments) : null
   const open = !!f && f.status !== 'closed'
+  const corrections = f
+    ? ((
+        await tx.execute(sql`select r.*, fc.display_name as fc_name, fc.customer_no as fc_no, fa.legal_name as fa_name, fa.account_no as fa_no,
+            tc.display_name as tc_name, tc.customer_no as tc_no, ta.legal_name as ta_name, ta.account_no as ta_no, ru.name as requested_by_name, du.name as decided_by_name
+          from finance_responsible_corrections r
+          left join customers fc on fc.company_id = r.company_id and fc.id = r.from_customer_id left join corporate_accounts fa on fa.company_id = r.company_id and fa.id = r.from_corporate_id
+          left join customers tc on tc.company_id = r.company_id and tc.id = r.to_customer_id left join corporate_accounts ta on ta.company_id = r.company_id and ta.id = r.to_corporate_id
+          left join users ru on ru.id = r.requested_by left join users du on du.id = r.decided_by
+          where r.finance_id = ${f.id as string} order by r.requested_at desc`)
+      ).rows as Row[])
+    : []
+  const party = (type: unknown, cName: unknown, cNo: unknown, aName: unknown, aNo: unknown) =>
+    type === 'customer' ? { type: 'customer' as const, name: cName as string, no: cNo as string } : { type: 'corporate' as const, name: aName as string, no: aNo as string }
+  const hasMovement = charges.length + payments.length + deposits.length > 0
+  const pendingCorrection = corrections.some((c) => c.status === 'requested')
+  const alternative = f ? (f.responsible_type === 'customer' ? !!k.corporate_account_id : true) || f.responsible_customer_id !== k.customer_id : false
+  const blocker: RentalFinanceView['correction']['blocker'] = !f ? 'no_file' : f.status === 'closed' ? 'closed' : hasMovement ? 'has_movement' : pendingCorrection ? 'pending' : !alternative ? 'no_alternative' : null
   const rentalOpen = ['prepared', 'delivered', 'returned', 'closed'].includes(k.status as string)
   return {
     rental: {
@@ -327,7 +345,24 @@ export async function rentalFinanceView(tx: Tx, access: CompanyAccess, k: Row): 
     events: f ? await financeEvents(tx, f.id as string) : [],
     returnFacts: await returnFacts(tx, k),
     closeBlockers: closeBlockers(totals, charges, payments, deposits),
+    responsibleCorrections: corrections.map((c) => ({
+      id: c.id as string,
+      status: c.status as ResponsibleCorrection['status'],
+      from: party(c.from_type, c.fc_name, c.fc_no, c.fa_name, c.fa_no),
+      to: party(c.to_type, c.tc_name, c.tc_no, c.ta_name, c.ta_no),
+      reason: c.reason as string,
+      requestedById: c.requested_by as string,
+      requestedByName: str(c.requested_by_name),
+      requestedAt: toIso(c.requested_at),
+      decidedByName: str(c.decided_by_name),
+      decidedAt: c.decided_at ? toIso(c.decided_at) : null,
+      decisionNote: str(c.decision_note),
+      version: Number(c.version),
+    })),
+    correction: { possible: blocker === null, blocker },
     can: {
+      requestCorrection: blocker === null && p.has('finance.close'),
+      decideCorrection: pendingCorrection && p.has('finance.close'),
       open: !f && rentalOpen && (p.has('finance.charges.manage') || p.has('finance.payments.record') || p.has('finance.deposits.record')),
       prepareCharge: open && p.has('finance.charges.manage'),
       approveCharge: open && p.has('finance.charges.approve'),
@@ -422,3 +457,44 @@ export const CHARGE_LIST_SELECT = sql`c.*, q.quote_no, uc.name as created_name, 
   left join users ur on ur.id = c.reversal_requested_by left join users ux on ux.id = c.reversed_by
   join rental_finances fx on fx.company_id = c.company_id and fx.id = c.finance_id
   join rentals k on k.company_id = fx.company_id and k.id = fx.rental_id`
+
+/**
+ * Finance totals per currency (never summed across currencies), from real finance records only, in the user's branch
+ * scope. Used by the finance centre and the dashboard: one definition.
+ */
+export async function financeSummary(tx: Tx, access: CompanyAccess, q: { branchId?: string; from?: string; to?: string }) {
+  const scope = fileScope(access)
+  const branch = q.branchId ? sql`and k.pickup_branch_id = ${q.branchId}` : sql``
+  const range = (col: SQL) => sql`${q.from ? sql`and ${col} >= ${q.from}::date` : sql``} ${q.to ? sql`and ${col} < (${q.to}::date + 1)` : sql``}`
+  const JOIN = sql`join rental_finances f on f.company_id = x.company_id and f.id = x.finance_id join rentals k on k.company_id = f.company_id and k.id = f.rental_id`
+  const pay = (await tx.execute(sql`select x.currency, x.status, x.method, sum(x.amount_minor)::text s from finance_payments x ${JOIN} where ${scope} ${branch} ${range(sql`x.received_at`)} group by 1, 2, 3`)).rows as Row[]
+  const chg = (await tx.execute(sql`select x.currency, x.status, sum(x.amount_minor)::text s from finance_charges x ${JOIN} where ${scope} ${branch} ${range(sql`x.created_at`)} group by 1, 2`)).rows as Row[]
+  const dep = (await tx.execute(sql`select x.currency, x.status, sum(x.amount_minor)::text s,
+      sum(coalesce((select sum(r.amount_minor) from finance_deposit_refunds r where r.company_id = x.company_id and r.deposit_id = x.id and r.status = 'completed'), 0))::text refunded,
+      sum(coalesce((select sum(r.amount_minor) from finance_deposit_refunds r where r.company_id = x.company_id and r.deposit_id = x.id and r.status in ('requested', 'approved')), 0))::text refund_open
+    from finance_deposits x ${JOIN} where ${scope} ${branch} ${range(sql`x.created_at`)} group by 1, 2`)).rows as Row[]
+  const currencies = [...new Set([...pay, ...chg, ...dep].map((r) => r.currency as string))].sort()
+  const big = (rows: Row[], f: (r: Row) => boolean, col = 's') => rows.filter(f).reduce((s, r) => s + BigInt(r[col] as string), 0n)
+  return {
+    rows: currencies.map((c) => {
+      const p = pay.filter((r) => r.currency === c)
+      const ch = chg.filter((r) => r.currency === c)
+      const d = dep.filter((r) => r.currency === c)
+      const verified = big(p, (r) => r.status === 'verified')
+      const posted = big(ch, (r) => r.status === 'posted' || r.status === 'reversal_requested')
+      return {
+        currency: c,
+        verifiedPaymentsMinor: Number(verified),
+        verifiedByMethod: Object.fromEntries(['cash', 'bank_transfer', 'external_pos', 'other_external'].map((m) => [m, Number(big(p, (r) => r.status === 'verified' && r.method === m))])),
+        recordedPaymentsMinor: Number(big(p, (r) => r.status === 'recorded')),
+        postedChargesMinor: Number(posted),
+        pendingChargesMinor: Number(big(ch, (r) => r.status === 'pending')),
+        outstandingMinor: Number(posted > verified ? posted - verified : 0n),
+        depositsHeldMinor: Number(big(d, (r) => r.status === 'verified') - big(d, (r) => r.status === 'verified', 'refunded')),
+        depositsReportedMinor: Number(big(d, (r) => r.status === 'reported')),
+        refundsOpenMinor: Number(big(d, () => true, 'refund_open')),
+        refundsCompletedMinor: Number(big(d, () => true, 'refunded')),
+      }
+    }),
+  }
+}

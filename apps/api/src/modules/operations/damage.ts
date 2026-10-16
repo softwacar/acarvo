@@ -10,6 +10,7 @@ import {
   damageReviewSchema,
   type DamageSearch,
   damageSearchSchema,
+  damageReleaseDecisionSchema,
   damageUnblockSchema,
   damageUpdateSchema,
 } from '@acarvo/shared'
@@ -29,6 +30,7 @@ import { nextNo } from '../pricing/repository'
 import { RENTAL_NOT_FOUND, rentalScopeSql } from '../rentals/repository'
 import { moment } from '../reservations/repository'
 import { inScope } from '../vehicles/repository'
+import { requirePhotoGrant } from './photo-access'
 import {
   activeBranch,
   addEvent,
@@ -158,6 +160,10 @@ async function getDamage(app: FastifyInstance, tx: Tx, access: CompanyAccess, id
       left join users su on su.id = b.started_by left join users eu on eu.id = b.ended_by where b.damage_id = ${id} order by b.started_at desc`)
   ).rows as Row[]
   const maintenance = (await tx.execute(sql`select id, maintenance_no, status from maintenance_records where damage_file_id = ${id} order by created_at desc`)).rows as Row[]
+  const releases = (
+    await tx.execute(sql`select r.*, ru.name as requested_by_name, du.name as decided_by_name from damage_block_release_requests r
+      left join users ru on ru.id = r.requested_by left join users du on du.id = r.decided_by where r.damage_id = ${id} order by r.requested_at desc`)
+  ).rows as Row[]
   return {
     ...item,
     timeZone: r.timezone as string,
@@ -181,6 +187,20 @@ async function getDamage(app: FastifyInstance, tx: Tx, access: CompanyAccess, id
       endedAt: isoOrNull(b.ended_at),
       endedByName: str(b.ended_by_name),
       endReason: str(b.end_reason),
+    })),
+    releaseRequests: releases.map((r) => ({
+      id: r.id as string,
+      blockId: r.block_id as string,
+      status: r.status as DamageDetail['releaseRequests'][number]['status'],
+      reason: r.reason as string,
+      usability: r.usability as 'usable' | 'restricted',
+      requestedById: r.requested_by as string,
+      requestedByName: str(r.requested_by_name),
+      requestedAt: toIso(r.requested_at),
+      decidedByName: str(r.decided_by_name),
+      decidedAt: isoOrNull(r.decided_at),
+      decisionNote: str(r.decision_note),
+      version: Number(r.version),
     })),
     maintenance: maintenance.map((m) => ({ id: m.id as string, maintenanceNo: m.maintenance_no as string, status: m.status as never })),
     atRisk: item.blocked ? await atRisk(tx, access.companyId, item.vehicle.id) : [],
@@ -385,23 +405,99 @@ export async function damageRoutes(app: FastifyInstance) {
     })
   })
 
-  /** Lifts the open block (own permission, reason, history). Other holds (maintenance, transfers) still apply. */
-  app.post('/:id/unblock', async (req) => {
+  /**
+   * Asks for the open block to be lifted (own permission, reason, the usability afterwards). Nothing is lifted yet: a
+   * second authorised person decides (four eyes, also enforced by PostgreSQL). One open request per block.
+   */
+  app.post('/:id/unblock-request', async (req) => {
     const id = parseId(req, DAMAGE_NOT_FOUND)
     return withCompany(req, 'damage.unblock', async (tx, access) => {
       const input = damageUnblockSchema.parse(req.body)
       const cur = await step(tx, access, id, input)
       if (!cur) return detail(tx, access, id)
+      const block = (await tx.execute(sql`select id from damage_blocks where damage_id = ${id} and ended_at is null`)).rows[0] as Row | undefined
+      if (!block) throw new AppError(409, 'NOT_BLOCKED', 'Bu hasar dosyasının açık bir engeli yok.')
+      const open = (await tx.execute(sql`select id from damage_block_release_requests where block_id = ${block.id as string} and status = 'requested'`)).rows[0]
+      if (open) throw new AppError(409, 'RELEASE_PENDING', 'Bu engel için zaten onay bekleyen bir kaldırma talebi var.')
       const userId = req.auth!.user.id
-      await lockVehicleAllocation(tx, access.companyId, cur.vehicle_id as string)
-      const res = await guarded(
-        tx.execute(sql`update damage_blocks set ended_at = now(), ended_by = ${userId}, end_reason = ${input.reason} where damage_id = ${id} and ended_at is null returning id`),
+      await guarded(
+        tx.execute(sql`insert into damage_block_release_requests (company_id, damage_id, block_id, reason, usability, requested_by)
+          values (${access.companyId}, ${id}, ${block.id as string}, ${input.reason}, ${input.usability}, ${userId})`),
       )
-      if (!res.rows.length) throw new AppError(409, 'NOT_BLOCKED', 'Bu hasar dosyasının açık bir engeli yok.')
-      await guarded(tx.execute(sql`update damage_files set usability = ${input.usability}, version = version + 1, updated_at = now(), updated_by = ${userId} where id = ${id}`))
-      await addEvent(tx, DAMAGE_EVENTS, access.companyId, id, 'unblocked', userId, { reason: input.reason, data: { usability: input.usability }, requestId: input.requestId })
-      await audit(tx, { companyId: access.companyId, actorUserId: userId, action: 'damage.unblock', entity: 'damage', entityId: id, summary: { damageNo: cur.damage_no, vehicle: cur.plate, fromVersion: input.version, usability: input.usability } })
+      await guarded(tx.execute(sql`update damage_files set version = version + 1, updated_at = now(), updated_by = ${userId} where id = ${id}`))
+      await addEvent(tx, DAMAGE_EVENTS, access.companyId, id, 'release_requested', userId, { reason: input.reason, data: { usability: input.usability }, requestId: input.requestId })
+      await audit(tx, { companyId: access.companyId, actorUserId: userId, action: 'damage.release_request', entity: 'damage', entityId: id, summary: { damageNo: cur.damage_no, vehicle: cur.plate, usability: input.usability } })
       return detail(tx, access, id)
+    })
+  })
+
+  /** Locks the damage file, then the release request; out of scope looks like unknown. */
+  const lockRelease = async (tx: Tx, access: CompanyAccess, rid: string, input: { version: number; requestId: string }) => {
+    const r = (await tx.execute(sql`select damage_id from damage_block_release_requests where id = ${rid}`)).rows[0] as Row | undefined
+    if (!r) throw notFound('Kaldırma talebi bulunamadı.')
+    const cur = await lockDamage(tx, access, r.damage_id as string)
+    if (await replayOf(tx, DAMAGE_EVENTS, input.requestId, cur.id as string)) return { cur, rel: null }
+    const rel = (await tx.execute(sql`select * from damage_block_release_requests where id = ${rid} for update`)).rows[0] as Row
+    if (Number(rel.version) !== input.version) {
+      throw new AppError(409, 'VERSION_CONFLICT', 'Bu talep siz çalışırken değişti.', undefined, { current: await detail(tx, access, cur.id as string) })
+    }
+    if (rel.status !== 'requested') throw new AppError(409, 'INVALID_TRANSITION', 'Bu talep zaten sonuçlandırılmış.')
+    return { cur, rel }
+  }
+
+  /**
+   * A second authorised person approves: the block ends now, the usability changes, and the vehicle's other holds
+   * (maintenance, transfers, rentals, reservations) stay as they are. Never by the requester.
+   */
+  app.post('/release-requests/:id/approve', async (req) => {
+    const rid = parseId(req, 'Kaldırma talebi bulunamadı.')
+    return withCompany(req, 'damage.unblock', async (tx, access) => {
+      const input = damageReleaseDecisionSchema.parse(req.body)
+      const { cur, rel } = await lockRelease(tx, access, rid, input)
+      if (!rel) return detail(tx, access, cur.id as string)
+      const userId = req.auth!.user.id
+      if (rel.requested_by === userId) throw new AppError(403, 'FOUR_EYES', 'Kendi kaldırma talebinizi onaylayamazsınız; farklı bir yetkili onaylamalı.')
+      await lockVehicleAllocation(tx, access.companyId, cur.vehicle_id as string)
+      const block = (await tx.execute(sql`select id from damage_blocks where id = ${rel.block_id as string} and ended_at is null for update`)).rows[0]
+      if (!block) throw new AppError(409, 'NOT_BLOCKED', 'Engel artık açık değil.')
+      await guarded(
+        tx.execute(sql`update damage_block_release_requests set status = 'approved', decided_by = ${userId}, decided_at = now(), decision_note = ${input.note ?? null}, version = version + 1 where id = ${rid}`),
+      )
+      await guarded(tx.execute(sql`update damage_blocks set ended_at = now(), ended_by = ${userId}, end_reason = ${rel.reason as string} where id = ${rel.block_id as string}`))
+      await guarded(tx.execute(sql`update damage_files set usability = ${rel.usability as string}, version = version + 1, updated_at = now(), updated_by = ${userId} where id = ${cur.id as string}`))
+      await addEvent(tx, DAMAGE_EVENTS, access.companyId, cur.id as string, 'unblocked', userId, { reason: rel.reason as string, data: { usability: rel.usability, releaseRequestId: rid }, requestId: input.requestId })
+      await audit(tx, { companyId: access.companyId, actorUserId: userId, action: 'damage.unblock', entity: 'damage', entityId: cur.id as string, summary: { damageNo: cur.damage_no, vehicle: cur.plate, usability: rel.usability, fourEyes: true } })
+      return detail(tx, access, cur.id as string)
+    })
+  })
+
+  app.post('/release-requests/:id/reject', async (req) => {
+    const rid = parseId(req, 'Kaldırma talebi bulunamadı.')
+    return withCompany(req, 'damage.unblock', async (tx, access) => {
+      const input = damageReleaseDecisionSchema.parse(req.body)
+      const { cur, rel } = await lockRelease(tx, access, rid, input)
+      if (!rel) return detail(tx, access, cur.id as string)
+      const userId = req.auth!.user.id
+      if (rel.requested_by === userId) throw new AppError(403, 'FOUR_EYES', 'Kendi talebinizi reddedemezsiniz; geri çekebilirsiniz.')
+      if (!input.note || input.note.length < 5) throw new AppError(400, 'VALIDATION', 'Ret gerekçesini yazın.', { note: 'Ret gerekçesini yazın (en az 5 karakter)' })
+      await guarded(tx.execute(sql`update damage_block_release_requests set status = 'rejected', decided_by = ${userId}, decided_at = now(), decision_note = ${input.note}, version = version + 1 where id = ${rid}`))
+      await addEvent(tx, DAMAGE_EVENTS, access.companyId, cur.id as string, 'release_rejected', userId, { reason: input.note, requestId: input.requestId })
+      await audit(tx, { companyId: access.companyId, actorUserId: userId, action: 'damage.release_reject', entity: 'damage', entityId: cur.id as string, summary: { damageNo: cur.damage_no } })
+      return detail(tx, access, cur.id as string)
+    })
+  })
+
+  app.post('/release-requests/:id/cancel', async (req) => {
+    const rid = parseId(req, 'Kaldırma talebi bulunamadı.')
+    return withCompany(req, 'damage.unblock', async (tx, access) => {
+      const input = damageReleaseDecisionSchema.parse(req.body)
+      const { cur, rel } = await lockRelease(tx, access, rid, input)
+      if (!rel) return detail(tx, access, cur.id as string)
+      const userId = req.auth!.user.id
+      if (rel.requested_by !== userId) throw new AppError(403, 'FOUR_EYES', 'Talebi yalnız talep eden kişi geri çekebilir.')
+      await guarded(tx.execute(sql`update damage_block_release_requests set status = 'cancelled', decided_by = ${userId}, decided_at = now(), version = version + 1 where id = ${rid}`))
+      await addEvent(tx, DAMAGE_EVENTS, access.companyId, cur.id as string, 'release_cancelled', userId, { requestId: input.requestId })
+      return detail(tx, access, cur.id as string)
     })
   })
 
@@ -456,6 +552,7 @@ export async function damageRoutes(app: FastifyInstance) {
           where p.id = ${photoId} and d.id = ${id} and ${scopeSql(access)}`)
       ).rows[0] as Row | undefined
       if (!r) throw notFound()
+      requirePhotoGrant(app, req, access.companyId, 'damage', id)
       return r
     })
     return streamFile(app, reply, file, variant)

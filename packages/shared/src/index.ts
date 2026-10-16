@@ -63,6 +63,7 @@ export const PERMISSIONS = [
   'transfers.approve',
   'transfers.execute',
   'transfers.repair',
+  'readiness.read',
   'users.read',
   'roles.read',
   'audit.read',
@@ -114,3 +115,4 @@ export * from './pricing'
 export * from './contracts'
 export * from './finance'
 export * from './operations'
+export * from './dashboard'

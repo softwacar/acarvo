@@ -36,6 +36,7 @@ import { withCompany } from '../../plugins/auth'
 import { UPLOAD_RATE_LIMIT } from '../../plugins/security'
 import type { CompanyAccess } from '../auth/context'
 import { CUSTOMER_NOT_FOUND } from '../customers/repository'
+import { requirePhotoGrant } from '../operations/photo-access'
 import { availability, moment } from '../reservations/repository'
 import { inScope } from '../vehicles/repository'
 import {
@@ -710,7 +711,7 @@ export async function rentalRoutes(app: FastifyInstance) {
     })
   })
 
-  /** Streams an evidence photo after company (RLS), permission and branch-scope checks; never cached. */
+  /** Streams an evidence photo after company (RLS), permission, branch-scope and photo-access-grant checks; never cached. */
   app.get('/:id/photos/:photoId', async (req, reply) => {
     const p = photoParams.safeParse(req.params)
     if (!p.success) throw notFound()
@@ -724,6 +725,7 @@ export async function rentalRoutes(app: FastifyInstance) {
           where ph.id = ${p.data.photoId} and k.id = ${p.data.id}`)
       ).rows[0] as Row | undefined
       if (!r || ![r.pickup_branch_id, r.return_branch_id, r.actual_return_branch_id].some((b) => b && inScope(access, b as string))) throw notFound()
+      requirePhotoGrant(app, req, access.companyId, 'rental', p.data.id)
       return r
     })
     const { stream, size } = await app.storage.open(variant === 'thumb' ? (file.thumb_key as string) : (file.storage_key as string))

@@ -2349,7 +2349,10 @@ export const damageEvents = pgTable(
     index('damage_events_file_idx').on(t.companyId, t.damageId, t.at),
     uniqueIndex('damage_events_request_key').on(t.companyId, t.clientRequestId).where(sql`${t.clientRequestId} is not null`),
     foreignKey({ columns: [t.companyId, t.damageId], foreignColumns: [damageFiles.companyId, damageFiles.id] }),
-    check('damage_events_kind_check', sql`${t.kind} in ('created', 'updated', 'review', 'repair', 'blocked', 'unblocked', 'closed', 'photo_added', 'photo_removed')`),
+    check(
+      'damage_events_kind_check',
+      sql`${t.kind} in ('created', 'updated', 'review', 'repair', 'blocked', 'unblocked', 'closed', 'photo_added', 'photo_removed', 'release_requested', 'release_rejected', 'release_cancelled')`,
+    ),
   ],
 )
 
@@ -2393,6 +2396,9 @@ export const vehicleTransfers = pgTable(
     purpose: text('purpose', { enum: TRANSFER_PURPOSES }).notNull().default('operational'),
     damageFileId: uuid('damage_file_id'),
     transportMethod: text('transport_method', { enum: TRANSPORT_METHODS }),
+    /** Repair transport: the carrier and its own dispatch/order reference, as entered by staff (not verified by the carrier). */
+    carrierName: text('carrier_name'),
+    transportReference: text('transport_reference'),
     /** Staff statement at departure that the vehicle left on the stated transport (a statement, not a verification). */
     transportAckAt: timestamp('transport_ack_at', { withTimezone: true }),
     transportAckBy: uuid('transport_ack_by').references(() => users.id),
@@ -2453,6 +2459,10 @@ export const vehicleTransfers = pgTable(
         or (${t.purpose} = 'repair' and ${t.damageFileId} is not null and ${t.transportMethod} in ('tow_truck', 'car_carrier'))`,
     ),
     check('vehicle_transfers_transport_ack_check', sql`(${t.transportAckAt} is null) = (${t.transportAckBy} is null)`),
+    check(
+      'vehicle_transfers_carrier_check',
+      sql`coalesce(char_length(${t.carrierName}), 0) <= 120 and coalesce(char_length(${t.transportReference}), 0) <= 60 and (${t.purpose} = 'repair' or (${t.carrierName} is null and ${t.transportReference} is null))`,
+    ),
     check('vehicle_transfers_plan_check', sql`${t.plannedArrivalAt} > ${t.plannedDepartureAt} and ${t.plannedArrivalAt} - ${t.plannedDepartureAt} <= interval '30 days'`),
     check('vehicle_transfers_reason_check', sql`char_length(${t.reason}) between 3 and 500`),
     check(
@@ -2500,6 +2510,120 @@ export const transferEvents = pgTable(
     index('transfer_events_transfer_idx').on(t.companyId, t.transferId, t.at),
     uniqueIndex('transfer_events_request_key').on(t.companyId, t.clientRequestId).where(sql`${t.clientRequestId} is not null`),
     foreignKey({ columns: [t.companyId, t.transferId], foreignColumns: [vehicleTransfers.companyId, vehicleTransfers.id] }),
-    check('transfer_events_kind_check', sql`${t.kind} in ('created', 'updated', 'approved', 'departed', 'received', 'cancelled')`),
+    check('transfer_events_kind_check', sql`${t.kind} in ('created', 'updated', 'approved', 'departed', 'received', 'cancelled', 'photo_added', 'photo_removed')`),
+  ],
+)
+
+// ---------------------------------------------------------------------------
+// Operational readiness V1 (docs/OPERASYONEL_HAZIRLIK_DASHBOARD_PLANI.md)
+
+/** Evidence of a repair transport (photo of the tow truck, dispatch slip image). Removal is a mark; nothing is deleted. */
+export const transferPhotos = pgTable(
+  'transfer_photos',
+  {
+    id: id(),
+    companyId: uuid('company_id').notNull().references(() => companies.id),
+    transferId: uuid('transfer_id').notNull(),
+    fileId: uuid('file_id').notNull(),
+    removedAt: timestamp('removed_at', { withTimezone: true }),
+    removedBy: uuid('removed_by').references(() => users.id),
+    createdAt: createdAt(),
+    createdBy: uuid('created_by').references(() => users.id),
+  },
+  (t) => [
+    unique('transfer_photos_company_id_key').on(t.companyId, t.id),
+    unique('transfer_photos_file_key').on(t.companyId, t.fileId),
+    index('transfer_photos_transfer_idx').on(t.companyId, t.transferId),
+    foreignKey({ columns: [t.companyId, t.transferId], foreignColumns: [vehicleTransfers.companyId, vehicleTransfers.id] }),
+    foreignKey({ columns: [t.companyId, t.fileId], foreignColumns: [files.companyId, files.id] }),
+  ],
+)
+
+/** Four-eyes release of a damage block: requested by one authorised person, decided by another. */
+export const damageBlockReleaseRequests = pgTable(
+  'damage_block_release_requests',
+  {
+    id: id(),
+    companyId: uuid('company_id').notNull().references(() => companies.id),
+    damageId: uuid('damage_id').notNull(),
+    blockId: uuid('block_id').notNull(),
+    status: text('status', { enum: ['requested', 'approved', 'rejected', 'cancelled'] }).notNull().default('requested'),
+    reason: text('reason').notNull(),
+    usability: text('usability', { enum: ['usable', 'restricted'] }).notNull(),
+    requestedBy: uuid('requested_by')
+      .notNull()
+      .references(() => users.id),
+    requestedAt: timestamp('requested_at', { withTimezone: true }).notNull().defaultNow(),
+    decidedBy: uuid('decided_by').references(() => users.id),
+    decidedAt: timestamp('decided_at', { withTimezone: true }),
+    decisionNote: text('decision_note'),
+    version: integer('version').notNull().default(1),
+    clientRequestId: uuid('client_request_id'),
+  },
+  (t) => [
+    unique('damage_block_release_requests_company_id_key').on(t.companyId, t.id),
+    uniqueIndex('damage_block_release_requests_open_key').on(t.companyId, t.blockId).where(sql`${t.status} = 'requested'`),
+    uniqueIndex('damage_block_release_requests_request_key').on(t.companyId, t.clientRequestId).where(sql`${t.clientRequestId} is not null`),
+    index('damage_block_release_requests_damage_idx').on(t.companyId, t.damageId, t.requestedAt),
+    foreignKey({ columns: [t.companyId, t.damageId], foreignColumns: [damageFiles.companyId, damageFiles.id] }),
+    foreignKey({ columns: [t.companyId, t.blockId], foreignColumns: [damageBlocks.companyId, damageBlocks.id] }),
+    check('damage_block_release_requests_status_check', sql`${t.status} in ('requested', 'approved', 'rejected', 'cancelled')`),
+    check('damage_block_release_requests_usability_check', sql`${t.usability} in ('usable', 'restricted')`),
+    check('damage_block_release_requests_reason_check', sql`char_length(${t.reason}) between 5 and 300 and coalesce(char_length(${t.decisionNote}), 0) <= 300`),
+    check(
+      'damage_block_release_requests_decision_check',
+      sql`(${t.status} = 'requested') = (${t.decidedAt} is null) and (${t.decidedAt} is null) = (${t.decidedBy} is null) and (${t.decidedBy} is null or ${t.decidedBy} <> ${t.requestedBy} or ${t.status} = 'cancelled')`,
+    ),
+    check('damage_block_release_requests_version_check', sql`${t.version} >= 1`),
+  ],
+)
+
+/** FN5: correcting a finance file's responsible party, only while the file has no financial movement, with four eyes. */
+export const financeResponsibleCorrections = pgTable(
+  'finance_responsible_corrections',
+  {
+    id: id(),
+    companyId: uuid('company_id').notNull().references(() => companies.id),
+    financeId: uuid('finance_id').notNull(),
+    status: text('status', { enum: ['requested', 'applied', 'rejected', 'cancelled'] }).notNull().default('requested'),
+    fromType: text('from_type', { enum: ['customer', 'corporate'] }).notNull(),
+    fromCustomerId: uuid('from_customer_id'),
+    fromCorporateId: uuid('from_corporate_id'),
+    toType: text('to_type', { enum: ['customer', 'corporate'] }).notNull(),
+    toCustomerId: uuid('to_customer_id'),
+    toCorporateId: uuid('to_corporate_id'),
+    reason: text('reason').notNull(),
+    requestedBy: uuid('requested_by')
+      .notNull()
+      .references(() => users.id),
+    requestedAt: timestamp('requested_at', { withTimezone: true }).notNull().defaultNow(),
+    decidedBy: uuid('decided_by').references(() => users.id),
+    decidedAt: timestamp('decided_at', { withTimezone: true }),
+    decisionNote: text('decision_note'),
+    version: integer('version').notNull().default(1),
+    clientRequestId: uuid('client_request_id'),
+  },
+  (t) => [
+    unique('finance_responsible_corrections_company_id_key').on(t.companyId, t.id),
+    uniqueIndex('finance_responsible_corrections_open_key').on(t.companyId, t.financeId).where(sql`${t.status} = 'requested'`),
+    uniqueIndex('finance_responsible_corrections_request_key').on(t.companyId, t.clientRequestId).where(sql`${t.clientRequestId} is not null`),
+    index('finance_responsible_corrections_finance_idx').on(t.companyId, t.financeId, t.requestedAt),
+    foreignKey({ columns: [t.companyId, t.financeId], foreignColumns: [rentalFinances.companyId, rentalFinances.id] }),
+    foreignKey({ columns: [t.companyId, t.fromCustomerId], foreignColumns: [customers.companyId, customers.id] }),
+    foreignKey({ columns: [t.companyId, t.toCustomerId], foreignColumns: [customers.companyId, customers.id] }),
+    foreignKey({ columns: [t.companyId, t.fromCorporateId], foreignColumns: [corporateAccounts.companyId, corporateAccounts.id] }),
+    foreignKey({ columns: [t.companyId, t.toCorporateId], foreignColumns: [corporateAccounts.companyId, corporateAccounts.id] }),
+    check('finance_responsible_corrections_status_check', sql`${t.status} in ('requested', 'applied', 'rejected', 'cancelled')`),
+    check(
+      'finance_responsible_corrections_parties_check',
+      sql`((${t.fromType} = 'customer') = (${t.fromCustomerId} is not null)) and ((${t.fromType} = 'corporate') = (${t.fromCorporateId} is not null))
+        and ((${t.toType} = 'customer') = (${t.toCustomerId} is not null)) and ((${t.toType} = 'corporate') = (${t.toCorporateId} is not null))`,
+    ),
+    check('finance_responsible_corrections_reason_check', sql`char_length(${t.reason}) between 5 and 300 and coalesce(char_length(${t.decisionNote}), 0) <= 300`),
+    check(
+      'finance_responsible_corrections_decision_check',
+      sql`(${t.status} = 'requested') = (${t.decidedAt} is null) and (${t.decidedAt} is null) = (${t.decidedBy} is null) and (${t.decidedBy} is null or ${t.decidedBy} <> ${t.requestedBy} or ${t.status} = 'cancelled')`,
+    ),
+    check('finance_responsible_corrections_version_check', sql`${t.version} >= 1`),
   ],
 )

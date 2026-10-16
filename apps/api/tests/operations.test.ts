@@ -63,6 +63,13 @@ const transfer = (c: Client, vehicleId: string, from: string, to: string, over: 
 const damage = (c: Client, vehicleId: string, over: Record<string, unknown> = {}) =>
   c.post('/api/damages', { requestId: uuid(), vehicleId, branchId: ids.sjj, view: 'front', description: 'Ön tamponda çizik', damageType: 'scratch', severity: 'minor', usability: 'usable', ...over })
 const act = (c: Client, url: string, d: { version: number }, body: Record<string, unknown> = {}) => c.post(url, { version: d.version, requestId: uuid(), ...body })
+/** Four-eyes release of a damage block: one person asks, another approves. Returns the approval response. */
+async function release(requester: Client, approver: Client, d: { id: string; version: number }, reason: string, usability: 'usable' | 'restricted' = 'usable') {
+  const asked = await act(requester, `/api/damages/${d.id}/unblock-request`, d, { reason, usability })
+  expect(asked.statusCode, asked.body).toBe(200)
+  const r = (asked.json() as DamageDetail).releaseRequests.find((x) => x.status === 'requested')!
+  return act(approver, `/api/damages/release-requests/${r.id}/approve`, r)
+}
 
 /** A prepared rental whose handover desk is complete (documents, inspection, 4 photos), ready to deliver. */
 async function readyRental(vehicleId: string, pickup: string, ret: string) {
@@ -272,10 +279,10 @@ describe('damage files and blocks', () => {
     const repair = await plan(selma, v, local(5, '08:00'), local(6, '17:00'), { type: 'repair', damageFileId: blocking.id })
     expect(repair.statusCode, repair.body).toBe(201)
     // Lifting the block: own permission and a reason; the maintenance still holds its window.
-    expect((await act(selma, `/api/damages/${blocking.id}/unblock`, blocking, { reason: 'Arıza giderildi', usability: 'usable' })).statusCode).toBe(403)
+    expect((await act(selma, `/api/damages/${blocking.id}/unblock-request`, blocking, { reason: 'Arıza giderildi', usability: 'usable' })).statusCode).toBe(403)
     const closing = await act(kontrol, `/api/damages/${blocking.id}/review`, blocking, { reviewStatus: 'closed', note: 'Kapatma denemesi' })
     expect(closing.json().error.code).toBe('CLOSE_BLOCKED')
-    const lifted = await act(kontrol, `/api/damages/${blocking.id}/unblock`, blocking, { reason: 'Arıza giderildi', usability: 'usable' })
+    const lifted = await release(kontrol, adnan, (await adnan.get(`/api/damages/${blocking.id}`)).json(), 'Arıza giderildi')
     expect(lifted.statusCode, lifted.body).toBe(200)
     expect(lifted.json()).toMatchObject({ blocked: false, usability: 'usable', maintenance: [{ maintenanceNo: repair.json().maintenanceNo }] })
     expect((await reservation(v, local(35, '10:00'), local(36, '10:00'))).statusCode).toBe(201)
@@ -295,7 +302,7 @@ describe('damage files and blocks', () => {
     const res = await deliver(adnan, k)
     expect(res.json().error.code).toBe('DELIVERY_BLOCKED')
     expect(res.json().error.details.gates.find((g: { code: string }) => g.code === 'availability')).toMatchObject({ state: 'blocked', detail: { refs: `Hasar engeli ${b.damageNo} (engel sürüyor)` } })
-    await act(adnan, `/api/damages/${b.id}/unblock`, b, { reason: 'Cam değiştirildi', usability: 'usable' })
+    expect((await release(adnan, kontrol, b, 'Cam değiştirildi')).statusCode).toBe(200)
     const again = (await adnan.get(`/api/rentals/${k.id}`)).json() as RentalDetail
     expect(again.deliveryGates.find((g) => g.code === 'vehicle_operations')).toMatchObject({ state: 'attention', detail: { openDamages: 1 } })
     expect((await deliver(adnan, again)).statusCode).toBe(200)
@@ -326,6 +333,8 @@ describe('damage files and blocks', () => {
     const up = await selma.upload(`/api/damages/${d.id}/photos`, jpeg)
     expect(up.statusCode, up.body).toBe(201)
     const photo = (up.json() as DamageDetail).photos[0]!
+    expect((await selma.get(photo.url)).json().error.code).toBe('PHOTO_ACCESS_REQUIRED')
+    expect((await selma.post('/api/photo-access', { kind: 'damage', id: d.id })).statusCode).toBe(200)
     const img = await selma.get(photo.url)
     expect(img.statusCode).toBe(200)
     expect(img.headers['content-type']).toBe('image/webp')
@@ -551,13 +560,13 @@ describe('a vehicle marked not usable is never moved by a normal transfer (BHT1 
     expect((await adnan.get(`/api/transfers/${t.id}`)).json().status).toBe('approved')
     expect(await one(`select count(*)::int n from odometer_readings where source_id = $1`, [t.id])).toEqual({ n: 0 }) // nothing half-done
     await act(adnan, `/api/transfers/${t.id}/cancel`, t, { reason: 'Araç hasarlı' })
-    await act(adnan, `/api/damages/${d.id}/unblock`, d, { reason: 'Lastik değişti', usability: 'usable' })
+    expect((await release(adnan, kontrol, (await adnan.get(`/api/damages/${d.id}`)).json(), 'Lastik değişti')).statusCode).toBe(200)
   })
 
   it('repair transport: own permission, an open damage file, tow truck or carrier, a departure statement; afterwards the block, the file and every check stay', async () => {
     const v = await vehicle('J27-K-615')
     const d = (await adnan.post('/api/damages/search', { vehicleId: v, view: 'blocked' })).json().items[0] as DamageDetail
-    const body = { fromBranchId: ids.sac, toBranchId: ids.mst, purpose: 'repair', damageFileId: d.id, transportMethod: 'tow_truck', reason: 'Onarım için servise' }
+    const body = { fromBranchId: ids.sac, toBranchId: ids.mst, purpose: 'repair', damageFileId: d.id, transportMethod: 'tow_truck', carrierName: 'Sentetik Çekici d.o.o.', transportReference: 'CK-2026/77', reason: 'Onarım için servise' }
     // Operasyon has no transfers.repair.
     expect((await transfer(selma, v, nowLocal(-5), nowLocal(300), { ...body, fromBranchId: ids.sjj, toBranchId: ids.sac })).statusCode).toBe(403)
     expect((await transfer(adnan, v, nowLocal(-5), nowLocal(300), { ...body, transportMethod: undefined })).json().error.fields).toHaveProperty('transportMethod')
@@ -597,8 +606,8 @@ describe('a vehicle marked not usable is never moved by a normal transfer (BHT1 
       const r = await adnan.post('/api/rentals', { customerId: ids.ajla, drivers: [{ customerId: ids.ajla, isPrimary: true }], vehicleClassId: cls[v], vehicleId: v, pickupBranchId: ids.mst, returnBranchId: ids.mst, pickupLocal: local(1, '10:00'), returnLocal: local(2, '10:00'), requestId: uuid() })
       expect(r.json().error.details.conflicts[0].kind).toBe('damage')
       // Lifting the block still needs its own permission and a reason.
-      expect((await act(selma, `/api/damages/${d.id}/unblock`, after, { reason: 'Kendiliğinden kalkmaz', usability: 'usable' })).statusCode).toBe(403)
-      expect((await act(adnan, `/api/damages/${d.id}/unblock`, after, { reason: 'x', usability: 'usable' })).statusCode).toBe(400)
+      expect((await act(selma, `/api/damages/${d.id}/unblock-request`, after, { reason: 'Kendiliğinden kalkmaz', usability: 'usable' })).statusCode).toBe(403)
+      expect((await act(adnan, `/api/damages/${d.id}/unblock-request`, after, { reason: 'x', usability: 'usable' })).statusCode).toBe(400)
     } finally {
       await asOwner(data.companies.drina, `update vehicles set status = 'out_of_service' where id = $1`, [v])
     }
@@ -672,11 +681,15 @@ describe('concurrency, second round (every pair sees the other through the share
     else expect(confirm.json().error.code).toBe('VEHICLE_UNAVAILABLE')
   })
 
-  it('two people lifting the same block at once: one lifts it, one block period ends once', async () => {
+  it('two approvals of the same release at once: one lifts the block, the period ends once; the requester cannot approve', async () => {
     const v = await vehicle('A12-K-345')
     const d = (await damage(adnan, v, { usability: 'not_usable', blockReason: 'Fren uyarısı yanıyor' })).json() as DamageDetail
-    const res = await Promise.all([act(adnan, `/api/damages/${d.id}/unblock`, d, { reason: 'Kontrol edildi A', usability: 'usable' }), act(kontrol, `/api/damages/${d.id}/unblock`, d, { reason: 'Kontrol edildi B', usability: 'usable' })])
-    expect(res.map((r) => r.statusCode).sort()).toEqual([200, 409])
+    const asked = (await act(adnan, `/api/damages/${d.id}/unblock-request`, d, { reason: 'Kontrol edildi', usability: 'usable' })).json() as DamageDetail
+    const r = asked.releaseRequests[0]!
+    expect((await act(adnan, `/api/damages/release-requests/${r.id}/approve`, r)).json().error.code).toBe('FOUR_EYES')
+    const kontrol2 = await login('kontrol@drina-demo.ba')
+    const res = await Promise.all([act(kontrol, `/api/damages/release-requests/${r.id}/approve`, r), act(kontrol2, `/api/damages/release-requests/${r.id}/approve`, r)])
+    expect(res.map((x) => x.statusCode).sort()).toEqual([200, 409])
     expect((await one(`select count(*) filter (where ended_at is not null)::int as ended, count(*)::int as total from damage_blocks where damage_id = $1`, [d.id]))).toEqual({ ended: 1, total: 1 })
     // The existing confirmed reservation R-000001 was never touched by the block.
     expect((await one(`select status from reservations where reservation_no = 'R-000001'`)).status).toBe('confirmed')

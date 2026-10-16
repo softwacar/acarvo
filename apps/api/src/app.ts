@@ -31,6 +31,9 @@ import { relatedReservationRoutes, reservationRoutes } from './modules/reservati
 import { relatedRentalRoutes, rentalRoutes } from './modules/rentals/routes'
 import { damageRoutes } from './modules/operations/damage'
 import { maintenanceRoutes } from './modules/operations/maintenance'
+import { photoAccessRoutes } from './modules/operations/photo-access'
+import { dashboardRoutes } from './modules/dashboard/routes'
+import { readinessRoutes } from './modules/dashboard/readiness'
 import { transferRoutes } from './modules/operations/transfers'
 import { vehicleOperationRoutes } from './modules/operations/vehicle-ops'
 import { registerAuth } from './plugins/auth'
@@ -109,6 +112,9 @@ export async function buildApp({
   await app.register(contractTemplateRoutes, { prefix: '/api/settings' })
   await app.register(contractRoutes, { prefix: '/api' })
   await app.register(maintenanceRoutes, { prefix: '/api/maintenance' })
+  await app.register(photoAccessRoutes, { prefix: '/api/photo-access' })
+  await app.register(dashboardRoutes, { prefix: '/api/dashboard' })
+  await app.register(readinessRoutes, { prefix: '/api/readiness' })
   await app.register(damageRoutes, { prefix: '/api/damages' })
   await app.register(transferRoutes, { prefix: '/api/transfers' })
   await app.register(vehicleOperationRoutes, { prefix: '/api/vehicles' })

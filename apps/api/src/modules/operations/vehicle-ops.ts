@@ -52,6 +52,11 @@ export async function serviceDue(tx: Tx, vehicleId: string): Promise<ServiceDue>
   const schedule = s ? { intervalKm: s.interval_km == null ? null : Number(s.interval_km), intervalMonths: s.interval_months == null ? null : Number(s.interval_months), version: Number(s.version) } : null
   const lastOut = last ? { maintenanceNo: last.maintenance_no as string, completedAt: toIso(last.completed_at), km: Number(last.end_km) } : null
   const currentKm = cur ? Number(cur.km) : null
+  return classifyServiceDue(schedule, lastOut, currentKm)
+}
+
+/** The service reminder rule, shared by the vehicle view and the dashboard (one definition). */
+export function classifyServiceDue(schedule: ServiceDue['schedule'], lastOut: ServiceDue['last'], currentKm: number | null): ServiceDue {
   const base: ServiceDue = { state: 'no_schedule', schedule, last: lastOut, currentKm, nextDueKm: null, nextDueDate: null, kmLeft: null, daysLeft: null }
   if (!schedule) return base
   if (!lastOut) return { ...base, state: 'no_history' }

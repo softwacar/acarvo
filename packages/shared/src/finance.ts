@@ -54,6 +54,29 @@ export function looksLikeCardNumber(text: string) {
 const noCard = (v: string | undefined) => !v || !looksLikeCardNumber(v)
 const NO_CARD = 'Kart numarası girilemez. Yalnız POS fişindeki işlem/onay referansını yazın.'
 
+/** FN5: ask to correct a finance file's responsible party (only while the file has no financial movement). */
+export const responsibleCorrectionSchema = z.object({
+  toType: z.enum(['customer', 'corporate'], { error: 'Doğru ödeme sorumlusunu seçin' }),
+  reason: reason('Düzeltme gerekçesini yazın (en az 3 karakter)'),
+  ...request,
+})
+export const responsibleDecisionSchema = z.object({ ...versioned, note: note })
+
+export interface ResponsibleCorrection {
+  id: string
+  status: 'requested' | 'applied' | 'rejected' | 'cancelled'
+  from: { type: 'customer' | 'corporate'; name: string; no: string }
+  to: { type: 'customer' | 'corporate'; name: string; no: string }
+  reason: string
+  requestedById: string
+  requestedByName: string | null
+  requestedAt: string
+  decidedByName: string | null
+  decidedAt: string | null
+  decisionNote: string | null
+  version: number
+}
+
 export const financeOpenSchema = z.object({
   currency: z.string().trim().toUpperCase().refine(isCurrency, 'Geçerli bir ISO 4217 para birimi seçin'),
   responsibleType: z.enum(['customer', 'corporate'], { error: 'Ödeme sorumlusunu seçin' }),
@@ -293,6 +316,9 @@ export interface RentalFinanceView {
   returnFacts: ReturnFacts | null
   /** Why the file cannot be closed now (codes), empty when it can. */
   closeBlockers: string[]
+  /** FN5: corrections of the responsible party, newest first, and whether one is possible now (and why not). */
+  responsibleCorrections: ResponsibleCorrection[]
+  correction: { possible: boolean; blocker: 'no_file' | 'closed' | 'has_movement' | 'no_alternative' | 'pending' | null }
   can: Record<string, boolean>
 }
 

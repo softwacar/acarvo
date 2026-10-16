@@ -1,0 +1,4 @@
+ALTER TABLE "damage_events" DROP CONSTRAINT "damage_events_kind_check";--> statement-breakpoint
+ALTER TABLE "transfer_events" DROP CONSTRAINT "transfer_events_kind_check";--> statement-breakpoint
+ALTER TABLE "damage_events" ADD CONSTRAINT "damage_events_kind_check" CHECK ("damage_events"."kind" in ('created', 'updated', 'review', 'repair', 'blocked', 'unblocked', 'closed', 'photo_added', 'photo_removed', 'release_requested', 'release_rejected', 'release_cancelled'));--> statement-breakpoint
+ALTER TABLE "transfer_events" ADD CONSTRAINT "transfer_events_kind_check" CHECK ("transfer_events"."kind" in ('created', 'updated', 'approved', 'departed', 'received', 'cancelled', 'photo_added', 'photo_removed'));

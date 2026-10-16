@@ -30,6 +30,7 @@ import type { CompanyAccess } from '../auth/context'
 import { nextNo } from '../pricing/repository'
 import { moment } from '../reservations/repository'
 import { inScope } from '../vehicles/repository'
+import { requirePhotoGrant } from './photo-access'
 import {
   activeBranch,
   addEvent,
@@ -567,6 +568,7 @@ export async function maintenanceRoutes(app: FastifyInstance) {
           where p.id = ${photoId} and m.id = ${id} and ${scopeSql(access)}`)
       ).rows[0] as Row | undefined
       if (!r) throw notFound()
+      requirePhotoGrant(app, req, access.companyId, 'maintenance', id)
       return r
     })
     return streamFile(app, reply, file, variant)

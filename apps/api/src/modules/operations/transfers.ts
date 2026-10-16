@@ -28,6 +28,8 @@ import type { CompanyAccess } from '../auth/context'
 import { nextNo } from '../pricing/repository'
 import { moment } from '../reservations/repository'
 import { inScope } from '../vehicles/repository'
+import { requirePhotoGrant } from './photo-access'
+import { UPLOAD_RATE_LIMIT } from '../../plugins/security'
 import {
   activeBranch,
   addEvent,
@@ -37,9 +39,15 @@ import {
   guarded,
   invalid,
   isoOrNull,
+  insertFile,
   loadEvents,
+  loadPhotos,
   need,
   num,
+  parsePhoto,
+  receivePhoto,
+  streamFile,
+  uploadPolicy,
   operationalVehicle,
   operationBranches,
   parseId,
@@ -155,7 +163,7 @@ async function nextCommitmentConflict(tx: Tx, companyId: string, vehicleId: stri
   return str(r.ref)
 }
 
-async function getTransfer(tx: Tx, access: CompanyAccess, id: string): Promise<TransferDetail> {
+async function getTransfer(app: FastifyInstance, tx: Tx, access: CompanyAccess, id: string): Promise<TransferDetail> {
   const r = (
     await tx.execute(sql`select ${LIST_SELECT}, t.*, v.status as v_status, v.home_branch_id as v_home, vc.name as v_class,
         ru.name as requested_by_name, au.name as approved_by_name, du.name as departed_by_name, eu.name as received_by_name,
@@ -186,6 +194,10 @@ async function getTransfer(tx: Tx, access: CompanyAccess, id: string): Promise<T
     reason: r.reason as string,
     driverNote: str(r.driver_note),
     transportMethod: (r.transport_method as TransferDetail['transportMethod']) ?? null,
+    carrierName: str(r.carrier_name),
+    transportReference: str(r.transport_reference),
+    photos: await loadPhotos(tx, 'transfer_photos', 'transfer_id', id, `/api/transfers/${id}/photos`),
+    uploadPolicy: uploadPolicy(app),
     transportAckAt: isoOrNull(r.transport_ack_at),
     damageFile: r.damage_file_id ? { id: r.damage_file_id as string, damageNo: r.df_no as string, blocked: r.df_blocked === true } : null,
     departureKm: num(r.departure_km),
@@ -240,7 +252,7 @@ const nextError = (ref: string) =>
   new AppError(409, 'NEXT_COMMITMENT_ELSEWHERE', `Aracın varıştan sonraki ilk kaydı (${ref}) başka bir şubeden başlıyor. Transfer bu kaydı sessizce geçersiz kılamaz; rezervasyon otomatik iptal edilmez.`, undefined, { refNo: ref })
 
 export async function transferRoutes(app: FastifyInstance) {
-  const detail = getTransfer
+  const detail = (tx: Tx, access: CompanyAccess, id: string) => getTransfer(app, tx, access, id)
   const versionConflict = async (tx: Tx, access: CompanyAccess, id: string) =>
     new AppError(409, 'VERSION_CONFLICT', 'Bu transfer siz çalışırken başka bir kullanıcı tarafından güncellendi.', undefined, { current: await detail(tx, access, id) })
   const begin = async (tx: Tx, access: CompanyAccess, id: string, input: { version: number; requestId: string }, end: 'from' | 'to', what: string) => {
@@ -282,14 +294,15 @@ export async function transferRoutes(app: FastifyInstance) {
       const row = (
         await guarded(
           tx.execute(sql`insert into vehicle_transfers (company_id, transfer_no, vehicle_id, from_branch_id, to_branch_id, reason, planned_departure_at, planned_arrival_at,
-              from_timezone, to_timezone, driver_note, purpose, damage_file_id, transport_method, client_request_id, created_by, updated_by)
+              from_timezone, to_timezone, driver_note, purpose, damage_file_id, transport_method, carrier_name, transport_reference, client_request_id, created_by, updated_by)
             values (${access.companyId}, ${no}, ${vehicle.id}, ${from.id}, ${to.id}, ${input.reason}, ${dep}, ${arr}, ${from.timezone}, ${to.timezone},
               ${input.driverNote ?? null}, ${input.purpose}, ${input.purpose === 'repair' ? input.damageFileId! : null}, ${input.purpose === 'repair' ? input.transportMethod! : null},
+              ${input.purpose === 'repair' ? input.carrierName! : null}, ${input.purpose === 'repair' ? input.transportReference! : null},
               ${input.requestId}, ${userId}, ${userId}) returning id`),
         )
       ).rows[0] as Row
       const id = row.id as string
-      const data = { vehicle: vehicle.plate, from: from.code, to: to.code, plannedDepartureAt: dep, plannedArrivalAt: arr, purpose: input.purpose, transportMethod: input.transportMethod ?? null }
+      const data = { vehicle: vehicle.plate, from: from.code, to: to.code, plannedDepartureAt: dep, plannedArrivalAt: arr, purpose: input.purpose, transportMethod: input.transportMethod ?? null, carrierRecorded: !!input.carrierName, referenceRecorded: !!input.transportReference }
       await addEvent(tx, TRANSFER_EVENTS, access.companyId, id, 'created', userId, { to: 'requested', data })
       await audit(tx, { companyId: access.companyId, actorUserId: userId, action: 'transfer.create', entity: 'transfer', entityId: id, summary: { transferNo: no, ...data } })
       return reply.code(201).send(await detail(tx, access, id))
@@ -485,4 +498,63 @@ export async function transferRoutes(app: FastifyInstance) {
       return detail(tx, access, id)
     })
   })
+
+  // Transport evidence photos (tow truck, dispatch slip): repair transports only, while not finished; private storage,
+  // content-checked, metadata removed, scanned; viewing needs a photo access grant.
+  app.post('/:id/photos', { config: UPLOAD_RATE_LIMIT }, async (req, reply) => {
+    const id = parseId(req, TRANSFER_NOT_FOUND)
+    await withCompany(req, 'transfers.repair', async (tx, access) => {
+      const cur = await lockTransfer(tx, access, id, 'from', 'taşıma kanıtı ekleme')
+      if (cur.purpose !== 'repair' || !['requested', 'approved', 'in_transit'].includes(cur.status as string)) throw new AppError(409, 'RECORD_CLOSED', 'Yalnız açık onarım taşımasına fotoğraf eklenebilir.')
+    })
+    const photo = await receivePhoto(app, req, 'transfers')
+    try {
+      const out = await withCompany(req, 'transfers.repair', async (tx, access) => {
+        const cur = await lockTransfer(tx, access, id, 'from', 'taşıma kanıtı ekleme')
+        const userId = req.auth!.user.id
+        const fileId = await insertFile(tx, access.companyId, 'transfer_photo', photo, userId)
+        const p = (await guarded(tx.execute(sql`insert into transfer_photos (company_id, transfer_id, file_id, created_by) values (${access.companyId}, ${id}, ${fileId}, ${userId}) returning id`))).rows[0] as Row
+        await tx.execute(sql`update vehicle_transfers set version = version + 1, updated_at = now(), updated_by = ${userId} where id = ${id}`)
+        await addEvent(tx, TRANSFER_EVENTS, access.companyId, id, 'photo_added', userId, { data: { photoId: p.id } })
+        await audit(tx, { companyId: access.companyId, actorUserId: userId, action: 'transfer.photo.add', entity: 'transfer', entityId: id, summary: { transferNo: cur.transfer_no, photoId: p.id, scanner: app.scanner.name } })
+        return detail(tx, access, id)
+      })
+      return reply.code(201).send(out)
+    } catch (e) {
+      await app.storage.remove(photo.keys.main, photo.keys.thumb)
+      throw e
+    }
+  })
+
+  app.delete('/:id/photos/:photoId', async (req) => {
+    const { id, photoId } = parsePhoto(req, TRANSFER_NOT_FOUND)
+    return withCompany(req, 'transfers.repair', async (tx, access) => {
+      const cur = await lockTransfer(tx, access, id, 'from', 'taşıma kanıtı kaldırma')
+      const userId = req.auth!.user.id
+      const res = await guarded(tx.execute(sql`update transfer_photos set removed_at = now(), removed_by = ${userId} where id = ${photoId} and transfer_id = ${id} and removed_at is null returning id`))
+      if (!res.rows.length) throw notFound('Fotoğraf bulunamadı.')
+      await tx.execute(sql`update vehicle_transfers set version = version + 1, updated_at = now(), updated_by = ${userId} where id = ${id}`)
+      await addEvent(tx, TRANSFER_EVENTS, access.companyId, id, 'photo_removed', userId, { data: { photoId } })
+      await audit(tx, { companyId: access.companyId, actorUserId: userId, action: 'transfer.photo.remove', entity: 'transfer', entityId: id, summary: { transferNo: cur.transfer_no, photoId } })
+      return detail(tx, access, id)
+    })
+  })
+
+  app.get('/:id/photos/:photoId', async (req, reply) => {
+    const { id, photoId } = parsePhoto(req, TRANSFER_NOT_FOUND)
+    const variant = (req.query as { variant?: string }).variant === 'thumb' ? 'thumb' : 'main'
+    const file = await withCompany(req, 'transfers.read', async (tx, access) => {
+      const r = (
+        await tx.execute(sql`select f.storage_key, f.thumb_key from transfer_photos p
+          join vehicle_transfers t on t.company_id = p.company_id and t.id = p.transfer_id
+          join files f on f.company_id = p.company_id and f.id = p.file_id
+          where p.id = ${photoId} and t.id = ${id} and ${scopeSql(access)}`)
+      ).rows[0] as Row | undefined
+      if (!r) throw notFound()
+      requirePhotoGrant(app, req, access.companyId, 'transfer', id)
+      return r
+    })
+    return streamFile(app, reply, file, variant)
+  })
+
 }

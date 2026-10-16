@@ -8,6 +8,8 @@ import {
   financeOpenSchema,
   financeReasonSchema,
   financeTransitionSchema,
+  responsibleCorrectionSchema,
+  responsibleDecisionSchema,
   type FinanceListQuery,
   paymentCreateSchema,
   parseAmount,
@@ -33,6 +35,7 @@ import {
   FINANCE_NOT_FOUND,
   fileItems,
   fileScope,
+  financeSummary,
   PAYMENT_LIST_SELECT,
   paymentListItem,
   REFUND_SELECT,
@@ -68,6 +71,11 @@ function mapGuard(e: unknown): never {
     rental_finances_closed: [409, 'FINANCE_CLOSED', 'Finans dosyası kapalı. Değişiklik için önce gerekçeyle yeniden açın.'],
     rental_finances_close_pending: [409, 'CLOSE_BLOCKED', 'Bekleyen kalem, tahsilat, depozito veya iade varken dosya kapatılamaz.'],
     rental_finances_close_balance: [409, 'CLOSE_BLOCKED', 'Dosya yalnız kalan bakiye sıfırken kapatılabilir.'],
+    rental_finances_correction_movement: [409, 'FINANCE_CORRECTION_REVIEW', 'Bu dosyada finansal hareket var (kalem, tahsilat veya depozito). Ödeme sorumlusu yerinde düzeltilmez; kayıtlar başka kişiye taşınmaz. Yetkili inceleme gerekir.'],
+    rental_finances_responsible: [409, 'RESPONSIBLE_NOT_OF_RENTAL', 'Ödeme sorumlusu yalnız kiralamanın kendi müşterisi veya kurumsal hesabı olabilir.'],
+    finance_responsible_corrections_from: [409, 'VERSION_CONFLICT', 'Dosyanın ödeme sorumlusu siz çalışırken değişti. Sayfayı yenileyin.'],
+    finance_responsible_corrections_same: [400, 'VALIDATION', 'Yeni ödeme sorumlusu mevcut sorumludan farklı olmalı.'],
+    finance_responsible_corrections_open_key: [409, 'CORRECTION_PENDING', 'Bu dosya için zaten onay bekleyen bir düzeltme talebi var.'],
     rental_finances_close_unpriced: [409, 'CLOSE_BLOCKED', 'Onaylanmış iç hesap kalemi olmayan dosya kapatılamaz; fiyatlandırılmamış dosya "sıfır borçla kapandı" sayılmaz.'],
     finance_charges_quote: [409, 'QUOTE_NOT_CURRENT', 'Teklif güncel değil veya bu kiralamaya ait değil. Teklifi yeniden hesaplayın.'],
     finance_charges_quote_key: [409, 'QUOTE_ALREADY_CHARGED', 'Bu teklif bu dosyada zaten iç hesap kalemine dönüştürüldü.'],
@@ -179,6 +187,80 @@ export async function financeRoutes(app: FastifyInstance) {
     })
     return reply.code(out.replay ? 200 : 201).send(out.body)
   })
+
+  // -------------------------------------------------------------------------
+  // FN5: correcting the responsible party of a file WITHOUT any financial movement, with four eyes. A file with lines,
+  // payments or deposits is never corrected in place (records are never moved to another person); it needs a reviewed
+  // procedure that is not part of V1. PostgreSQL enforces the same.
+
+  app.post('/rentals/:id/finance/responsible-corrections', async (req, reply) => {
+    const id = parseId(req, RENTAL_NOT_FOUND)
+    return withCompany(req, 'finance.close', async (tx, access) => {
+      const input = responsibleCorrectionSchema.parse(req.body)
+      const k = await rentalFor(tx, access, id, true)
+      const f = await fileOf(tx, id, true)
+      if (!f) throw new AppError(409, 'NO_FINANCE_FILE', 'Bu kiralamanın finans dosyası yok.')
+      if (await replayed(tx, input.requestId)) return reply.code(200).send(await view(tx, access, id))
+      if (f.status === 'closed') throw new AppError(409, 'FINANCE_CLOSED', 'Kapalı dosyada ödeme sorumlusu düzeltilmez.')
+      if ((await tx.execute(sql`select finance_file_has_movement(${access.companyId}::uuid, ${f.id as string}::uuid) as m`)).rows[0]!.m) {
+        throw new AppError(409, 'FINANCE_CORRECTION_REVIEW', 'Bu dosyada finansal hareket var (kalem, tahsilat veya depozito). Ödeme sorumlusu yerinde düzeltilmez; kayıtlar başka kişiye taşınmaz. Yetkili inceleme gerekir.')
+      }
+      if (input.toType === 'corporate' && !k.corporate_account_id) throw new AppError(400, 'VALIDATION', 'Bu kiralamanın kurumsal hesabı yok.', { toType: 'Kurumsal hesap yok' })
+      const toCustomer = input.toType === 'customer' ? (k.customer_id as string) : null
+      const toCorporate = input.toType === 'corporate' ? (k.corporate_account_id as string) : null
+      const userId = req.auth!.user.id
+      const c = (
+        await tx
+          .execute(sql`insert into finance_responsible_corrections (company_id, finance_id, from_type, from_customer_id, from_corporate_id, to_type, to_customer_id, to_corporate_id, reason, requested_by, client_request_id)
+            values (${access.companyId}, ${f.id as string}, ${f.responsible_type as string}, ${(f.responsible_customer_id as string | null) ?? null}, ${(f.responsible_corporate_id as string | null) ?? null},
+              ${input.toType}, ${toCustomer}, ${toCorporate}, ${input.reason}, ${userId}, ${input.requestId}) returning id`)
+          .catch(mapGuard)
+      ).rows[0] as Row
+      await event(tx, access.companyId, f.id as string, { entityType: 'finance', entityId: f.id as string, kind: 'responsible_correction_requested', data: { from: f.responsible_type, to: input.toType, correctionId: c.id }, requestId: input.requestId }, userId)
+      await auditFinance(tx, access, userId, 'finance.responsible_correction.request', id, { rentalNo: k.rental_no, from: f.responsible_type, to: input.toType })
+      return reply.code(201).send(await view(tx, access, id))
+    })
+  })
+
+  for (const path of ['approve', 'reject', 'cancel'] as const) {
+    app.post(`/finance/responsible-corrections/:id/${path}`, async (req) => {
+      const cid = parseId(req, FINANCE_NOT_FOUND)
+      return withCompany(req, 'finance.close', async (tx, access) => {
+        const input = responsibleDecisionSchema.parse(req.body)
+        const c0 = (await tx.execute(sql`select finance_id from finance_responsible_corrections where id = ${cid}`)).rows[0] as Row | undefined
+        if (!c0) throw notFound(FINANCE_NOT_FOUND)
+        const f = (await tx.execute(sql`select * from rental_finances where id = ${c0.finance_id as string} for update`)).rows[0] as Row
+        const k = await rentalFor(tx, access, f.rental_id as string, true)
+        if (await replayed(tx, input.requestId)) return view(tx, access, k.id as string)
+        const c = (await tx.execute(sql`select * from finance_responsible_corrections where id = ${cid} for update`)).rows[0] as Row
+        if (Number(c.version) !== input.version) throw conflict()
+        if (c.status !== 'requested') throw new AppError(409, 'INVALID_TRANSITION', 'Bu düzeltme talebi zaten sonuçlandırılmış.')
+        const userId = req.auth!.user.id
+        if (path === 'cancel' && c.requested_by !== userId) throw new AppError(403, 'FOUR_EYES', 'Talebi yalnız talep eden kişi geri çekebilir.')
+        if (path !== 'cancel' && c.requested_by === userId) throw new AppError(403, 'FOUR_EYES', 'Kendi düzeltme talebinizi onaylayamaz veya reddedemezsiniz; ikinci bir finans yetkilisi gerekir.')
+        if (path === 'reject' && (input.note?.length ?? 0) < 3) throw new AppError(400, 'VALIDATION', 'Ret gerekçesini yazın.', { note: 'Ret gerekçesini yazın' })
+        if (path === 'approve') {
+          if ((await tx.execute(sql`select finance_file_has_movement(${access.companyId}::uuid, ${f.id as string}::uuid) as m`)).rows[0]!.m || f.status === 'closed') {
+            throw new AppError(409, 'FINANCE_CORRECTION_REVIEW', 'Talepten sonra dosyada finansal hareket oluştu veya dosya kapandı. Ödeme sorumlusu yerinde düzeltilmez; yetkili inceleme gerekir.')
+          }
+          await tx.execute(sql`update finance_responsible_corrections set status = 'applied', decided_by = ${userId}, decided_at = now(), decision_note = ${input.note ?? null}, version = version + 1 where id = ${cid}`).catch(mapGuard)
+          await tx
+            .execute(sql`update rental_finances set responsible_type = ${c.to_type as string}, responsible_customer_id = ${(c.to_customer_id as string | null) ?? null},
+                responsible_corporate_id = ${(c.to_corporate_id as string | null) ?? null}, version = version + 1, updated_at = now() where id = ${f.id as string}`)
+            .catch(mapGuard)
+        } else {
+          await tx
+            .execute(sql`update finance_responsible_corrections set status = ${path === 'reject' ? 'rejected' : 'cancelled'}, decided_by = ${userId}, decided_at = now(),
+                decision_note = ${input.note ?? null}, version = version + 1 where id = ${cid}`)
+            .catch(mapGuard)
+        }
+        const kind = { approve: 'responsible_corrected', reject: 'responsible_correction_rejected', cancel: 'responsible_correction_cancelled' }[path]
+        await event(tx, access.companyId, f.id as string, { entityType: 'finance', entityId: f.id as string, kind, data: { from: c.from_type, to: c.to_type, correctionId: cid }, requestId: input.requestId }, userId)
+        await auditFinance(tx, access, userId, `finance.responsible_correction.${path}`, k.id as string, { rentalNo: k.rental_no, from: c.from_type, to: c.to_type })
+        return view(tx, access, k.id as string)
+      })
+    })
+  }
 
   // -------------------------------------------------------------------------
   // Internal account lines
@@ -628,40 +710,7 @@ export async function financeRoutes(app: FastifyInstance) {
   app.post('/finance/summary', async (req) =>
     withCompany(req, 'finance.reports.read', async (tx, access) => {
       const q = financeListSchema.parse(req.body ?? {})
-      const scope = fileScope(access)
-      const branch = q.branchId ? sql`and k.pickup_branch_id = ${q.branchId}` : sql``
-      const range = (col: SQL) => sql`${q.from ? sql`and ${col} >= ${q.from}::date` : sql``} ${q.to ? sql`and ${col} < (${q.to}::date + 1)` : sql``}`
-      const JOIN = sql`join rental_finances f on f.company_id = x.company_id and f.id = x.finance_id join rentals k on k.company_id = f.company_id and k.id = f.rental_id`
-      const pay = (await tx.execute(sql`select x.currency, x.status, x.method, sum(x.amount_minor)::text s from finance_payments x ${JOIN} where ${scope} ${branch} ${range(sql`x.received_at`)} group by 1, 2, 3`)).rows as Row[]
-      const chg = (await tx.execute(sql`select x.currency, x.status, sum(x.amount_minor)::text s from finance_charges x ${JOIN} where ${scope} ${branch} ${range(sql`x.created_at`)} group by 1, 2`)).rows as Row[]
-      const dep = (await tx.execute(sql`select x.currency, x.status, sum(x.amount_minor)::text s,
-          sum(coalesce((select sum(r.amount_minor) from finance_deposit_refunds r where r.company_id = x.company_id and r.deposit_id = x.id and r.status = 'completed'), 0))::text refunded,
-          sum(coalesce((select sum(r.amount_minor) from finance_deposit_refunds r where r.company_id = x.company_id and r.deposit_id = x.id and r.status in ('requested', 'approved')), 0))::text refund_open
-        from finance_deposits x ${JOIN} where ${scope} ${branch} ${range(sql`x.created_at`)} group by 1, 2`)).rows as Row[]
-      const currencies = [...new Set([...pay, ...chg, ...dep].map((r) => r.currency as string))].sort()
-      const big = (rows: Row[], f: (r: Row) => boolean, col = 's') => rows.filter(f).reduce((s, r) => s + BigInt(r[col] as string), 0n)
-      return {
-        rows: currencies.map((c) => {
-          const p = pay.filter((r) => r.currency === c)
-          const ch = chg.filter((r) => r.currency === c)
-          const d = dep.filter((r) => r.currency === c)
-          const verified = big(p, (r) => r.status === 'verified')
-          const posted = big(ch, (r) => r.status === 'posted' || r.status === 'reversal_requested')
-          return {
-            currency: c,
-            verifiedPaymentsMinor: Number(verified),
-            verifiedByMethod: Object.fromEntries(['cash', 'bank_transfer', 'external_pos', 'other_external'].map((m) => [m, Number(big(p, (r) => r.status === 'verified' && r.method === m))])),
-            recordedPaymentsMinor: Number(big(p, (r) => r.status === 'recorded')),
-            postedChargesMinor: Number(posted),
-            pendingChargesMinor: Number(big(ch, (r) => r.status === 'pending')),
-            outstandingMinor: Number(posted > verified ? posted - verified : 0n),
-            depositsHeldMinor: Number(big(d, (r) => r.status === 'verified') - big(d, (r) => r.status === 'verified', 'refunded')),
-            depositsReportedMinor: Number(big(d, (r) => r.status === 'reported')),
-            refundsOpenMinor: Number(big(d, () => true, 'refund_open')),
-            refundsCompletedMinor: Number(big(d, () => true, 'refunded')),
-          }
-        }),
-      }
+      return financeSummary(tx, access, { branchId: q.branchId, from: q.from, to: q.to })
     }),
   )
 

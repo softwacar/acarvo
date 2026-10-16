@@ -302,6 +302,27 @@
       "when": 1792100259717,
       "tag": "0042_transfer_damage_window",
       "breakpoints": true
+    },
+    {
+      "idx": 43,
+      "version": "7",
+      "when": 1792108249860,
+      "tag": "0043_readiness",
+      "breakpoints": true
+    },
+    {
+      "idx": 44,
+      "version": "7",
+      "when": 1792108250860,
+      "tag": "0044_readiness_guards",
+      "breakpoints": true
+    },
+    {
+      "idx": 45,
+      "version": "7",
+      "when": 1792108515499,
+      "tag": "0045_readiness_event_kinds",
+      "breakpoints": true
     }
   ]
 }

@@ -304,6 +304,8 @@ export const damageReviewSchema = z
   .refine((v) => v.reviewStatus !== 'closed' || (v.note?.length ?? 0) >= 5, { message: 'Kapatma gerekçesini yazın (en az 5 karakter)', path: ['note'] })
 export const damageRepairSchema = z.object({ version, requestId, repairStatus: z.enum(DAMAGE_REPAIR_STATUSES, { error: 'Onarım durumunu seçin' }) })
 export const damageBlockSchema = z.object({ version, requestId, reason: reason('Engel gerekçesini yazın (en az 5 karakter)') })
+/** A second authorised person decides a release request; the requester may only cancel it. */
+export const damageReleaseDecisionSchema = z.object({ version, requestId, note: optText(300) })
 export const damageUnblockSchema = z.object({
   version,
   requestId,
@@ -329,6 +331,22 @@ export interface DamageBlockItem {
   endedAt: string | null
   endedByName: string | null
   endReason: string | null
+}
+
+/** Four-eyes release of a damage block: who asked, why, and who decided (never the same person). */
+export interface DamageReleaseRequest {
+  id: string
+  blockId: string
+  status: 'requested' | 'approved' | 'rejected' | 'cancelled'
+  reason: string
+  usability: 'usable' | 'restricted'
+  requestedById: string
+  requestedByName: string | null
+  requestedAt: string
+  decidedByName: string | null
+  decidedAt: string | null
+  decisionNote: string | null
+  version: number
 }
 
 export interface DamageListItem {
@@ -369,6 +387,7 @@ export interface DamageDetail extends DamageListItem {
   version: number
   vehicle: OperationVehicle & { homeBranchId: string }
   blocks: DamageBlockItem[]
+  releaseRequests: DamageReleaseRequest[]
   maintenance: { id: string; maintenanceNo: string; status: MaintenanceStatus }[]
   /** Confirmed reservations of the vehicle while blocked: never cancelled automatically, shown as at risk. */
   atRisk: AllocationConflict[]
@@ -408,10 +427,23 @@ export const transferCreateSchema = z
     /** repair only: the open damage file of the vehicle and how it is carried. */
     damageFileId: z.preprocess(blank, z.uuid().optional()),
     transportMethod: z.preprocess(blank, z.enum(TRANSPORT_METHODS, { error: 'Taşıma yöntemini seçin' }).optional()),
+    /** repair only: the carrier and its own dispatch/order reference (entered by staff, not verified by the carrier). */
+    carrierName: optText(120),
+    transportReference: z.preprocess(
+      blank,
+      z
+        .string()
+        .trim()
+        .max(60, 'En fazla 60 karakter')
+        .regex(/^[A-Za-z0-9][A-Za-z0-9 ./_-]*$/, 'Yalnız harf, rakam, boşluk ve . / _ - kullanın (kişisel bilgi yazmayın)')
+        .optional(),
+    ),
   })
   .refine((v) => v.fromBranchId !== v.toBranchId, { message: 'Varış şubesi çıkış şubesinden farklı olmalı', path: ['toBranchId'] })
   .refine((v) => v.purpose !== 'repair' || v.damageFileId, { message: 'Taşımanın bağlı olduğu hasar dosyasını seçin', path: ['damageFileId'] })
   .refine((v) => v.purpose !== 'repair' || v.transportMethod, { message: 'Taşıma yöntemini seçin (çekici veya taşıyıcı)', path: ['transportMethod'] })
+  .refine((v) => v.purpose !== 'repair' || (v.carrierName?.length ?? 0) >= 2, { message: 'Taşıyıcı firma veya çekici adını girin', path: ['carrierName'] })
+  .refine((v) => v.purpose !== 'repair' || (v.transportReference?.length ?? 0) >= 2, { message: 'Taşıyıcının sevk veya iş emri referansını girin', path: ['transportReference'] })
 export type TransferCreateInput = z.infer<typeof transferCreateSchema>
 
 export const transferUpdateSchema = z.object({
@@ -481,7 +513,11 @@ export interface TransferDetail extends TransferListItem {
   reason: string
   driverNote: string | null
   transportMethod: TransportMethod | null
+  carrierName: string | null
+  transportReference: string | null
   transportAckAt: string | null
+  photos: OperationPhoto[]
+  uploadPolicy: { enabled: boolean; reason: string | null }
   damageFile: { id: string; damageNo: string; blocked: boolean } | null
   departureKm: number | null
   arrivalKm: number | null
