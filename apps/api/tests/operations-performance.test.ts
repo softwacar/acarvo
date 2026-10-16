@@ -40,7 +40,16 @@ beforeAll(async () => {
      select company_id, id, vehicle_id, detected_at, $1, 'Sentetik engel' from damage_files where substr(damage_no, 3)::int % 3 = 0`,
     [user],
   )
-  await q(`update damage_blocks set ended_at = started_at + interval '30 minutes', ended_by = $1, end_reason = 'Sentetik kaldırma'`, [user])
+  // Synthetic lifts follow the four-eyes rule: requested by one person, approved by another, ended in the same
+  // transaction (a block cannot be ended directly).
+  const second = (await asOwner(null, `select id from users where email = $1`, [EMAILS.selma])).rows[0].id as string
+  if (!/^[0-9a-f-]{36}$/.test(user) || !/^[0-9a-f-]{36}$/.test(second)) throw new Error('unexpected user id')
+  await q(`do $$ begin
+    insert into damage_block_release_requests (company_id, damage_id, block_id, reason, usability, requested_by)
+      select company_id, damage_id, id, 'Sentetik kaldırma', 'usable', '${user}' from damage_blocks where ended_at is null;
+    update damage_block_release_requests set status = 'approved', decided_by = '${second}', decided_at = now(), version = version + 1 where status = 'requested';
+    update damage_blocks set ended_at = started_at + interval '30 minutes', ended_by = '${second}', end_reason = 'Sentetik kaldırma' where ended_at is null;
+  end $$`)
   await q(
     `insert into vehicle_transfers (company_id, transfer_no, vehicle_id, from_branch_id, to_branch_id, reason, planned_departure_at, planned_arrival_at, from_timezone, to_timezone, created_by)
      select $1, 'T-' || lpad(g::text, 6, '0'), v.id, v.home_branch_id, (select id from branches where id <> v.home_branch_id order by code limit 1), 'Sentetik transfer ' || g,

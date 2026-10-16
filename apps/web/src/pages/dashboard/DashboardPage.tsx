@@ -58,8 +58,11 @@ function ItemLink({ item, children, className }: { item: DashboardItem; children
 function formatters(timeZone: string) {
   const time = new Intl.DateTimeFormat('tr-TR', { timeZone, hour: '2-digit', minute: '2-digit' })
   const dayTime = new Intl.DateTimeFormat('tr-TR', { timeZone, weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
+  const dayTimeYear = new Intl.DateTimeFormat('tr-TR', { timeZone, day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+  const year = new Intl.DateTimeFormat('en', { timeZone, year: 'numeric' })
+  const thisYear = year.format(new Date())
   const day = new Intl.DateTimeFormat('tr-TR', { timeZone, weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
-  return { time: (iso: string) => time.format(new Date(iso)), dayTime: (iso: string) => dayTime.format(new Date(iso)), day: (iso: string) => day.format(new Date(iso)) }
+  return { time: (iso: string) => time.format(new Date(iso)), dayTime: (iso: string) => (year.format(new Date(iso)) === thisYear ? dayTime : dayTimeYear).format(new Date(iso)), day: (iso: string) => day.format(new Date(iso)) }
 }
 
 /** Panel with a title row; quiet by design, the data carries the weight. */
@@ -114,7 +117,7 @@ function Summary({ d }: { d: DashboardResponse }) {
   const c = d.counts
   const overdue = (c.overdueReturns ?? 0) + (c.overduePickups ?? 0)
   const cells: { label: string; value: number | null; hint: string; to: string; tone?: 'alert' | 'hold' | 'ok' }[] = [
-    { label: 'Bugün teslim', value: c.pickupsToday, hint: 'Onaylı rezervasyon + hazır kiralama', to: '/kiralamalar' },
+    { label: 'Bugün teslim', value: c.pickupsToday, hint: 'Rezervasyon ve kiralama', to: '/kiralamalar' },
     { label: 'Bugün iade', value: c.returnsToday, hint: 'Müşterideki araçlar', to: '/kiralamalar' },
     { label: 'Aktif kiralama', value: c.activeRentals, hint: 'Araç müşteride', to: '/kiralamalar' },
     { label: 'Gecikmiş', value: c.overdueReturns == null && c.overduePickups == null ? null : overdue, hint: `${c.overdueReturns ?? 0} iade · ${c.overduePickups ?? 0} teslim`, to: '/kiralamalar', tone: overdue ? 'alert' : undefined },
