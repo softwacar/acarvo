@@ -1,3 +1,4 @@
+import { EvidenceGate } from '@/components/EvidenceGate'
 import {
   CHECKLIST_ANSWERS,
   CHECKLIST_ITEMS,
@@ -148,6 +149,7 @@ function PhotoPanel({ r, kind, inspection, onUpdated }: { r: RentalDetail; kind:
   }
   return (
     <div className="space-y-3">
+      <EvidenceGate kind="rental" id={r.id} count={photos.length}>
       <ul aria-label="Fotoğraflar" className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
         {photos.map((p, i) => (
           <li key={p.id} className="overflow-hidden rounded-lg border border-line bg-ground">
@@ -181,6 +183,7 @@ function PhotoPanel({ r, kind, inspection, onUpdated }: { r: RentalDetail; kind:
           </li>
         ))}
       </ul>
+      </EvidenceGate>
       <p className={cn('tnum text-[13px] font-medium', photos.length >= INSPECTION_MIN_PHOTOS ? 'text-ok' : 'text-hold')}>
         {photos.length} / {INSPECTION_MIN_PHOTOS}–{INSPECTION_MAX_PHOTOS} fotoğraf
       </p>

@@ -1,5 +1,5 @@
 import { CUSTOMER_DOCUMENT_TYPES, type RequirementItem, type RequirementPolicy, type ResidencyClass } from '@acarvo/shared'
-import { CaretDown, GearSix, Info, MapPin, Plus, ShieldWarning, SpinnerGap, Trash, WarningCircle } from '@phosphor-icons/react'
+import { ArrowRight, CaretDown, GearSix, Info, ListChecks, MapPin, Plus, ShieldWarning, SpinnerGap, Trash, WarningCircle } from '@phosphor-icons/react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
 import { Dialog } from 'radix-ui'
@@ -467,6 +467,16 @@ export function SettingsPage() {
   return (
     <div className="space-y-6">
       <PageHeader title="Ayarlar" description={session.company ? `${session.company.name} şirket ayarları` : undefined} />
+      {can(session, 'readiness.read') && (
+        <Link to="/ayarlar/hazirlik" className="group flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl border border-line bg-surface px-5 py-4 hover:bg-ground/50">
+          <ListChecks size={18} className="text-blue" />
+          <span className="min-w-0 flex-1">
+            <span className="block font-medium text-ink">Operasyonel hazırlık</span>
+            <span className="block text-[13px] text-ink-2">Gerçek kullanım öncesi eksikler, doğrulanmamış maddeler ve insan kararları (salt okunur).</span>
+          </span>
+          <ArrowRight size={15} className="text-blue transition-transform group-hover:translate-x-0.5" />
+        </Link>
+      )}
       {canRentalMode && <RentalModeSettings />}
       {canTemplates && <ContractTemplateSettings />}
       {canDocs ? (

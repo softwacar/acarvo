@@ -7,7 +7,8 @@ import { Select } from '@/components/fields'
 import { Plate } from '@/components/Plate'
 import { ErrorState, StatePanel } from '@/components/states'
 import { toast } from '@/components/Toaster'
-import { ApiRequestError, vehiclesApi } from '@/lib/api'
+import { EvidenceGate } from '@/components/EvidenceGate'
+import { ApiRequestError, type PhotoRecordKind, vehiclesApi } from '@/lib/api'
 import type { Tone } from '@/lib/finance-labels'
 import { eventLabel, HOLD_KIND_LABELS } from '@/lib/operation-labels'
 import { formatDateTime } from '@/lib/vehicle-labels'
@@ -329,6 +330,8 @@ export function EventsList({ events }: { events: OperationEvent[] }) {
 
 /** Evidence photos: private, streamed after checks. Adding and removing only while the record is open. */
 export function PhotoGrid({
+  kind,
+  recordId,
   photos,
   canEdit,
   policy,
@@ -336,6 +339,8 @@ export function PhotoGrid({
   onUpload,
   onRemove,
 }: {
+  kind: PhotoRecordKind
+  recordId: string
   photos: OperationPhoto[]
   canEdit: boolean
   policy: { enabled: boolean; reason: string | null }
@@ -349,6 +354,7 @@ export function PhotoGrid({
   return (
     <div className="space-y-3">
       {photos.length ? (
+        <EvidenceGate kind={kind} id={recordId} count={photos.length}>
         <ul className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
           {photos.map((p, i) => (
             <li key={p.id} className="group relative overflow-hidden rounded-lg border border-line">
@@ -378,6 +384,7 @@ export function PhotoGrid({
             </li>
           ))}
         </ul>
+        </EvidenceGate>
       ) : (
         <p className="text-[13px] text-ink-2">Fotoğraf yok.</p>
       )}

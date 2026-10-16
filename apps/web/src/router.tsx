@@ -17,6 +17,7 @@ import { validateReservationSearch } from './pages/reservations/search'
 import { validateRentalSearch } from './pages/rentals/search'
 import { validateFinanceSearch } from './pages/finance/search'
 import { validateCreateSearch, validateDamageSearch, validateMaintenanceSearch, validateTransferSearch } from './pages/operations/search'
+import { validateDashboardSearch } from './pages/dashboard/search'
 import { sessionQuery } from './session'
 
 const rootRoute = createRootRouteWithContext<{ queryClient: QueryClient }>()({
@@ -56,7 +57,7 @@ const appRoute = createRoute({
   notFoundComponent: NotFoundPage,
 })
 
-const indexRoute = createRoute({ getParentRoute: () => appRoute, path: '/', component: () => <ModulePage slug="" /> })
+const indexRoute = createRoute({ getParentRoute: () => appRoute, path: '/', validateSearch: validateDashboardSearch, component: lazyRouteComponent(() => import('./pages/dashboard/DashboardPage'), 'DashboardPage') })
 const branchesRoute = createRoute({ getParentRoute: () => appRoute, path: '/subeler', component: BranchesPage })
 const vehiclesRoute = createRoute({ getParentRoute: () => appRoute, path: '/araclar', validateSearch: validateVehicleSearch, component: VehiclesPage })
 // Vehicle 360° (gallery, documents, history) and the vehicle form load on demand: smaller first load for sign-in and lists.
@@ -193,6 +194,7 @@ const settingsRoute = createRoute({
   path: '/ayarlar',
   component: lazyRouteComponent(() => import('./pages/settings/SettingsPage'), 'SettingsPage'),
 })
+const readinessRoute = createRoute({ getParentRoute: () => appRoute, path: '/ayarlar/hazirlik', component: lazyRouteComponent(() => import('./pages/settings/ReadinessPage'), 'ReadinessPage') })
 const profileRoute = createRoute({ getParentRoute: () => appRoute, path: '/profil', component: ProfilePage })
 const moduleRoute = createRoute({
   getParentRoute: () => appRoute,
@@ -203,7 +205,7 @@ const moduleRoute = createRoute({
   },
 })
 
-const routeTree = rootRoute.addChildren([loginRoute, appRoute.addChildren([indexRoute, branchesRoute, vehiclesRoute, vehicleNewRoute, vehicle360Route, vehicleEditRoute, customersRoute, customer360Route, corporateRoute, corporate360Route, reservationsRoute, reservationNewRoute, reservation360Route, reservationEditRoute, rentalsRoute, rentalNewRoute, rental360Route, rentalEditRoute, rentalHandoverRoute, rentalReturnRoute, pricingRoute, priceListNewRoute, priceListRoute, financeRoute, maintenanceRoute, maintenanceNewRoute, maintenanceDetailRoute, damagesRoute, damageNewRoute, damageDetailRoute, transfersRoute, transferNewRoute, transferDetailRoute, transferReceiveRoute, settingsRoute, profileRoute, moduleRoute])])
+const routeTree = rootRoute.addChildren([loginRoute, appRoute.addChildren([indexRoute, branchesRoute, vehiclesRoute, vehicleNewRoute, vehicle360Route, vehicleEditRoute, customersRoute, customer360Route, corporateRoute, corporate360Route, reservationsRoute, reservationNewRoute, reservation360Route, reservationEditRoute, rentalsRoute, rentalNewRoute, rental360Route, rentalEditRoute, rentalHandoverRoute, rentalReturnRoute, pricingRoute, priceListNewRoute, priceListRoute, financeRoute, maintenanceRoute, maintenanceNewRoute, maintenanceDetailRoute, damagesRoute, damageNewRoute, damageDetailRoute, transfersRoute, transferNewRoute, transferDetailRoute, transferReceiveRoute, settingsRoute, readinessRoute, profileRoute, moduleRoute])])
 
 export function createAppRouter(queryClient: QueryClient) {
   return createRouter({ routeTree, context: { queryClient }, defaultPreload: 'intent', scrollRestoration: true })

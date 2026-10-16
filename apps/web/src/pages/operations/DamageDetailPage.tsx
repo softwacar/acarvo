@@ -22,7 +22,7 @@ import { formatDateTime } from '@/lib/vehicle-labels'
 import { can, useSession } from '@/session'
 import { btnPrimary, btnSecondary, DetailHeader, errorText, EventsList, Facts, HoldList, newRequestId, Notice, PhotoGrid, Section, StepDialog } from './OpsParts'
 
-type Step = 'review' | 'repair' | 'block' | 'unblock' | 'edit'
+type Step = 'review' | 'repair' | 'block' | 'unblock' | 'edit' | 'approve' | 'reject' | 'cancel'
 
 function StepForm({ d, step, onClose, onDone }: { d: DamageDetail; step: Step; onClose: () => void; onDone: (next: DamageDetail) => void }) {
   const [requestId] = useState(newRequestId)
@@ -50,9 +50,43 @@ function StepForm({ d, step, onClose, onDone }: { d: DamageDetail; step: Step; o
         </Field>
       </StepDialog>
     )
+  const pending = d.releaseRequests.find((r) => r.status === 'requested')
+  if ((step === 'approve' || step === 'reject' || step === 'cancel') && pending) {
+    const rbase = { version: pending.version, requestId }
+    if (step === 'approve')
+      return (
+        <StepDialog
+          title="Engel kaldırmayı onayla"
+          description="Onaylarsanız engel şimdi kalkar ve kullanılabilirlik değişir. Araçta bakım, transfer veya başka kayıt varsa araç yine onlar nedeniyle tutulur. Kendi talebinizi onaylayamazsınız."
+          confirm="Onayla ve engeli kaldır"
+          onClose={onClose}
+          onSubmit={() => run(() => damagesApi.release(pending.id, 'approve', { ...rbase, note: text || undefined }), 'Engel ikinci onayla kaldırıldı.')}
+          summary={[['Talep eden', pending.requestedByName ?? '—'], ['Gerekçe', pending.reason], ['Yeni durum', DAMAGE_USABILITY_LABELS[pending.usability]]]}
+        >
+          <Field id="rl-note" label="Not (isteğe bağlı)">
+            <Textarea id="rl-note" rows={2} value={text} maxLength={300} onChange={(e) => setText(e.target.value)} />
+          </Field>
+        </StepDialog>
+      )
+    if (step === 'reject')
+      return (
+        <StepDialog title="Talebi reddet" description="Engel yerinde kalır; talep gerekçesiyle geçmişe yazılır." confirm="Reddet" danger onClose={onClose} onSubmit={() => run(() => damagesApi.release(pending.id, 'reject', { ...rbase, note: text }), 'Talep reddedildi.')}>
+          <Field id="rl-reject" label="Ret gerekçesi" required error={fields.note}>
+            <Textarea id="rl-reject" rows={3} value={text} maxLength={300} onChange={(e) => setText(e.target.value)} />
+          </Field>
+        </StepDialog>
+      )
+    return <StepDialog title="Talebi geri çek" description="Talebiniz geri çekilir; engel yerinde kalır." confirm="Geri çek" onClose={onClose} onSubmit={() => run(() => damagesApi.release(pending.id, 'cancel', rbase), 'Talep geri çekildi.')} />
+  }
   if (step === 'unblock')
     return (
-      <StepDialog title="Hasar engelini kaldır" description="Engel kaldırılır ve geçmişte kalır. Araçta bakım veya transfer varsa onlar yine aracı tutar." confirm="Engeli kaldır" onClose={onClose} onSubmit={() => run(() => damagesApi.step(d.id, 'unblock', { ...base, reason: text, usability }), 'Engel kaldırıldı.')}>
+      <StepDialog
+        title="Engel kaldırma talebi"
+        description="Engel bu adımla kalkmaz: farklı bir yetkili talebi inceleyip onaylamalı (dört göz). Araçta bakım veya transfer varsa onlar yine aracı tutar."
+        confirm="Talebi gönder"
+        onClose={onClose}
+        onSubmit={() => run(() => damagesApi.step(d.id, 'unblock-request', { ...base, reason: text, usability }), 'Engel kaldırma talebi ikinci onaya gönderildi.')}
+      >
         <Field id="dm-usability" label="Aracın yeni durumu" required>
           <Select id="dm-usability" value={usability} onChange={(e) => setUsability(e.target.value as 'usable' | 'restricted')}>
             <option value="usable">{DAMAGE_USABILITY_LABELS.usable}</option>
@@ -167,7 +201,8 @@ export function DamageDetailPage() {
   const report = can(session, 'damage.report')
   const review = can(session, 'damage.review')
   const actions: ReactNode[] = []
-  if (open && d.blocked && can(session, 'damage.unblock')) actions.push(<button key="u" type="button" className={btnPrimary} onClick={() => setStep('unblock')}>Engeli kaldır</button>)
+  const pending = d.releaseRequests.find((r) => r.status === 'requested')
+  if (open && d.blocked && !pending && can(session, 'damage.unblock')) actions.push(<button key="u" type="button" className={btnPrimary} onClick={() => setStep('unblock')}>Engel kaldırma talebi</button>)
   if (open && !d.blocked && report) actions.push(<button key="b" type="button" className={btnSecondary} onClick={() => setStep('block')}>Kullanılamaz işaretle</button>)
   if (open && review) actions.push(<button key="r" type="button" className={btnSecondary} onClick={() => setStep('review')}>İnceleme durumu</button>)
   if (open && review) actions.push(<button key="p" type="button" className={btnSecondary} onClick={() => setStep('repair')}>Onarım durumu</button>)
@@ -188,6 +223,35 @@ export function DamageDetailPage() {
       />
       <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_340px]">
         <div className="min-w-0 space-y-5">
+          {pending && (
+            <Notice tone="blue">
+              <p className="font-medium">Engel kaldırma talebi ikinci onay bekliyor.</p>
+              <p className="mt-1">
+                {pending.requestedByName ?? '—'} · {formatDateTime(pending.requestedAt)} · Gerekçe: {pending.reason} · Sonra: {DAMAGE_USABILITY_LABELS[pending.usability]}
+              </p>
+              {can(session, 'damage.unblock') && (
+                <div className="mt-2.5 flex flex-wrap gap-2">
+                  {pending.requestedById !== session.user.id ? (
+                    <>
+                      <button type="button" className={btnPrimary} onClick={() => setStep('approve')}>
+                        Onayla
+                      </button>
+                      <button type="button" className={btnSecondary} onClick={() => setStep('reject')}>
+                        Reddet
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <span className="self-center text-[13px] text-ink-2">Kendi talebinizi onaylayamazsınız; farklı bir yetkili onaylamalı.</span>
+                      <button type="button" className={btnSecondary} onClick={() => setStep('cancel')}>
+                        Talebi geri çek
+                      </button>
+                    </>
+                  )}
+                </div>
+              )}
+            </Notice>
+          )}
           {d.blocked && (
             <Notice tone="alert" icon={Prohibit}>
               <p className="font-medium">Araç kullanılamaz olarak işaretli. Rezervasyon onayı ve teslim engelli.</p>
@@ -221,8 +285,30 @@ export function DamageDetailPage() {
             {d.closeReason && <p className="mt-2 text-[13px] text-ink-2">Kapatma gerekçesi: {d.closeReason}</p>}
           </Section>
           <Section title="Fotoğraflar">
-            <PhotoGrid photos={d.photos} canEdit={open && report} policy={d.uploadPolicy} label="Hasar" onUpload={async (f, p) => done(await damagesApi.uploadPhoto(d.id, f, p))} onRemove={async (id) => done(await damagesApi.removePhoto(d.id, id))} />
+            <PhotoGrid kind="damage" recordId={d.id} photos={d.photos} canEdit={open && report} policy={d.uploadPolicy} label="Hasar" onUpload={async (f, p) => done(await damagesApi.uploadPhoto(d.id, f, p))} onRemove={async (id) => done(await damagesApi.removePhoto(d.id, id))} />
           </Section>
+          {d.releaseRequests.length > 0 && (
+            <Section title="Engel kaldırma talepleri" description="Talep eden ile karar veren her zaman farklı kişidir.">
+              <ul className="divide-y divide-line-soft">
+                {d.releaseRequests.map((r) => (
+                  <li key={r.id} className="py-2.5 text-[13px]">
+                    <p className="font-medium text-ink">
+                      {{ requested: 'Onay bekliyor', approved: 'Onaylandı', rejected: 'Reddedildi', cancelled: 'Geri çekildi' }[r.status]} · {formatDateTime(r.requestedAt)}
+                    </p>
+                    <p className="text-ink-2">
+                      Talep: {r.requestedByName ?? '—'} — {r.reason}
+                    </p>
+                    {r.decidedAt && (
+                      <p className="text-ink-2">
+                        Karar: {r.decidedByName ?? '—'} · {formatDateTime(r.decidedAt)}
+                        {r.decisionNote ? ` — ${r.decisionNote}` : ''}
+                      </p>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </Section>
+          )}
           <Section title="Engel geçmişi" description="Her engel dönemi, kimin neden koyduğu ve kaldırdığıyla saklanır.">
             {d.blocks.length ? (
               <ul className="divide-y divide-line-soft">

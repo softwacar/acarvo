@@ -33,6 +33,8 @@ export function TransferFormPage() {
   const [purpose, setPurpose] = useState<TransferPurpose>(search.hasar ? 'repair' : 'operational')
   const [damageFileId, setDamageFileId] = useState(search.hasar ?? '')
   const [method, setMethod] = useState<TransportMethod | ''>('')
+  const [carrier, setCarrier] = useState('')
+  const [reference, setReference] = useState('')
   const canRepair = can(session, 'transfers.repair')
   const ops = useQuery({ queryKey: ['vehicle-ops', session.company?.id, vehicle?.id], queryFn: () => vehicleOpsApi.get(vehicle!.id), enabled: !!vehicle && purpose === 'repair', retry: false })
   const openDamages = (ops.data?.damages ?? []).filter((d) => d.reviewStatus !== 'closed')
@@ -81,12 +83,14 @@ export function TransferFormPage() {
           if (reason.trim().length < 3) f.reason = 'Transferin nedenini yazın'
           if (purpose === 'repair' && !damageFileId) f.damageFileId = 'Taşımanın bağlı olduğu hasar dosyasını seçin'
           if (purpose === 'repair' && !method) f.transportMethod = 'Taşıma yöntemini seçin'
+          if (purpose === 'repair' && carrier.trim().length < 2) f.carrierName = 'Taşıyıcı firma veya çekici adını girin'
+          if (purpose === 'repair' && reference.trim().length < 2) f.transportReference = 'Taşıyıcının sevk veya iş emri referansını girin'
           setFields(f)
           if (Object.keys(f).length) return
           setPending(true)
           setError(null)
           try {
-            const t = await transfersApi.create({ requestId, vehicleId: vehicle!.id, fromBranchId: fromId, toBranchId: toId, reason, plannedDepartureLocal: dep, plannedDepartureChoice: depChoice, plannedArrivalLocal: arr, plannedArrivalChoice: arrChoice, driverNote: driver || undefined, purpose, damageFileId: purpose === 'repair' ? damageFileId : undefined, transportMethod: purpose === 'repair' ? method : undefined })
+            const t = await transfersApi.create({ requestId, vehicleId: vehicle!.id, fromBranchId: fromId, toBranchId: toId, reason, plannedDepartureLocal: dep, plannedDepartureChoice: depChoice, plannedArrivalLocal: arr, plannedArrivalChoice: arrChoice, driverNote: driver || undefined, purpose, damageFileId: purpose === 'repair' ? damageFileId : undefined, transportMethod: purpose === 'repair' ? method : undefined, carrierName: purpose === 'repair' ? carrier.trim() : undefined, transportReference: purpose === 'repair' ? reference.trim() : undefined })
             void qc.invalidateQueries({ queryKey: ['transfers'] })
             void qc.invalidateQueries({ queryKey: ['vehicle-ops'] })
             toast(`${t.transferNo} talebi oluşturuldu.`)
@@ -150,6 +154,15 @@ export function TransferFormPage() {
                   ))}
                 </Select>
               </Field>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Field id="t-carrier" label="Taşıyıcı firma / çekici" required error={fields.carrierName} hint="Aracı taşıyacak firma veya kişinin adı.">
+                  <Input {...describe('t-carrier', fields.carrierName)} value={carrier} maxLength={120} onChange={(e) => setCarrier(e.target.value)} />
+                </Field>
+                <Field id="t-ref" label="Sevk / iş emri referansı" required error={fields.transportReference} hint="Taşıyıcının verdiği numara; ACARVO bunu taşıyıcıyla doğrulamaz.">
+                  <Input {...describe('t-ref', fields.transportReference)} value={reference} maxLength={60} onChange={(e) => setReference(e.target.value)} />
+                </Field>
+              </div>
+              <p className="text-[12.5px] text-ink-2">Çekici veya sevk belgesi fotoğrafları, transfer kaydedildikten sonra detay ekranından eklenebilir.</p>
             </div>
           )}
           {purpose === 'operational' && blocked && <p className="mt-3 text-[13px] text-alert">Bu araç kullanılamaz olarak işaretli; normal transfer onaylanamaz.</p>}

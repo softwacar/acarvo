@@ -60,11 +60,16 @@ export async function dashboard(tx: Tx, access: CompanyAccess, branchId: string 
     transfers: p.has('transfers.read'),
     finance: p.has('finance.reports.read'),
   }
-  const branches = ((await tx.execute(sql`select id, code, name from branches where status = 'active' and ${inB(sql`id`)} order by name`)).rows as Row[]).map((b) => ({
+  // Branches the user may choose from (their whole scope); the figures below use only the chosen one (B).
+  const scopeB = access.allBranches ? null : access.branchIds
+  const allowed = ((await tx.execute(sql`select id, code, name from branches where status = 'active' and ${scopeB === null ? sql`true` : scopeB.length ? sql`id in ${scopeB}` : sql`false`} order by name`)).rows as Row[]).map((b) => ({
     id: b.id as string,
     code: b.code as string,
     name: b.name as string,
   }))
+  // A branch id that is not an active branch of this company (row level security hides other companies) is refused.
+  if (branchId && !allowed.some((b) => b.id === branchId)) throw new AppError(403, 'BRANCH_FORBIDDEN', 'Bu şubenin verilerini görme yetkiniz yok.')
+  const branches = B === null ? allowed : allowed.filter((b) => B.includes(b.id))
   const counts: DashboardResponse['counts'] = {
     pickupsToday: null,
     returnsToday: null,
@@ -317,7 +322,7 @@ export async function dashboard(tx: Tx, access: CompanyAccess, branchId: string 
     generatedAt: new Date().toISOString(),
     timeZone: tz,
     today,
-    scope: { allBranches: B === null, branchId: branchId ?? null, branches },
+    scope: { allBranches: access.allBranches, branchId: branchId ?? null, branches: allowed },
     sections,
     fleet,
     counts,

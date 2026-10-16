@@ -1,3 +1,4 @@
+import { EvidenceGate } from '@/components/EvidenceGate'
 import {
   CHECKLIST_ITEMS,
   EXTENSION_CHANNELS,
@@ -145,7 +146,7 @@ function FuelGauge({ level }: { level: RentalInspection['fuel'] }) {
 }
 
 /** Read view of one final (or open) inspection: facts, checklist, marks and photos. */
-function InspectionView({ i, reference, referenceLabel, title, zone }: { i: RentalInspection; reference?: RentalInspection['marks']; referenceLabel?: string; title: string; zone?: string }) {
+function InspectionView({ i, rentalId, reference, referenceLabel, title, zone }: { i: RentalInspection; rentalId: string; reference?: RentalInspection['marks']; referenceLabel?: string; title: string; zone?: string }) {
   return (
     <div className="grid gap-5 lg:grid-cols-2">
       <Panel title={title} action={<span className={cn('text-[12.5px] font-medium', i.state === 'final' ? 'text-ok' : 'text-hold')}>{i.state === 'final' ? `Kesinleşti · ${formatDateTime(i.finalizedAt!)}` : 'Tamamlanmadı (taslak)'}</span>}>
@@ -181,6 +182,7 @@ function InspectionView({ i, reference, referenceLabel, title, zone }: { i: Rent
         </Panel>
         <Panel title={`Fotoğraflar (${i.photos.length})`}>
           {i.photos.length ? (
+            <EvidenceGate kind="rental" id={rentalId} count={i.photos.length}>
             <ul className="grid grid-cols-2 gap-2 sm:grid-cols-3">
               {i.photos.map((p, n) => (
                 <li key={p.id} className="overflow-hidden rounded-lg border border-line">
@@ -193,6 +195,7 @@ function InspectionView({ i, reference, referenceLabel, title, zone }: { i: Rent
                 </li>
               ))}
             </ul>
+            </EvidenceGate>
           ) : (
             <p className="text-ink-2">Fotoğraf yok.</p>
           )}
@@ -902,7 +905,7 @@ export function Rental360Page() {
                     <Note>Bunlar personel beyanıdır; imzalı sözleşmenin, ödemenin, kesin fiyatın veya hukuki uygunluğun kanıtı değildir.</Note>
                   </Panel>
                 )}
-                <InspectionView i={r.handover} reference={r.previousReturnMarks} referenceLabel="Önceki iadedeki işaret" title="Teslim kaydı" zone={zone} />
+                <InspectionView i={r.handover} rentalId={r.id} reference={r.previousReturnMarks} referenceLabel="Önceki iadedeki işaret" title="Teslim kaydı" zone={zone} />
               </div>
             ) : (
               <StatePanel icon={Key} title="Teslim kaydı yok">
@@ -917,7 +920,7 @@ export function Rental360Page() {
           {tab === 'iade' &&
             (r.return ? (
               <div className="space-y-5">
-                <InspectionView i={r.return} reference={r.handover?.marks} referenceLabel="Teslimdeki işaret" title="İade kaydı" zone={zone} />
+                <InspectionView i={r.return} rentalId={r.id} reference={r.handover?.marks} referenceLabel="Teslimdeki işaret" title="İade kaydı" zone={zone} />
                 <Panel title="Teslim / iade karşılaştırması">
                   <Comparison r={r} />
                 </Panel>
@@ -951,6 +954,7 @@ export function Rental360Page() {
               )}
               <RentalDamageFiles rentalId={r.id} />
               <Panel title="Fotoğraflar">
+                <EvidenceGate kind="rental" id={r.id} count={(r.handover?.photos.length ?? 0) + (r.return?.photos.length ?? 0)}>
                 <div className="grid gap-5 lg:grid-cols-2">
                   {(['handover', 'return'] as const).map((k) => {
                     const i = k === 'handover' ? r.handover : r.return
@@ -975,6 +979,7 @@ export function Rental360Page() {
                     )
                   })}
                 </div>
+                </EvidenceGate>
               </Panel>
             </div>
           )}

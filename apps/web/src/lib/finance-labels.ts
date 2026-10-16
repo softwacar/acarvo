@@ -79,6 +79,10 @@ export const CLOSE_BLOCKER_LABEL: Record<string, string> = {
 
 export const EVENT_LABEL: Record<string, string> = {
   opened: 'Finans dosyası açıldı',
+  responsible_correction_requested: 'Ödeme sorumlusu düzeltme talebi',
+  responsible_corrected: 'Ödeme sorumlusu düzeltildi (ikinci onay)',
+  responsible_correction_rejected: 'Ödeme sorumlusu düzeltmesi reddedildi',
+  responsible_correction_cancelled: 'Ödeme sorumlusu düzeltme talebi geri çekildi',
   charge_prepared: 'İç hesap kalemi hazırlandı',
   charge_approve: 'Kalem onaylandı (kayıtlı)',
   charge_reject: 'Kalem reddedildi',

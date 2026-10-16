@@ -12,9 +12,9 @@ import { TRANSFER_PURPOSE_LABELS, TRANSFER_STATUS_HINT, TRANSFER_STATUS_LABELS, 
 import { formatMoment } from '@/lib/reservation-labels'
 import { FUEL_LEVEL_LABELS } from '@/lib/rental-labels'
 import { formatDateTime, formatKm, LOCATION_LABELS } from '@/lib/vehicle-labels'
-import { useSession } from '@/session'
+import { can, useSession } from '@/session'
 import { TimeField } from '../reservations/ReservationFormPage'
-import { BranchCode, btnGhost, btnPrimary, btnSecondary, DetailHeader, ErrorLine, errorText, EventsList, Facts, HoldList, newRequestId, Notice, Section, StepDialog } from './OpsParts'
+import { BranchCode, btnGhost, btnPrimary, btnSecondary, DetailHeader, ErrorLine, errorText, EventsList, Facts, HoldList, newRequestId, Notice, PhotoGrid, Section, StepDialog } from './OpsParts'
 
 const useTransfer = (id: string) => {
   const session = useSession()
@@ -161,6 +161,7 @@ function NotFound({ error, retry }: { error: Error; retry: () => void }) {
 
 export function TransferDetailPage() {
   const qc = useQueryClient()
+  const session = useSession()
   const { transferId } = useParams({ from: '/app/araclar/transferler/$transferId' })
   const { key, q } = useTransfer(transferId)
   const [step, setStep] = useState<'approve' | 'cancel' | 'depart' | null>(null)
@@ -246,7 +247,14 @@ export function TransferDetailPage() {
                 ['Planlanan çıkış', `${formatMoment(t.plannedDeparture)} (${t.fromBranch.code})`],
                 ['Planlanan varış', `${formatMoment(t.plannedArrival)} (${t.toBranch.code})`],
                 ['Tür', TRANSFER_PURPOSE_LABELS[t.purpose]],
-                ...(t.purpose === 'repair' ? ([['Taşıma yöntemi', t.transportMethod ? TRANSPORT_METHOD_LABELS[t.transportMethod] : null], ['Taşıma beyanı', t.transportAckAt ? formatDateTime(t.transportAckAt) : null]] as [string, ReactNode][]) : []),
+                ...(t.purpose === 'repair'
+                  ? ([
+                      ['Taşıma yöntemi', t.transportMethod ? TRANSPORT_METHOD_LABELS[t.transportMethod] : null],
+                      ['Taşıyıcı', t.carrierName],
+                      ['Sevk / iş emri referansı', t.transportReference ? `${t.transportReference} (beyan, doğrulanmadı)` : null],
+                      ['Taşıma beyanı', t.transportAckAt ? formatDateTime(t.transportAckAt) : null],
+                    ] as [string, ReactNode][])
+                  : []),
                 ['Görevli / sürücü notu', t.driverNote],
                 ['Talep eden', `${t.requestedByName ?? '—'} · ${formatDateTime(t.createdAt)}`],
                 ['Onay', t.approvedAt ? `${formatDateTime(t.approvedAt)}${t.approvedByName ? ` · ${t.approvedByName}` : ''}` : null],
@@ -254,6 +262,20 @@ export function TransferDetailPage() {
             />
             {t.cancelReason && <p className="mt-3 text-[13px] text-ink-2">İptal gerekçesi: {t.cancelReason}</p>}
           </Section>
+          {t.purpose === 'repair' && (
+            <Section title="Taşıma kanıtı" description="Çekici, taşıyıcı veya sevk belgesi fotoğrafları. İsteğe bağlıdır; taşıyıcı tarafından doğrulanmış sayılmaz.">
+              <PhotoGrid
+                kind="transfer"
+                recordId={t.id}
+                photos={t.photos}
+                canEdit={can(session, 'transfers.repair') && ['requested', 'approved', 'in_transit'].includes(t.status)}
+                policy={t.uploadPolicy}
+                label="Taşıma kanıtı"
+                onUpload={async (f, p) => done(await transfersApi.uploadPhoto(t.id, f, p))}
+                onRemove={async (id) => done(await transfersApi.removePhoto(t.id, id))}
+              />
+            </Section>
+          )}
           <Section title="Çıkış ve varış">
             <Facts
               rows={[

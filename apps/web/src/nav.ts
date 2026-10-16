@@ -58,7 +58,7 @@ export const NAV: NavGroup[] = [
   {
     label: 'Genel',
     items: [
-      { slug: '', label: 'Ana Ekran', icon: House },
+      { slug: '', label: 'Ana Ekran', icon: House, built: true },
       { slug: 'komuta-merkezi', label: 'Komuta Merkezi', icon: Siren },
       { slug: 'filo-asistani', label: 'Filo Asistanı', icon: Lightbulb },
     ],

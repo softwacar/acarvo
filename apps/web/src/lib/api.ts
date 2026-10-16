@@ -1,4 +1,4 @@
-import type { DamageCandidate, DamageDetail, DamageListResponse, MaintenanceDetail, MaintenanceListResponse, ServiceDue, TransferDetail, TransferListResponse, VehicleOperations, FinanceDepositListItem, FinanceFileListItem, FinanceListPage, FinancePaymentListItem, FinancePendingResponse, FinanceRefundListItem, FinanceSummaryRow, PartyFinanceView, RentalFinanceView, ContractDetail, ContractTemplate, PriceListDetail, PriceListSummary, PriceQuote, PricingResult, ApiError,AvailabilityResponse, RentalActivityItem, RentalSettings, RentalDetail, RentalListItem, RentalListResponse, ReservationActivityItem, ReservationBranch, ReservationDetail, ReservationListItem, ReservationListResponse, TimelineResponse, CorporateActivityItem, CorporateDetail, CorporateDuplicateMatch, CorporateListResponse, CorporatePeopleResponse, CustomerCorporateLink, CustomerActivityItem, CustomerDocument, CustomerDocumentsResponse, CustomerDocumentStatus, RequirementItem, RequirementPolicy, CustomerDetail, CustomerDuplicateResponse, CustomerListResponse, HistoryWriteResult, SessionInfo, VehicleActivityItem, VehicleDocumentDetail, VehicleDocumentsResponse, VehiclePhoto, VehiclePhotoList, VehicleClassSummary, VehicleDetail, VehicleHistory, VehicleListResponse } from '@acarvo/shared'
+import type { DashboardResponse, ReadinessResponse, DamageCandidate, DamageDetail, DamageListResponse, MaintenanceDetail, MaintenanceListResponse, ServiceDue, TransferDetail, TransferListResponse, VehicleOperations, FinanceDepositListItem, FinanceFileListItem, FinanceListPage, FinancePaymentListItem, FinancePendingResponse, FinanceRefundListItem, FinanceSummaryRow, PartyFinanceView, RentalFinanceView, ContractDetail, ContractTemplate, PriceListDetail, PriceListSummary, PriceQuote, PricingResult, ApiError,AvailabilityResponse, RentalActivityItem, RentalSettings, RentalDetail, RentalListItem, RentalListResponse, ReservationActivityItem, ReservationBranch, ReservationDetail, ReservationListItem, ReservationListResponse, TimelineResponse, CorporateActivityItem, CorporateDetail, CorporateDuplicateMatch, CorporateListResponse, CorporatePeopleResponse, CustomerCorporateLink, CustomerActivityItem, CustomerDocument, CustomerDocumentsResponse, CustomerDocumentStatus, RequirementItem, RequirementPolicy, CustomerDetail, CustomerDuplicateResponse, CustomerListResponse, HistoryWriteResult, SessionInfo, VehicleActivityItem, VehicleDocumentDetail, VehicleDocumentsResponse, VehiclePhoto, VehiclePhotoList, VehicleClassSummary, VehicleDetail, VehicleHistory, VehicleListResponse } from '@acarvo/shared'
 
 export class ApiRequestError extends Error {
   constructor(
@@ -397,6 +397,8 @@ export const financeApi = {
   open: (rentalId: string, body: unknown) => api<RentalFinanceView>(`/rentals/${rentalId}/finance/open`, { method: 'POST', body }),
   close: (rentalId: string, body: unknown) => api<RentalFinanceView>(`/rentals/${rentalId}/finance/close`, { method: 'POST', body }),
   reopen: (rentalId: string, body: unknown) => api<RentalFinanceView>(`/rentals/${rentalId}/finance/reopen`, { method: 'POST', body }),
+  requestCorrection: (rentalId: string, body: unknown) => api<RentalFinanceView>(`/rentals/${rentalId}/finance/responsible-corrections`, { method: 'POST', body }),
+  correctionAction: (id: string, action: 'approve' | 'reject' | 'cancel', body: unknown) => api<RentalFinanceView>(`/finance/responsible-corrections/${id}/${action}`, { method: 'POST', body }),
   createCharge: (rentalId: string, body: unknown) => api<RentalFinanceView>(`/rentals/${rentalId}/finance/charges`, { method: 'POST', body }),
   chargeAction: (id: string, action: string, body: unknown) => api<RentalFinanceView>(`/finance/charges/${id}/${action}`, { method: 'POST', body }),
   createPayment: (rentalId: string, body: unknown) => api<RentalFinanceView>(`/rentals/${rentalId}/finance/payments`, { method: 'POST', body }),
@@ -442,7 +444,8 @@ export const damagesApi = {
   candidates: (rentalId: string) => api<{ items: DamageCandidate[] }>(`/damages/candidates?rentalId=${rentalId}`),
   create: (body: unknown) => api<DamageDetail>('/damages', { method: 'POST', body }),
   update: (id: string, body: unknown) => api<DamageDetail>(`/damages/${id}`, { method: 'PUT', body }),
-  step: (id: string, step: 'review' | 'repair' | 'block' | 'unblock', body: unknown) => api<DamageDetail>(`/damages/${id}/${step}`, { method: 'POST', body }),
+  step: (id: string, step: 'review' | 'repair' | 'block' | 'unblock-request', body: unknown) => api<DamageDetail>(`/damages/${id}/${step}`, { method: 'POST', body }),
+  release: (requestId: string, decision: 'approve' | 'reject' | 'cancel', body: unknown) => api<DamageDetail>(`/damages/release-requests/${requestId}/${decision}`, { method: 'POST', body }),
   uploadPhoto: (id: string, file: File, onProgress?: (f: number) => void) => uploadFile<DamageDetail>(`/damages/${id}/photos`, file, onProgress),
   removePhoto: (id: string, photoId: string) => api<DamageDetail>(`/damages/${id}/photos/${photoId}`, { method: 'DELETE' }),
 }
@@ -453,8 +456,21 @@ export const transfersApi = {
   create: (body: unknown) => api<TransferDetail>('/transfers', { method: 'POST', body }),
   update: (id: string, body: unknown) => api<TransferDetail>(`/transfers/${id}`, { method: 'PUT', body }),
   step: (id: string, step: 'approve' | 'depart' | 'receive' | 'cancel', body: unknown) => api<TransferDetail>(`/transfers/${id}/${step}`, { method: 'POST', body }),
+  uploadPhoto: (id: string, file: File, onProgress?: (f: number) => void) => uploadFile<TransferDetail>(`/transfers/${id}/photos`, file, onProgress),
+  removePhoto: (id: string, photoId: string) => api<TransferDetail>(`/transfers/${id}/photos/${photoId}`, { method: 'DELETE' }),
 }
 export const vehicleOpsApi = {
   get: (vehicleId: string) => api<VehicleOperations>(`/vehicles/${vehicleId}/operations`),
   saveSchedule: (vehicleId: string, body: unknown) => api<ServiceDue>(`/vehicles/${vehicleId}/maintenance-schedule`, { method: 'PUT', body }),
+}
+
+// Ana Kontrol Paneli, Operasyonel Hazırlık, evidence photo access (docs/OPERASYONEL_HAZIRLIK_DASHBOARD_PLANI.md).
+export const dashboardApi = {
+  get: (branchId?: string) => api<DashboardResponse>(`/dashboard${branchId ? `?branchId=${branchId}` : ''}`),
+  readiness: () => api<ReadinessResponse>('/readiness'),
+}
+export type PhotoRecordKind = 'rental' | 'maintenance' | 'damage' | 'transfer'
+export const photoAccessApi = {
+  /** Asks ACARVO for access to the evidence photos of one record (recorded once per grant; the GETs record nothing). */
+  grant: (kind: PhotoRecordKind, id: string) => api<{ expiresAt: string; photos: number; reused: boolean }>('/photo-access', { method: 'POST', body: { kind, id } }),
 }

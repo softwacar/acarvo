@@ -10,6 +10,7 @@ import {
   PAYMENT_METHODS,
   type PaymentMethod,
   type RentalFinanceView,
+  type ResponsibleCorrection,
 } from '@acarvo/shared'
 import { ArrowCounterClockwise, Calculator, CheckCircle, ClockCounterClockwise, FolderOpen, HandCoins, Info, LockSimple, Plus, ShieldCheck, Vault, WarningCircle } from '@phosphor-icons/react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
@@ -32,6 +33,7 @@ import {
   PAYMENT_TONE,
   REFUND_STATUS_LABEL,
   REFUND_TONE,
+  type Tone,
 } from '@/lib/finance-labels'
 import { formatLate, FUEL_LEVEL_LABELS } from '@/lib/rental-labels'
 import { cn } from '@/lib/utils'
@@ -52,6 +54,8 @@ type Dialog =
   | { kind: 'refund'; action: 'approve' | 'reject' | 'cancel' | 'complete' | 'reverse'; r: FinanceRefund; d: FinanceDeposit }
   | { kind: 'close' }
   | { kind: 'reopen' }
+  | { kind: 'correction-new' }
+  | { kind: 'correction'; action: 'approve' | 'reject' | 'cancel'; c: ResponsibleCorrection }
 
 const rid = () => crypto.randomUUID()
 
@@ -333,6 +337,8 @@ export function RentalFinancePanel({ rentalId }: { rentalId: string }) {
             )}
           </Section>
 
+          <ResponsibleSection v={v} userId={session.user.id} onAction={setDialog} />
+
           <Section title="Finans geçmişi" description="Her adım: kim, ne zaman, önceki ve yeni durum. Silinmez.">
             {!v.events.length ? (
               <p className="text-[13px] text-ink-2">Kayıt yok.</p>
@@ -364,6 +370,94 @@ export function RentalFinancePanel({ rentalId }: { rentalId: string }) {
 }
 
 const fmt = (minor: number, currency: string) => formatMoney(minor, currency)
+
+const CORRECTION_STATUS: Record<ResponsibleCorrection['status'], [string, Tone]> = {
+  requested: ['İkinci onay bekliyor', 'blue'],
+  applied: ['Uygulandı', 'ok'],
+  rejected: ['Reddedildi', 'alert'],
+  cancelled: ['Geri çekildi', 'muted'],
+}
+const CORRECTION_BLOCKER: Record<string, string> = {
+  closed: 'Dosya kapalı. Düzeltme için önce gerekçeyle yeniden açılmalı.',
+  has_movement: 'Dosyada iç hesap kalemi, tahsilat veya depozito kaydı var. Ödeme sorumlusu yerinde değiştirilmez; kayıtlar değişmez kalır. Yetkili inceleme gerekir (ters kayıtlar ve yeni dosya kararı insan kararıdır).',
+  no_alternative: 'Kiralamada seçilebilecek başka bir ödeme sorumlusu yok.',
+  pending: 'Bekleyen bir düzeltme talebi var.',
+}
+const partyLabel = (p: { type: 'customer' | 'corporate'; name: string }) => `${p.name} (${p.type === 'corporate' ? 'kurumsal hesap' : 'müşteri'})`
+
+/** FN5: the responsible party is corrected only on a file with no financial movement, by two different people. */
+function ResponsibleSection({ v, userId, onAction }: { v: RentalFinanceView; userId: string; onAction: (x: Dialog) => void }) {
+  const pending = v.responsibleCorrections.find((c) => c.status === 'requested')
+  const blocker = v.correction.blocker
+  if (!v.correction.possible && !v.responsibleCorrections.length && blocker !== 'has_movement') return null
+  return (
+    <Section
+      title="Ödeme sorumlusu düzeltmesi"
+      description="Yanlış seçilen ödeme sorumlusu, dosyada finansal hareket yokken ikinci bir finans yetkilisinin onayıyla düzeltilir. Eski değer geçmişte kalır."
+      action={
+        v.can.requestCorrection && (
+          <button type="button" className={btnSecondary} onClick={() => onAction({ kind: 'correction-new' })}>
+            Düzeltme talebi…
+          </button>
+        )
+      }
+    >
+      {blocker && blocker !== 'pending' && blocker !== 'no_file' && (
+        <p className={cn('flex items-start gap-2 text-[13px]', blocker === 'has_movement' ? 'text-hold' : 'text-ink-2')}>
+          <WarningCircle size={16} className="mt-0.5 shrink-0" />
+          <span>
+            {blocker === 'has_movement' && <span className="font-medium">İnceleme gerekli. </span>}
+            {CORRECTION_BLOCKER[blocker]}
+          </span>
+        </p>
+      )}
+      {v.responsibleCorrections.length > 0 && (
+        <ul className="mt-2 divide-y divide-line-soft">
+          {v.responsibleCorrections.map((c) => (
+            <li key={c.id} className="py-3 text-[13px]">
+              <div className="flex flex-wrap items-center gap-2">
+                <Pill tone={CORRECTION_STATUS[c.status][1]}>{CORRECTION_STATUS[c.status][0]}</Pill>
+                <span className="text-ink">
+                  {partyLabel(c.from)} → <span className="font-medium">{partyLabel(c.to)}</span>
+                </span>
+              </div>
+              <p className="mt-1 text-ink-2">
+                Talep: {c.requestedByName ?? '—'} · {formatDateTime(c.requestedAt)} — {c.reason}
+              </p>
+              {c.decidedAt && (
+                <p className="text-ink-2">
+                  Karar: {c.decidedByName ?? '—'} · {formatDateTime(c.decidedAt)}
+                  {c.decisionNote ? ` — ${c.decisionNote}` : ''}
+                </p>
+              )}
+              {c === pending && v.can.decideCorrection && (
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {c.requestedById !== userId ? (
+                    <>
+                      <button type="button" className={btnSmall} onClick={() => onAction({ kind: 'correction', action: 'approve', c })}>
+                        Onayla
+                      </button>
+                      <button type="button" className={btnSmall} onClick={() => onAction({ kind: 'correction', action: 'reject', c })}>
+                        Reddet
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <span className="self-center text-ink-2">Kendi talebinizi onaylayamazsınız.</span>
+                      <button type="button" className={btnSmall} onClick={() => onAction({ kind: 'correction', action: 'cancel', c })}>
+                        Geri çek
+                      </button>
+                    </>
+                  )}
+                </div>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+    </Section>
+  )
+}
 
 function Figure({ label, hint, children, tone }: { label: string; hint: string; children: ReactNode; tone?: 'ok' | 'hold' | 'alert' }) {
   return (
@@ -967,6 +1061,60 @@ function FinanceDialogs({ dialog, v, rentalId, run, onClose }: { dialog: Dialog;
           onSubmit={() => (v.closeBlockers.length ? 'Önce engelleri giderin.' : run(() => financeApi.close(rentalId, versioned(f!.version)), 'Finans dosyası kapatıldı.'))}
         />
       )
+    case 'correction-new': {
+      const options = [
+        ...(!(f?.responsible.type === 'customer' && f.responsible.id === v.rental.customer.id) ? [['customer', `${v.rental.customer.name} (kiralamanın müşterisi)`]] : []),
+        ...(v.rental.corporate && !(f?.responsible.type === 'corporate' && f.responsible.id === v.rental.corporate.id) ? [['corporate', `${v.rental.corporate.name} (kurumsal hesap)`]] : []),
+      ] as [string, string][]
+      return (
+        <FinanceDialog
+          title="Ödeme sorumlusu düzeltme talebi"
+          description="Talep tek başına bir şey değiştirmez: farklı bir finans yetkilisi onaylayınca uygulanır. Onay anında dosyada finansal hareket varsa uygulanmaz."
+          summary={[['Şu anki sorumlu', f ? partyLabel(f.responsible) : '—']]}
+          confirm="Talebi gönder"
+          onClose={onClose}
+          onSubmit={() => (responsible ? run(() => financeApi.requestCorrection(rentalId, { toType: responsible, reason: text, requestId: rid() }), 'Düzeltme talebi ikinci onaya gönderildi.') : 'Doğru ödeme sorumlusunu seçin.')}
+        >
+          <Field id="rc-to" label="Doğru ödeme sorumlusu" required>
+            <Select {...describe('rc-to')} value={responsible} onChange={(e) => setResponsible(e.target.value as 'customer' | 'corporate')}>
+              <option value="">Seçin</option>
+              {options.map(([k, label]) => (
+                <option key={k} value={k}>
+                  {label}
+                </option>
+              ))}
+            </Select>
+          </Field>
+          <Field id="rc-reason" label="Gerekçe" required>
+            <Textarea {...describe('rc-reason')} maxLength={300} value={text} onChange={(e) => setText(e.target.value)} />
+          </Field>
+        </FinanceDialog>
+      )
+    }
+    case 'correction': {
+      const { c, action } = dialog
+      const copy = {
+        approve: ['Düzeltmeyi onayla', 'Ödeme sorumlusu şimdi değişir; eski değer ve talep geçmişte kalır. Dosyada bu arada finansal hareket oluştuysa uygulanmaz.', 'Onayla ve uygula'],
+        reject: ['Düzeltmeyi reddet', 'Ödeme sorumlusu değişmez; talep gerekçesiyle geçmişe yazılır.', 'Reddet'],
+        cancel: ['Talebi geri çek', 'Talebiniz geri çekilir; ödeme sorumlusu değişmez.', 'Geri çek'],
+      }[action]
+      return (
+        <FinanceDialog
+          title={copy[0]}
+          description={copy[1]}
+          summary={[['Değişiklik', `${partyLabel(c.from)} → ${partyLabel(c.to)}`], ['Talep eden', c.requestedByName ?? '—'], ['Gerekçe', c.reason]]}
+          confirm={copy[2]}
+          onClose={onClose}
+          onSubmit={() => run(() => financeApi.correctionAction(c.id, action, { ...versioned(c.version), note: text || undefined }), action === 'approve' ? 'Ödeme sorumlusu düzeltildi.' : action === 'reject' ? 'Düzeltme talebi reddedildi.' : 'Talep geri çekildi.')}
+        >
+          {action !== 'cancel' && (
+            <Field id="rc-note" label={action === 'reject' ? 'Ret gerekçesi' : 'Not (isteğe bağlı)'} required={action === 'reject'}>
+              <Textarea {...describe('rc-note')} maxLength={300} value={text} onChange={(e) => setText(e.target.value)} />
+            </Field>
+          )}
+        </FinanceDialog>
+      )
+    }
     case 'reopen':
       return (
         <FinanceDialog title="Finans dosyasını yeniden aç" description="Sonradan gelen bir kayıt (ör. ceza) için dosya gerekçeyle yeniden açılır; önceki kapanış geçmişte kalır." confirm="Yeniden aç" onClose={onClose} onSubmit={() => run(() => financeApi.reopen(rentalId, { ...versioned(f!.version), reason: text }), 'Finans dosyası yeniden açıldı.')}>

@@ -275,6 +275,8 @@ export function MaintenanceDetailPage() {
           </Section>
           <Section title="Fotoğraflar" description="Servis raporu, parça veya iş fotoğrafları. Kayıt kapanınca değiştirilemez.">
             <PhotoGrid
+              kind="maintenance"
+              recordId={m.id}
               photos={m.photos}
               canEdit={open && manage}
               policy={m.uploadPolicy}

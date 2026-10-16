@@ -95,7 +95,15 @@ describe('dashboard', () => {
     expect(s.fleet!.total).toBe(sjjVehicles)
     expect(s.scope).toMatchObject({ allBranches: false, branches: [{ code: 'SJJ' }] })
     expect((await selma.get(`/api/dashboard?branchId=${ids.sac}`)).statusCode).toBe(403)
-    expect((await dash(adnan, ids.sjj)).fleet!.total).toBe(sjjVehicles)
+    const one1 = await dash(adnan, ids.sjj)
+    expect(one1.fleet!.total).toBe(sjjVehicles)
+    // The figures narrow to the chosen branch; the list to choose from stays the user's whole scope.
+    expect(one1.branches.map((b) => b.code)).toEqual(['SJJ'])
+    expect(one1.scope.branches.length).toBeGreaterThan(1)
+    // An all-branches owner asking for another company's branch is refused (not answered with empty figures).
+    const moc = (await one(`select id from branches where code = 'MOC'`, [], data.companies.neretva)).id as string
+    expect((await adnan.get(`/api/dashboard?branchId=${moc}`)).statusCode).toBe(403)
+    expect((await lejla.get(`/api/dashboard?branchId=${ids.sjj}`)).statusCode).toBe(403)
     const l = await dash(lejla)
     expect(l.fleet!.total).toBe(4)
     expect(l.scope.branches.map((b) => b.code)).toEqual(['MOC'])
@@ -159,7 +167,9 @@ describe('evidence photo access grants', () => {
   it('POST grants (company, permission, scope), records once; GET needs the grant and records nothing; logout and permission removal end access', async () => {
     const v = await vehicle('M87-J-529')
     const d = (await adnan.post('/api/damages', { requestId: uuid(), vehicleId: v, branchId: ids.sjj, view: 'left', description: 'Sol kapı çizik', damageType: 'scratch', severity: 'minor', usability: 'usable' })).json() as DamageDetail
-    const up = (await adnan.upload(`/api/damages/${d.id}/photos`, jpeg)).json() as DamageDetail
+    const upRes = await adnan.upload(`/api/damages/${d.id}/photos`, jpeg)
+    expect(upRes.statusCode, upRes.body).toBe(201)
+    const up = upRes.json() as DamageDetail
     const url = up.photos[0]!.url
     expect(url).not.toMatch(/token|key|sig|\.jpg|foto/i)
     expect((await selma.get(url)).json().error.code).toBe('PHOTO_ACCESS_REQUIRED')
