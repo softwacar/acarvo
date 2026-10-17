@@ -5,7 +5,7 @@
 | Dal | `operasyon-hazirlik-v1` |
 | Çalışma ağacı | `C:\Users\soena\Desktop\acarvo-oh1` |
 | Başlangıç | main `29b105d` (ana veritabanı 43 migration) |
-| Durum | Test ortamında tamamlandı. Main'e birleştirilmedi, ana veritabanına migration uygulanmadı, push yapılmadı. |
+| Durum | **Main'e entegre edildi** (fast-forward). Ana veritabanı 43 → 47, doğrulanmış yedek `backups/2026-10-17-00-24-03`. Push yapılmadı. Son kararlar ve entegrasyon: bölüm **S** (sonda). Bölüm 1–22 geliştirme raporudur; S bölümüyle çelişen yerde S geçerlidir. |
 | Plan | `docs/OPERASYONEL_HAZIRLIK_DASHBOARD_PLANI.md` |
 
 ---
@@ -136,7 +136,7 @@ Kanıt fotoğrafları (kiralama teslim/iade, bakım, hasar, transfer) belge eri�
 1. `POST /api/photo-access {kind, id}`:
    - CSRF ve Origin koruması (genel eklenti).
    - İlgili okuma yetkisi ve kaydın şirket/şube görünürlüğü denetlenir.
-   - Bu oturuma 10 dakikalık izin verilir.
+   - Bu oturuma 5 dakikalık izin verilir (son karar; ilk sürümde 10 dakikaydı).
    - Geçmişe **bir kez** `photo.access_granted` yazılır. Özet: kayıt no, fotoğraf sayısı, dakika.
    - Geçerli izin varsa aynısı döner (`reused`); ikinci kayıt yazılmaz.
 2. Fotoğraf GET'leri izni ister; izin yoksa 403 `PHOTO_ACCESS_REQUIRED`.
@@ -373,6 +373,255 @@ Her görüntüde yatay taşma kontrol edildi.
 1. **İkinci onaylayan kişi:** Drina'ya (ve gerekiyorsa Neretva'ya) `damage.unblock` ve finans dört göz yetkisi olan ikinci bir kişi (ör. Yönetici) atanacak mı? Atanmazsa hasar engeli kaldırılamaz.
 2. **FN5 (B) modeli:** hareketli dosyada "ters kayıt + yeni dosya" yaklaşımı onaylanıyor mu, yoksa hareketli dosyalar yalnız manuel incelemede mi kalsın?
 3. Ana Ekran finans bölümü için `finance.reports.read` yeterli mi (Yönetici ve Sahip görür)?
-4. Fotoğraf erişim izni süresi 10 dakika. Uygun mu?
+4. Fotoğraf erişim izni süresi: **karar verildi, 5 dakika** (bkz. S.7).
 5. Şube ülkeleri, vergi oranı, fiyat listesi, sözleşme şablonu ve hukuki onay: hazırlık ekranındaki "Eksik" ve "Doğrulanmadı" maddeleri yetkili kişilerce tamamlanmalı. Sistem bunları tahmin etmez veya açmaz.
 6. Main'e birleştirme ve ana veritabanı migration'ı için onay.
+
+
+---
+
+# S. Son ürün kararları, güvenlik denetimi ve main entegrasyonu (2026-10-17)
+
+Kapsam: kullanıcının "Dashboard + Operasyonel Hazırlık V1 — son ürün kararları, güvenlik ve main entegrasyonu" talimatı. Bütün kontroller başarılı olduğu için entegrasyon tamamlandı. Kritik güvenlik açığı, migration tutarsızlığı, başarısız yedek, veri kaybı riski ya da açıklanamayan veri değişikliği bulunmadı.
+
+## S.1 Ürün kararlarının uygulanma durumu
+
+| Karar | Durum |
+|---|---|
+| A) Hasar engeli: iki farklı uygun yetkili; talep eden onaylayamaz; finans dört göz gevşetilmez; ikinci yetkili yoksa işlem engelli ve Hazırlık'ta görünür; gerçek kullanıcı/yetki değiştirilmez | Uygulandı. Main'de Drina'da `damage.unblock`, `finance.payments.verify` ve `finance.close` yetkilisi **1 kişi**: bu adımlar engelli kalır ve Hazırlık ekranında "Eksik" görünür. Neretva'da 2 kişi var. Kullanıcı, rol veya yetki atanmadı. |
+| B) FN5: hareketsiz dosyada iki kişilik akış korunur; hareketli dosyada taşıma/ters kayıt/yeni dosya/değişiklik yok, "Yetkili incelemesi gerekli" | Uygulandı. Ek olarak, talep beklerken dosyada hareket oluşursa onay denemesi talebi gerekçesiyle **geçersiz (reddedildi)** olarak kapatır ve geçmişe yazar. |
+| C) Dashboard finansı yalnız `finance.reports.read` | Uygulandı. Yetkisiz kullanıcıda finans sorguları hiç çalışmaz, yanıtta `finance: null` döner (API testi ve tarayıcı testi). |
+| D) Fotoğraf izni 5 dakika; kullanıcı, oturum, şirket, kayıt ve amaca bağlı; GET'te güncel yetki; süre, yetki iptali ve oturum kapanışında geçersiz; GET denetim kaydı yazmaz; kayıt anlamı "Fotoğraf erişim izni verildi" | Uygulandı (S.7). |
+| E) Doğrulanmış yedekten sonra main entegrasyonu | Uygulandı (S.13–S.18). |
+
+## S.2 Dashboard veri doğruluğu
+
+- Tüm sayılar gerçek tablolardan gelir. Filo kovaları ortak `vehicle_busy` ile şu ana göre hesaplanır; ikinci bir uygunluk motoru yoktur.
+- API testlerinde doğrulananlar:
+  - Toplam araç = kova toplamı = veritabanındaki aktif ve hizmet dışı araçlar. Bekleyen ve onaylı rezervasyonlar, aktif kiralama, bugünkü teslim/iade ve gecikenler veritabanı sayılarıyla eşleşir.
+  - "Şimdi müsait" araçlar, rezervasyon uygunluğunun önümüzdeki dakikalar için verdiği sonuçla aynıdır.
+  - Hasar engeli kalkınca araç, süren bakım nedeniyle yine "bakımda" görünür.
+- Kavramlar ayrı tutulur:
+  - Ana Ekran yalnız **şu anki** uygunluğu gösterir ve bunu ekranda yazar.
+  - Gelecek tarihli uygunluk rezervasyon ekranındadır.
+  - Fiziksel konum araç konum geçmişindedir; Ana Ekran konum göstermez.
+- Performans: 3.000'er kayıtla tüm şirket ~61 ms, tek şube ~51 ms, Hazırlık ~26 ms.
+
+## S.3 Finans yetkisi ve şirket/şube güvenliği
+
+- Başka şirketin şube kimliği → **403** (yeniden doğrulandı). Hem tüm şubelere yetkili Drina sahibi Neretva şubesiyle denedi, hem Neretva sahibi Drina şubesiyle.
+- Şubeye sınırlı kullanıcı yalnız kendi şubesini görür; kapsam dışı şube → 403.
+- Başka şirketin araç, rezervasyon, kiralama, finans, bakım, hasar, transfer ve hazırlık verisi dönmez. Testler: RLS altında sorgular, Neretva yanıtında Drina plakaları ve adı yok, başka şirketin hazırlık listesi ayrı.
+- Hazırlık yalnız `readiness.read` ile açılır (yalnız Sahip). Operasyon kullanıcısı API'de 403 alır, ekranda yetkisiz mesajı görür.
+- Hiçbir yetki kontrolü yalnız arayüzde değildir.
+
+## S.4 Operasyonel Hazırlık
+
+Bölüm 5'teki kontroller geçerlidir. Yeni durum: Drina'da ikinci onay yetkilisi olmadığından şu maddeler "Eksik" görünür:
+- tahsilat doğrulama;
+- kalem onayı;
+- depozito iadesi;
+- FN5;
+- hasar engeli kaldırma.
+
+Yanında şu açıklama yer alır: "ikinci yetkili olmadan bu adım tamamlanamaz (kural gevşetilmez)".
+
+Değişmeyen davranış:
+- Anahtar değerleri okunmaz, yazılmaz, gösterilmez, günlüğe geçmez.
+- Hukuki onay her zaman "Doğrulanmadı" kalır.
+- Hiçbir ayar kendiliğinden değişmez.
+
+## S.5 Hasar engeli dört göz denetimi (API + PostgreSQL)
+
+| Durum | Sonuç |
+|---|---|
+| Talep oluşturma | Engel kalkmaz; tek açık talep olabilir |
+| Farklı yetkilinin onayı | Engel kalkar, kullanılabilirlik değişir |
+| Talep edenin kendi onayı | 403 `FOUR_EYES`; veritabanı da reddeder |
+| Aynı talebe ikinci onay | 409 |
+| Eşzamanlı iki onay (iki ayrı oturum) | Biri 200, diğeri 409; tek `unblocked` olayı |
+| Onaylayanın yetkisi kaldırılınca | 403; talep "bekliyor" kalır |
+| Başka şirket | 404 |
+| Aynı şirkette kapsam dışı şubeden Yönetici | 404 |
+| Onaydan sonra diğer tutmalar | Süren bakım aracı tutmaya devam eder; araç müsait görünmez |
+| Onaysız doğrudan veritabanı kaldırması | Reddedilir (`damage_blocks_four_eyes`) |
+
+Ek düzeltme (geçen sprintten kalma, aralıklı başarısız bir eşzamanlılık testi): hasar engelinin başlangıç zamanı artık araç kilidi alındıktan sonraki gerçek zamandır (`clock_timestamp()`), işlemin başladığı an değil. Böylece kilidi önce alan bir teslim, kayıtlı zamanda da her zaman engelden öncedir.
+
+## S.6 FN5 düzeltme güvenliği
+
+- Hareketsiz dosyada: talep → farklı finans yetkilisi onayı. Ödeme sorumlusu yalnız kiralamanın müşterisi veya kurumsal hesabı olabilir. Şirket ilişkileri bileşik yabancı anahtarlarla korunur; geçmiş ve denetim kaydı tutulur; sürüm çakışması 409 döner.
+- **Eşzamanlılık:** her finansal hareket (kalem, tahsilat, depozito, iade) ve FN5 onayı aynı `rental_finances` satırını kilitler (`finance_open_file` ve `FOR UPDATE`). İkisi sıraya girer:
+  - Hareket önce gelirse onay reddedilir ve talep geçersiz sayılır.
+  - Onay önce gelirse düzeltme hareketten önce uygulanmış olur.
+
+  Bu iki sonuç API testinde aynı anda gönderilerek doğrulandı. Veritabanı koruması (`rental_finances_guard`) güncelleme anında hareketi yeniden denetler.
+- Hareketli dosyalar değişmez kalır. Finans V1 korumalarına (dört göz, kapanış, değişmezlik, geçmiş) dokunulmadı; tüm finans testleri geçiyor.
+- **İleride ayrı ürün kararı gereken konu:** hareketli dosyada yanlış ödeme sorumlusunun düzeltilmesi. Öneri: ters kayıtlar ve iade akışlarıyla tek tek kapatma ve doğru sorumlu için yeni dosya; hepsi elle ve iki kişiyle. Uygulanmadı.
+
+## S.7 Fotoğraf erişimi
+
+- İzin süresi **5 dakika** (`PHOTO_ACCESS_TTL_MS`). Belge/PDF izin modeliyle aynı yapıdır.
+- İzin şunlara bağlıdır: oturum, kullanıcı (yeni: GET'te kullanıcı da eşleşmeli), şirket, kayıt ve amaç (görüntüleme). Başka bir dosya türüyle eşleşmez (birim testi).
+- **POST** `/api/photo-access`:
+  - CSRF ve Origin koruması;
+  - okuma yetkisi ve şirket/şube kapsamı denetlenir;
+  - **bir** `photo.access_granted` kaydı yazılır. Ekranda "Fotoğraf erişim izni verildi" olarak okunur, "incelendi" denmez.
+- **GET:**
+  - izin ister, güncel okuma yetkisini ve kapsamı yeniden denetler;
+  - `no-store` başlığıyla döner;
+  - denetim kaydı yazmaz (testte üç GET sonrası kayıt sayısı aynı kaldı).
+- İzin geçersiz olur:
+  - süre dolunca (birim testinde tam 5. dakikada reddedilir);
+  - oturum kapanınca;
+  - yetki kaldırılınca (GET güncel yetkiyi istediği için eski izin işe yaramaz).
+- Başka şirketin fotoğrafı: 404. URL'de jeton veya gizli bilgi yoktur.
+- Arayüz izin dolunca, sayfa açık ve görünürse yeni izin ister. Her yeni izin bir kayıt daha yazar; geçerli izin yeniden kullanılınca kayıt yazılmaz.
+- Eski fotoğraflar değiştirilmedi, yeniden sıkıştırılmadı, silinmedi (dosya deposu parmak izi önce/sonra aynı).
+
+## S.8 Onarım taşıması kanıtları
+
+- Taşıyıcı adı ve dış sevk/iş emri referansı oluşturmada zorunludur ve sonradan değiştirilemez.
+- **Yeni:** taşıyıcı bilgisi eksik bir onarım taşıması **yola çıkamaz** (API 409 `TRANSPORT_EVIDENCE_MISSING` + veritabanı tetikleyicisi, migration 0046). Bu, kuraldan önce açılmış bir kaydı da kapsar. Main'de onarım taşıması yoktu.
+- Yöntem, bağlı hasar dosyası, yetkili kullanıcı, zaman ve çıkış beyanı kaydedilir.
+- Normal transferle kullanılamaz araç gönderme yasağı korunur.
+- Taşıma tamamlanınca hasar engeli kendiliğinden kalkmaz.
+- Taşıyıcı bilgisi ekranda "(beyan, doğrulanmadı)" olarak görünür.
+
+## S.9 Son API test sayısı
+
+**534 / 534** geçti, 38 dosya. Main üzerinde ana veritabanı geçişinden sonra çalıştırıldı.
+
+5 yeni regresyon testi:
+1. izin bağı ve 5 dakikalık süre (birim);
+2. API'de 5 dakika ve GET'in kayıt yazmaması;
+3. hasar dört göz: yetki iptali, şube kapsamı, başka şirket, eşzamanlı onay, diğer tutmalar;
+4. FN5 yarışı;
+5. kanıtsız eski onarım taşımasının çıkışı.
+
+FN5 (B) testi, talebin geçersiz sayılmasını da doğrulayacak şekilde genişletildi.
+
+Not: main'deki ilk tam çalıştırmada iki test düştü:
+- Finans performans testi süre eşiğine takıldı (makine yükü). Tek başına geçti.
+- Yukarıda düzeltilen zaman damgası testi.
+
+Düzeltmeden sonra tam çalıştırma 534/534.
+
+## S.10 Son tarayıcı test sayısı
+
+**134 / 134** geçti (36 atlanan test yalnız `SCREENSHOTS=1` ile çalışan ekran görüntüsü testleri). Main üzerinde, ana veritabanı geçişinden sonra çalıştırıldı; süre 10,9 dakika.
+
+Önceki iki tam çalıştırmada her birinde farklı bir test ortam kaynaklı nedenle düştü:
+- dalda: mobil fiyat ekranı boş sayfa açtı (Vite'ın ilk yüklemesi);
+- main'de: fiyat/sözleşme testinde sayfa içi istek ağ düzeyinde kesildi ("Failed to fetch").
+
+İkisi de tek başına yeniden çalıştırıldığında geçti. Üçüncü tam çalıştırma hatasız tamamlandı.
+
+Sunucu sağlık kontrolü: main sunucuları yeniden başlatıldıktan sonra API (3001) ve web (5173) yanıt veriyor (bkz. S.19).
+
+Görsel kontroller 1440, 768 ve 390 genişlikte yenilendi (30 görüntü, `apps/e2e/screenshots/oh1/`) ve incelendi; yatay taşma yok.
+
+## S.11 TypeScript ve derleme
+
+4 projede (web, api, e2e, shared) TypeScript hatasız. Web üretim derlemesi başarılı. 500 kB üstü parça uyarısı önceden de vardı.
+
+## S.12 RLS ve RBAC denetimi
+
+- `safe-migrate --verify`:
+  - ana veritabanı: 47/47 migration, 78 tablo, 74'ü RLS'li; RLS'siz 4 tablo bilinen genel tablolar;
+  - test veritabanı: 47/47.
+
+  Sorun yok.
+- Önce/sonra güvenlik anlık görüntüsü (ana veritabanı):
+  - kaldırılan politika ve yetki yok;
+  - yalnız 3 yeni tablonun 12 politikası ve 9 yetkisi eklendi (SELECT, INSERT, UPDATE; **DELETE yok**);
+  - mevcut tabloların RLS durumu değişmedi;
+  - `acarvo_app` ve `acarvo_owner` rol özellikleri aynı.
+- Hazır roller: yalnız iki şirketin **Sahip** rolüne `readiness.read` eklendi. Yönetici ve Operasyon değişmedi. Main'de özel rol yok.
+
+## S.13 Migration dosyaları
+
+| Dosya | İçerik | Yıkıcı işlem |
+|---|---|---|
+| `0043_readiness.sql` | 2 sütun (boş), 3 yeni tablo, bileşik şirket yabancı anahtarları, taşıyıcı CHECK | Yok |
+| `0044_readiness_guards.sql` | RLS, korumalar, `files_kind_check` genişletmesi, silme yasağı | Yok (yeniden eklenen kısıt eskinin üst kümesi) |
+| `0045_readiness_event_kinds.sql` | olay türü kısıtları genişletildi | Yok (eskinin üst kümesi) |
+| `0046_repair_departure_evidence.sql` | onarım taşımasında çıkış kanıtı tetikleyicisi | Yok |
+
+Ek kontroller:
+- Boş SQL dosyası yok.
+- Uygulanmış eski migration'lar değişmedi; doğrulama özet uyuşmazlığı bildirmedi.
+- Snapshot zinciri ve journal tutarlı.
+- Test veritabanı kayıtları dosyalarla eşleşiyor.
+- Eski kayıtları değiştiren SQL yok.
+
+## S.14 Main'e birleştirme sonucu
+
+- `git merge --ff-only operasyon-hazirlik-v1`: başarılı. İki adımda yapıldı: önce `b3f3386`, ardından zaman damgası düzeltmesi `4366f22` ve bu rapor.
+- Force, reset veya rebase kullanılmadı.
+- Dal ve `acarvo-oh1` worktree korunuyor.
+- Push yapılmadı.
+
+## S.15 Son main commit'i
+
+Bu raporun commit'i (main'in en son commit'i). Kod: `4366f22`.
+
+## S.16 Ana veritabanı migration sayısı
+
+**47** (43 + 4).
+
+## S.17 Doğrulanmış yedek klasörü
+
+`C:\Users\soena\Desktop\acarvo\backups\2026-10-17-00-24-03`. Döküm satır sayıları canlı sayılarla karşılaştırıldı; yedek doğrulandıktan sonra migration uygulandı.
+
+## S.18 Mevcut gerçek verilerin korunması
+
+Önce/sonra salt okunur parmak izi alındı: 71 şirket tablosu, her şirket için ayrı ayrı ve RLS bağlamında; ayrıca kullanıcılar, şirketler ve dosya deposu. Farklar **yalnız** şunlar:
+
+- migration sayısı 43 → 47;
+- iki şirkette Sahip rolü (+1 izin);
+- iki şirkette +1 `role.preset_upgrade` denetim kaydı (Drina 30 → 31, Neretva 30 → 31);
+- 3 yeni boş tablo.
+
+Şunlar birebir aynı:
+- araçlar (Drina 23, Neretva 4);
+- tek gerçek rezervasyon;
+- müşteriler, kurumsal hesaplar, fiyat ve sözleşme kayıtları;
+- km ve konum geçmişi;
+- dosyalar ve belgeler;
+- kullanıcılar ve şirketler;
+- diğer bütün denetim kayıtları;
+- dosya deposu (adet, boyut, ad özeti).
+
+Main'de finans, bakım, hasar ve transfer kaydı yoktu; bu yüzden etkilenen kayıt da yok. Ana veritabanına sentetik veri eklenmedi, otomatik test ana veritabanında çalışmadı. Gerçek kullanıcı hesabıyla test yapılmadı.
+
+## S.19 Dashboard ekran adresi
+
+`http://localhost:5173/` (Ana Ekran). Şube seçimiyle: `/?sube=<şube>`.
+
+## S.20 Operasyonel Hazırlık ekran adresi
+
+`http://localhost:5173/ayarlar/hazirlik` (yalnız Sahip). Ayarlar sayfasından da bağlantısı var.
+
+## S.21 Açık kalan ürün ve teknik riskler
+
+- **Drina'da ikinci yetkili yok:** hasar engeli kaldırma ve finans ikinci onayları ikinci bir uygun kişi atanana kadar yapılamaz (bilinçli karar).
+- FN5 (B), yani hareketli dosyada düzeltme süreci, ayrı ürün kararı bekliyor.
+- Fotoğraf ve belge izinleri sunucu belleğinde tutulur. Yeniden başlatmada biter; birden çok sunucu örneğinde ortak depo gerekir.
+- Açık bir fotoğraf sayfası her 5 dakikada yeni izin isterse her izin bir geçmiş kaydı yazar. Bu dürüst ama kalabalık bir geçmiş üretebilir.
+- Ana Ekran 60 saniyede bir yenilenir; canlı akış değildir. Listeler en fazla 12 satır gösterir.
+- Aralıklı test zamanlamaları: makine yükünde finans performans testi ve Vite'ın ilk yüklemesindeki bir mobil test. Tek başına çalıştırınca geçiyorlar.
+- Taşıyıcı referansı beyandır; ACARVO doğrulamaz.
+
+## S.22 Gerçek işletme öncesi eksik koşullar
+
+1. Drina'ya ikinci uygun yetkili (ör. Yönetici) atanması. ACARVO kendiliğinden yetki vermez.
+2. Şube ülkeleri. Main'deki şubelerde ülke tanımlı değil; teslim bu yüzden kapalı.
+3. Kiralama çalışma modu (dış sözleşme/fiyat) kararı.
+4. Etkin fiyat listesi ve vergi oranı. Oran tahmin edilmez.
+5. Sözleşme şablonu ve ACARVO dışında hukuki inceleme.
+6. Ülke belge kuralları.
+7. M2 müşteri belgesi şifreleme anahtarları. Yetkili kişi oluşturur; ACARVO üretmez.
+8. ClamAV zararlı dosya tarayıcısı. Üretimde yükleme bu olmadan kapalı kalır.
+9. Birden çok sunucu örneği planlanıyorsa izinler için ortak depo.
+10. Yedeklerin düzenli alınması ve dışarıda saklanması.
