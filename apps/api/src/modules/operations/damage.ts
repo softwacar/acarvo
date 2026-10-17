@@ -314,9 +314,11 @@ export async function damageRoutes(app: FastifyInstance) {
       await addEvent(tx, DAMAGE_EVENTS, access.companyId, id, 'created', userId, { to: 'reported', data })
       if (input.usability === 'not_usable') {
         await lockVehicleAllocation(tx, access.companyId, vehicle.id)
+        // The block starts when it is recorded, after the vehicle lock (not at transaction start): a handover that won the
+        // lock is always earlier than the block.
         await guarded(
           tx.execute(sql`insert into damage_blocks (company_id, damage_id, vehicle_id, started_at, started_by, start_reason)
-            values (${access.companyId}, ${id}, ${vehicle.id}, now(), ${userId}, ${input.blockReason!})`),
+            values (${access.companyId}, ${id}, ${vehicle.id}, clock_timestamp(), ${userId}, ${input.blockReason!})`),
         )
         await addEvent(tx, DAMAGE_EVENTS, access.companyId, id, 'blocked', userId, { reason: input.blockReason! })
       }
@@ -396,7 +398,7 @@ export async function damageRoutes(app: FastifyInstance) {
       await lockVehicleAllocation(tx, access.companyId, cur.vehicle_id as string)
       await guarded(
         tx.execute(sql`insert into damage_blocks (company_id, damage_id, vehicle_id, started_at, started_by, start_reason)
-          values (${access.companyId}, ${id}, ${cur.vehicle_id as string}, now(), ${userId}, ${input.reason})`),
+          values (${access.companyId}, ${id}, ${cur.vehicle_id as string}, clock_timestamp(), ${userId}, ${input.reason})`),
       )
       await guarded(tx.execute(sql`update damage_files set usability = 'not_usable', version = version + 1, updated_at = now(), updated_by = ${userId} where id = ${id}`))
       await addEvent(tx, DAMAGE_EVENTS, access.companyId, id, 'blocked', userId, { reason: input.reason, requestId: input.requestId })
