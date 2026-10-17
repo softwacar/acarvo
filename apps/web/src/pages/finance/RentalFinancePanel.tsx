@@ -81,7 +81,8 @@ export function RentalFinancePanel({ rentalId }: { rentalId: string }) {
       set(await fn(), message)
     } catch (e) {
       const { message: m, fields } = apiError(e)
-      if ((e as { code?: string }).code === 'VERSION_CONFLICT') void q.refetch()
+      const code = (e as { code?: string }).code
+      if (code === 'VERSION_CONFLICT' || code === 'FINANCE_CORRECTION_REVIEW') void q.refetch()
       return [m, ...Object.values(fields)].join(' ')
     }
   }

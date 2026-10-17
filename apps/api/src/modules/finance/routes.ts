@@ -225,40 +225,68 @@ export async function financeRoutes(app: FastifyInstance) {
   for (const path of ['approve', 'reject', 'cancel'] as const) {
     app.post(`/finance/responsible-corrections/:id/${path}`, async (req) => {
       const cid = parseId(req, FINANCE_NOT_FOUND)
-      return withCompany(req, 'finance.close', async (tx, access) => {
-        const input = responsibleDecisionSchema.parse(req.body)
-        const c0 = (await tx.execute(sql`select finance_id from finance_responsible_corrections where id = ${cid}`)).rows[0] as Row | undefined
-        if (!c0) throw notFound(FINANCE_NOT_FOUND)
-        const f = (await tx.execute(sql`select * from rental_finances where id = ${c0.finance_id as string} for update`)).rows[0] as Row
-        const k = await rentalFor(tx, access, f.rental_id as string, true)
-        if (await replayed(tx, input.requestId)) return view(tx, access, k.id as string)
-        const c = (await tx.execute(sql`select * from finance_responsible_corrections where id = ${cid} for update`)).rows[0] as Row
-        if (Number(c.version) !== input.version) throw conflict()
-        if (c.status !== 'requested') throw new AppError(409, 'INVALID_TRANSITION', 'Bu düzeltme talebi zaten sonuçlandırılmış.')
-        const userId = req.auth!.user.id
-        if (path === 'cancel' && c.requested_by !== userId) throw new AppError(403, 'FOUR_EYES', 'Talebi yalnız talep eden kişi geri çekebilir.')
-        if (path !== 'cancel' && c.requested_by === userId) throw new AppError(403, 'FOUR_EYES', 'Kendi düzeltme talebinizi onaylayamaz veya reddedemezsiniz; ikinci bir finans yetkilisi gerekir.')
-        if (path === 'reject' && (input.note?.length ?? 0) < 3) throw new AppError(400, 'VALIDATION', 'Ret gerekçesini yazın.', { note: 'Ret gerekçesini yazın' })
-        if (path === 'approve') {
-          if ((await tx.execute(sql`select finance_file_has_movement(${access.companyId}::uuid, ${f.id as string}::uuid) as m`)).rows[0]!.m || f.status === 'closed') {
-            throw new AppError(409, 'FINANCE_CORRECTION_REVIEW', 'Talepten sonra dosyada finansal hareket oluştu veya dosya kapandı. Ödeme sorumlusu yerinde düzeltilmez; yetkili inceleme gerekir.')
-          }
-          await tx.execute(sql`update finance_responsible_corrections set status = 'applied', decided_by = ${userId}, decided_at = now(), decision_note = ${input.note ?? null}, version = version + 1 where id = ${cid}`).catch(mapGuard)
-          await tx
-            .execute(sql`update rental_finances set responsible_type = ${c.to_type as string}, responsible_customer_id = ${(c.to_customer_id as string | null) ?? null},
-                responsible_corporate_id = ${(c.to_corporate_id as string | null) ?? null}, version = version + 1, updated_at = now() where id = ${f.id as string}`)
-            .catch(mapGuard)
-        } else {
-          await tx
-            .execute(sql`update finance_responsible_corrections set status = ${path === 'reject' ? 'rejected' : 'cancelled'}, decided_by = ${userId}, decided_at = now(),
-                decision_note = ${input.note ?? null}, version = version + 1 where id = ${cid}`)
-            .catch(mapGuard)
+      try {
+        return await decideCorrection(req, cid, path)
+      } catch (e) {
+        // A request whose file got a financial movement (or was closed) meanwhile is no longer valid: the approval
+        // attempt closes it as rejected, with that reason, by the second person, and the refusal is returned.
+        if (path === 'approve' && e instanceof AppError && e.code === 'FINANCE_CORRECTION_REVIEW') await invalidateCorrection(req, cid)
+        throw e
+      }
+    })
+  }
+  async function invalidateCorrection(req: FastifyRequest, cid: string) {
+    await withCompany(req, 'finance.close', async (tx, access) => {
+      const c = (await tx.execute(sql`select c.*, f.rental_id, f.status as file_status from finance_responsible_corrections c join rental_finances f on f.company_id = c.company_id and f.id = c.finance_id
+          where c.id = ${cid} for update of f`)).rows[0] as Row | undefined
+      if (!c || c.status !== 'requested') return
+      const userId = req.auth!.user.id
+      if (c.requested_by === userId) return
+      const moved = (await tx.execute(sql`select finance_file_has_movement(${access.companyId}::uuid, ${c.finance_id as string}::uuid) as m`)).rows[0]!.m
+      if (!moved && c.file_status !== 'closed') return
+      const k = await rentalFor(tx, access, c.rental_id as string, true)
+      const note = 'Talepten sonra dosyada finansal hareket oluştu veya dosya kapandı; talep geçersiz sayıldı. Yetkili incelemesi gerekli.'
+      await tx
+        .execute(sql`update finance_responsible_corrections set status = 'rejected', decided_by = ${userId}, decided_at = now(), decision_note = ${note}, version = version + 1 where id = ${cid}`)
+        .catch(mapGuard)
+      await event(tx, access.companyId, c.finance_id as string, { entityType: 'finance', entityId: c.finance_id as string, kind: 'responsible_correction_rejected', data: { from: c.from_type, to: c.to_type, correctionId: cid, reason: 'movement' } }, userId)
+      await auditFinance(tx, access, userId, 'finance.responsible_correction.invalidated', k.id as string, { rentalNo: k.rental_no, from: c.from_type, to: c.to_type })
+    })
+  }
+  function decideCorrection(req: FastifyRequest, cid: string, path: 'approve' | 'reject' | 'cancel') {
+    return withCompany(req, 'finance.close', async (tx, access) => {
+      const input = responsibleDecisionSchema.parse(req.body)
+      const c0 = (await tx.execute(sql`select finance_id from finance_responsible_corrections where id = ${cid}`)).rows[0] as Row | undefined
+      if (!c0) throw notFound(FINANCE_NOT_FOUND)
+      const f = (await tx.execute(sql`select * from rental_finances where id = ${c0.finance_id as string} for update`)).rows[0] as Row
+      const k = await rentalFor(tx, access, f.rental_id as string, true)
+      if (await replayed(tx, input.requestId)) return view(tx, access, k.id as string)
+      const c = (await tx.execute(sql`select * from finance_responsible_corrections where id = ${cid} for update`)).rows[0] as Row
+      if (Number(c.version) !== input.version) throw conflict()
+      if (c.status !== 'requested') throw new AppError(409, 'INVALID_TRANSITION', 'Bu düzeltme talebi zaten sonuçlandırılmış.')
+      const userId = req.auth!.user.id
+      if (path === 'cancel' && c.requested_by !== userId) throw new AppError(403, 'FOUR_EYES', 'Talebi yalnız talep eden kişi geri çekebilir.')
+      if (path !== 'cancel' && c.requested_by === userId) throw new AppError(403, 'FOUR_EYES', 'Kendi düzeltme talebinizi onaylayamaz veya reddedemezsiniz; ikinci bir finans yetkilisi gerekir.')
+      if (path === 'reject' && (input.note?.length ?? 0) < 3) throw new AppError(400, 'VALIDATION', 'Ret gerekçesini yazın.', { note: 'Ret gerekçesini yazın' })
+      if (path === 'approve') {
+        if ((await tx.execute(sql`select finance_file_has_movement(${access.companyId}::uuid, ${f.id as string}::uuid) as m`)).rows[0]!.m || f.status === 'closed') {
+          throw new AppError(409, 'FINANCE_CORRECTION_REVIEW', 'Talepten sonra dosyada finansal hareket oluştu veya dosya kapandı. Ödeme sorumlusu yerinde düzeltilmez; yetkili inceleme gerekir.')
         }
-        const kind = { approve: 'responsible_corrected', reject: 'responsible_correction_rejected', cancel: 'responsible_correction_cancelled' }[path]
-        await event(tx, access.companyId, f.id as string, { entityType: 'finance', entityId: f.id as string, kind, data: { from: c.from_type, to: c.to_type, correctionId: cid }, requestId: input.requestId }, userId)
-        await auditFinance(tx, access, userId, `finance.responsible_correction.${path}`, k.id as string, { rentalNo: k.rental_no, from: c.from_type, to: c.to_type })
-        return view(tx, access, k.id as string)
-      })
+        await tx.execute(sql`update finance_responsible_corrections set status = 'applied', decided_by = ${userId}, decided_at = now(), decision_note = ${input.note ?? null}, version = version + 1 where id = ${cid}`).catch(mapGuard)
+        await tx
+          .execute(sql`update rental_finances set responsible_type = ${c.to_type as string}, responsible_customer_id = ${(c.to_customer_id as string | null) ?? null},
+              responsible_corporate_id = ${(c.to_corporate_id as string | null) ?? null}, version = version + 1, updated_at = now() where id = ${f.id as string}`)
+          .catch(mapGuard)
+      } else {
+        await tx
+          .execute(sql`update finance_responsible_corrections set status = ${path === 'reject' ? 'rejected' : 'cancelled'}, decided_by = ${userId}, decided_at = now(),
+              decision_note = ${input.note ?? null}, version = version + 1 where id = ${cid}`)
+          .catch(mapGuard)
+      }
+      const kind = { approve: 'responsible_corrected', reject: 'responsible_correction_rejected', cancel: 'responsible_correction_cancelled' }[path]
+      await event(tx, access.companyId, f.id as string, { entityType: 'finance', entityId: f.id as string, kind, data: { from: c.from_type, to: c.to_type, correctionId: cid }, requestId: input.requestId }, userId)
+      await auditFinance(tx, access, userId, `finance.responsible_correction.${path}`, k.id as string, { rentalNo: k.rental_no, from: c.from_type, to: c.to_type })
+      return view(tx, access, k.id as string)
     })
   }
 

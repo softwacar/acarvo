@@ -391,6 +391,9 @@ export async function transferRoutes(app: FastifyInstance) {
       if (cur.status !== 'approved') throw new AppError(409, 'INVALID_TRANSITION', 'Yalnız onaylanmış transfer yola çıkabilir.')
       if (cur.purpose === 'repair') {
         need(access, 'transfers.repair')
+        if (!String(cur.carrier_name ?? '').trim() || !String(cur.transport_reference ?? '').trim()) {
+          throw new AppError(409, 'TRANSPORT_EVIDENCE_MISSING', 'Bu onarım taşımasında taşıyıcı ve dış sevk/iş emri referansı kayıtlı değil; yola çıkamaz. Taşımayı iptal edip bilgileriyle yeniden talep edin.')
+        }
         if (!input.transportAck) {
           throw invalid({ transportAck: 'Aracın beyan edilen çekici veya taşıyıcıyla yola çıktığını onaylayın' }, 'Onarım amaçlı taşıma yalnız taşıma beyanıyla yola çıkar; araç kendi gücüyle sürülmez.')
         }

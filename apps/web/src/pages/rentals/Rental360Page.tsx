@@ -263,6 +263,7 @@ const ACTION_TITLES: Record<string, string> = {
   'rental.extend': 'İade zamanı değiştirildi',
   'rental.return': 'Araç iade alındı',
   'rental.close': 'Kiralama kapatıldı',
+  'photo.access_granted': 'Fotoğraf erişim izni verildi',
 }
 const EVENT_TITLES: Record<string, string> = {
   created: 'Hazırlandı',

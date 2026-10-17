@@ -45,7 +45,7 @@ const grantKey = (kind: PhotoRecordKind, id: string) => `${kind}:${id}`
 
 /** For photo GETs: the session must hold an unexpired grant for this record in the active company. */
 export function requirePhotoGrant(app: FastifyInstance, req: FastifyRequest, companyId: string, kind: PhotoRecordKind, id: string) {
-  if (!app.documentGrants.allows({ kind: 'evidence_photos', sessionId: req.auth!.session.id, companyId, fileId: grantKey(kind, id), mode: 'view' })) {
+  if (!app.documentGrants.allows({ kind: 'evidence_photos', sessionId: req.auth!.session.id, userId: req.auth!.user.id, companyId, fileId: grantKey(kind, id), mode: 'view' })) {
     throw new AppError(403, 'PHOTO_ACCESS_REQUIRED', 'Fotoğrafları görmek için önce ACARVO içinden erişim izni isteyin.')
   }
 }
@@ -54,7 +54,7 @@ const body = z.object({ kind: z.enum(PHOTO_RECORD_KINDS), id: z.uuid() })
 
 export async function photoAccessRoutes(app: FastifyInstance) {
   /**
-   * POST /api/photo-access: grants this session access to the evidence photos of one record for 10 minutes. A grant still
+   * POST /api/photo-access: grants this session access to the evidence photos of one record for 5 minutes. A grant still
    * valid is reused without a new history row; a new grant writes one "photo access granted" row (no personal data).
    */
   app.post('/', async (req) => {

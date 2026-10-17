@@ -4,6 +4,7 @@ import { todayIn } from '@acarvo/shared'
 import type { FastifyInstance } from 'fastify'
 import sharp from 'sharp'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { createDocumentAccessGrants, type DocumentAccessMode, PHOTO_ACCESS_TTL_MS } from '../src/lib/document-access'
 import { appPool, asOwner, Client, type DevData, EMAILS, env, makeApp, ownerPool, resetDatabase } from './helpers'
 
 // Operational readiness + dashboard V1 (docs/OPERASYONEL_HAZIRLIK_DASHBOARD_PLANI.md): dashboard scope and figures,
@@ -272,7 +273,9 @@ describe('FN5: correcting the responsible party', () => {
     f = (await adnan.get(`/api/rentals/${k.id}/finance`)).json()
     expect(f.finance!.responsible.name).toBe('Ajla Testović')
     expect(f.correction).toEqual({ possible: false, blocker: 'has_movement' })
-    await act(adnan, `/api/finance/responsible-corrections/${c.id}/cancel`, c)
+    // The old request is no longer valid: closed as rejected with the reason, by the second person; nothing moved.
+    expect(f.responsibleCorrections[0]).toMatchObject({ status: 'rejected', decidedByName: 'Kontrol Kullanıcı', decisionNote: expect.stringContaining('finansal hareket') })
+    expect(await auditCount('finance.responsible_correction.invalidated', k.id)).toBe(1)
     expect((await adnan.post(`/api/rentals/${k.id}/finance/responsible-corrections`, { toType: 'customer', reason: 'Yeniden deneme', requestId: uuid() })).json().error.code).toBe('FINANCE_CORRECTION_REVIEW')
     await expect(
       asOwner(data.companies.drina, `insert into finance_responsible_corrections (company_id, finance_id, from_type, from_customer_id, to_type, to_customer_id, reason, requested_by) select company_id, id, 'customer', responsible_customer_id, 'customer', $2, 'Doğrudan deneme', created_by from rental_finances where id = $1`, [f.finance!.id, ids.mirza]),
@@ -304,5 +307,154 @@ describe('repair transport evidence', () => {
     // A normal transfer has no evidence photos.
     const normal = (await adnan.post('/api/transfers', { requestId: uuid(), vehicleId: await vehicle('T09-A-781'), fromBranchId: ids.sac, toBranchId: ids.mst, reason: 'Normal', plannedDepartureLocal: local(50, '09:00'), plannedArrivalLocal: local(50, '12:00') })).json() as TransferDetail
     expect((await adnan.upload(`/api/transfers/${normal.id}/photos`, jpeg)).json().error.code).toBe('RECORD_CLOSED')
+  })
+})
+
+// Final product decisions before main (docs/OPERASYONEL_HAZIRLIK_DASHBOARD_RAPORU.md, final section).
+describe('final decisions: photo grant lifetime and binding', () => {
+  it('a photo grant lasts 5 minutes and is bound to the session, the user, the company, the record and the purpose', async () => {
+    expect(PHOTO_ACCESS_TTL_MS).toBe(5 * 60_000)
+    let t = 1_000_000
+    const grants = createDocumentAccessGrants(undefined, () => t)
+    const g = { kind: 'evidence_photos' as const, sessionId: 's1', userId: 'u1', companyId: 'c1', fileId: 'damage:x', mode: 'view' as DocumentAccessMode }
+    grants.issue(g, PHOTO_ACCESS_TTL_MS)
+    const ask = (over: Partial<typeof g> = {}) => grants.allows({ ...g, ...over })
+    expect(ask()).toBe(true)
+    expect(ask({ userId: 'u2' })).toBe(false) // another user
+    expect(ask({ sessionId: 's2' })).toBe(false) // another session
+    expect(ask({ companyId: 'c2' })).toBe(false) // another company
+    expect(ask({ fileId: 'damage:y' })).toBe(false) // another record
+    expect(ask({ mode: 'download' })).toBe(false) // another purpose
+    expect(grants.allows({ ...g, kind: 'customer_document' })).toBe(false) // another kind of file
+    t += PHOTO_ACCESS_TTL_MS - 1
+    expect(ask()).toBe(true)
+    t += 1
+    expect(ask()).toBe(false) // expired
+    grants.issue(g, PHOTO_ACCESS_TTL_MS)
+    grants.revokeSession('s1')
+    expect(ask()).toBe(false)
+  })
+
+  it('the API grants 5 minutes; an expired grant is refused; GETs never write history', async () => {
+    const v = await vehicle('A39-T-657')
+    const d = (await adnan.post('/api/damages', { requestId: uuid(), vehicleId: v, branchId: ids.sjj, view: 'rear', description: 'Arka tampon çizik', damageType: 'scratch', severity: 'minor', usability: 'usable' })).json() as DamageDetail
+    const up = await adnan.upload(`/api/damages/${d.id}/photos`, jpeg)
+    expect(up.statusCode, up.body).toBe(201)
+    const url = (up.json() as DamageDetail).photos[0]!.url
+    const before = Date.now()
+    const g = (await kontrol.post('/api/photo-access', { kind: 'damage', id: d.id })).json() as { expiresAt: string }
+    const left = Date.parse(g.expiresAt) - before
+    expect(left).toBeGreaterThan(5 * 60_000 - 5_000)
+    expect(left).toBeLessThanOrEqual(5 * 60_000 + 1_000)
+    const grants = Number((await one(`select count(*)::int n from audit_log where action = 'photo.access_granted' and entity_id = $1`, [d.id])).n)
+    for (let i = 0; i < 3; i++) expect((await kontrol.get(url)).statusCode).toBe(200)
+    expect(Number((await one(`select count(*)::int n from audit_log where action = 'photo.access_granted' and entity_id = $1`, [d.id])).n)).toBe(grants)
+    expect(Number((await one(`select count(*)::int n from audit_log where entity_id = $1 and created_at > now() - interval '1 minute' and action not in ('photo.access_granted', 'damage.create', 'damage.photo.add')`, [d.id])).n)).toBe(0)
+    // Expiry, logout and permission removal are covered by the grant store test above and the grant test earlier.
+  })
+})
+
+describe('final decisions: damage block four eyes', () => {
+  it('one approval only (also concurrently), permission removal and branch scope are enforced, another company cannot reach it; other holds keep the vehicle', async () => {
+    const v = await vehicle('K40-M-526')
+    let d = (await adnan.post('/api/damages', { requestId: uuid(), vehicleId: v, branchId: ids.sjj, view: 'left', description: 'Sol ayna kırık', damageType: 'glass', severity: 'severe', usability: 'not_usable', blockReason: 'Görüş yok' })).json() as DamageDetail
+    // A repair maintenance on the same vehicle (a separate hold) starts now.
+    const m = await adnan.post('/api/maintenance', { requestId: uuid(), vehicleId: v, branchId: ids.sjj, type: 'repair', reason: 'Ayna değişimi', plannedStartLocal: nowLocal(-5), plannedEndLocal: nowLocal(240), damageFileId: d.id })
+    expect(m.statusCode, m.body).toBe(201)
+    d = (await act(adnan, `/api/damages/${d.id}/unblock-request`, d, { reason: 'Ayna değişti', usability: 'usable' })).json()
+    const r = d.releaseRequests.find((x) => x.status === 'requested')!
+    // Another company and an out-of-scope user of the same company cannot reach the request.
+    expect((await act(lejla, `/api/damages/release-requests/${r.id}/approve`, r)).statusCode).toBe(404)
+    const role = (await one(`select id from roles where name = 'Yönetici'`)).id
+    const user = (await asOwner(null, `insert into users (email, name, password_hash) select 'mostar-yonetici@drina-demo.ba', 'Mostar Yönetici', password_hash from users where email = $1 returning id`, [EMAILS.adnan])).rows[0].id
+    const mem = (await asOwner(data.companies.drina, `insert into memberships (company_id, user_id, all_branches) values ($1, $2, 'no') returning id`, [data.companies.drina, user])).rows[0].id
+    await asOwner(data.companies.drina, `insert into membership_branches (company_id, membership_id, branch_id) values ($1, $2, $3)`, [data.companies.drina, mem, ids.mst])
+    await asOwner(data.companies.drina, `insert into membership_roles (company_id, membership_id, role_id) values ($1, $2, $3)`, [data.companies.drina, mem, role])
+    const mostar = await login('mostar-yonetici@drina-demo.ba')
+    expect((await act(mostar, `/api/damages/release-requests/${r.id}/approve`, r)).statusCode).toBe(404)
+    // Permission removed from the approver's role: refused at once (checked on every request).
+    const kontrolRole = (await one(`select id from roles where name = 'Yönetici'`)).id
+    await asOwner(data.companies.drina, `update roles set permissions = array_remove(permissions, 'damage.unblock') where id = $1`, [kontrolRole])
+    try {
+      expect((await act(kontrol, `/api/damages/release-requests/${r.id}/approve`, r)).statusCode).toBe(403)
+    } finally {
+      await asOwner(data.companies.drina, `update roles set permissions = array_append(permissions, 'damage.unblock') where id = $1`, [kontrolRole])
+    }
+    expect((await one(`select status from damage_block_release_requests where id = $1`, [r.id])).status).toBe('requested')
+    // Two approvals at the same time (one by a second approver session): exactly one lifts the block.
+    const kontrol2 = await login('kontrol@drina-demo.ba')
+    const both = await Promise.all([act(kontrol, `/api/damages/release-requests/${r.id}/approve`, r), act(kontrol2, `/api/damages/release-requests/${r.id}/approve`, r)])
+    expect(both.map((x) => x.statusCode).sort()).toEqual([200, 409])
+    expect(Number((await one(`select count(*)::int n from damage_events where damage_id = $1 and kind = 'unblocked'`, [d.id])).n)).toBe(1)
+    // Approving again: refused.
+    expect((await act(kontrol, `/api/damages/release-requests/${r.id}/approve`, { version: r.version + 1 })).statusCode).toBe(409)
+    // The block is gone, the maintenance still holds the vehicle: not available now (shared vehicle_busy and dashboard).
+    const holds = (await one(`select array_agg(kind)::text[] k from vehicle_busy($1, $2, now(), now() + interval '1 second', null, null)`, [data.companies.drina, v])).k as string[]
+    expect(holds).toContain('maintenance')
+    expect(holds).not.toContain('damage')
+    const dash1 = await dash(adnan, ids.sjj)
+    const nowBlocked = Number((await one(`select count(*)::int n from damage_blocks where vehicle_id = $1 and ended_at is null`, [v])).n)
+    expect(nowBlocked).toBe(0)
+    expect(dash1.fleet!.buckets.maintenance).toBeGreaterThanOrEqual(1)
+  })
+})
+
+describe('final decisions: FN5 concurrency', () => {
+  it('an approval racing a new financial movement never applies a correction to a file that already had a movement', async () => {
+    const v = await vehicle('J58-O-142')
+    const cls = (await one(`select class_id from vehicles where id = $1`, [v])).class_id
+    let k = (await adnan.post('/api/rentals', { customerId: ids.ajla, drivers: [{ customerId: ids.ajla, isPrimary: true }], vehicleClassId: cls, vehicleId: v, pickupBranchId: ids.mst, returnBranchId: ids.mst, pickupLocal: local(60, '10:00'), returnLocal: local(61, '10:00'), requestId: uuid() })).json() as RentalDetail
+    expect((await adnan.post(`/api/rentals/${k.id}/finance/open`, { currency: 'EUR', responsibleType: 'customer', requestId: uuid() })).statusCode).toBe(201)
+    k = (await adnan.put(`/api/rentals/${k.id}`, { version: k.version, customerId: ids.mirza, drivers: [{ customerId: ids.mirza, isPrimary: true }], vehicleClassId: cls, vehicleId: v, pickupBranchId: ids.mst, returnBranchId: ids.mst, pickupLocal: local(60, '10:00'), returnLocal: local(61, '10:00') })).json()
+    const f = (await adnan.post(`/api/rentals/${k.id}/finance/responsible-corrections`, { toType: 'customer', reason: 'Müşteri düzeltildi', requestId: uuid() })).json() as RentalFinanceView
+    const c = f.responsibleCorrections[0]!
+    const [approve, deposit] = await Promise.all([
+      act(kontrol, `/api/finance/responsible-corrections/${c.id}/approve`, c),
+      adnan.post(`/api/rentals/${k.id}/finance/deposits`, { currency: 'EUR', amount: '40,00', received: true, method: 'cash', cashAck: true, requestId: uuid() }),
+    ])
+    expect(deposit.statusCode).toBe(201)
+    const row = await one(`select c.status, c.decided_at, f.responsible_customer_id, (select min(created_at) from finance_deposits x where x.finance_id = f.id) as moved_at
+      from finance_responsible_corrections c join rental_finances f on f.id = c.finance_id where c.id = $1`, [c.id])
+    if (approve.statusCode === 200) {
+      // The correction won the lock: it was applied before the deposit existed.
+      expect(row.status).toBe('applied')
+      expect(row.responsible_customer_id).toBe(ids.mirza)
+      expect(new Date(row.decided_at as string).getTime()).toBeLessThanOrEqual(new Date(row.moved_at as string).getTime())
+    } else {
+      // The deposit won: the correction is refused, the request closed as invalid, the responsible unchanged.
+      expect(approve.json().error.code).toBe('FINANCE_CORRECTION_REVIEW')
+      expect(row.status).toBe('rejected')
+      expect(row.responsible_customer_id).toBe(ids.ajla)
+    }
+  })
+})
+
+describe('final decisions: repair transport departure', () => {
+  it('a repair transport without carrier evidence (requested before the rule) cannot depart: API and database', async () => {
+    const v = await vehicle('A05-J-418')
+    const d = (await adnan.post('/api/damages', { requestId: uuid(), vehicleId: v, branchId: ids.mst, view: 'front', description: 'Fren arızası', damageType: 'mechanical', severity: 'severe', usability: 'not_usable', blockReason: 'Fren tutmuyor' })).json() as DamageDetail
+    // Simulates a transfer requested before carrier evidence was required (insert guard switched off only here).
+    const t = await asOwner(data.companies.drina, `do $$ begin
+        alter table vehicle_transfers disable trigger vehicle_transfers_guard;
+        insert into vehicle_transfers (company_id, transfer_no, vehicle_id, from_branch_id, to_branch_id, reason, planned_departure_at, planned_arrival_at, from_timezone, to_timezone, purpose, damage_file_id, transport_method, status, approved_at, approved_by, created_by)
+          select company_id, 'T-888888', vehicle_id, branch_id, '${ids.sjj}', 'Eski onarım taşıması', now() - interval '5 minutes', now() + interval '3 hours', 'Europe/Sarajevo', 'Europe/Sarajevo', 'repair', id, 'tow_truck', 'approved', now(), created_by, created_by
+          from damage_files where id = '${d.id}';
+        alter table vehicle_transfers enable trigger vehicle_transfers_guard;
+      end $$`)
+    expect(t).toBeTruthy()
+    const id = (await one(`select id from vehicle_transfers where transfer_no = 'T-888888'`)).id as string
+    const cur = (await adnan.get(`/api/transfers/${id}`)).json() as TransferDetail
+    const km = Number((await one(`select km from odometer_readings where vehicle_id = $1 order by occurred_at desc limit 1`, [v])).km)
+    const res = await act(adnan, `/api/transfers/${id}/depart`, cur, { km, fuel: 'half', transportAck: true })
+    expect(res.json().error.code).toBe('TRANSPORT_EVIDENCE_MISSING')
+    // Database: even with the other transfer checks out of the way (only inside this failing transaction), departing is refused.
+    await expect(
+      asOwner(data.companies.drina, `do $$ begin
+          alter table vehicle_transfers disable trigger vehicle_transfers_guard;
+          update vehicle_transfers set status = 'in_transit', departed_at = now() where id = '${id}';
+        end $$`),
+    ).rejects.toThrow(/carrier/)
+    expect((await one(`select count(*)::int n from pg_trigger where tgname = 'vehicle_transfers_guard' and tgenabled = 'O'`)).n).toBe(1)
+    expect((await one(`select status from vehicle_transfers where id = $1`, [id])).status).toBe('approved')
   })
 })

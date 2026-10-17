@@ -17,7 +17,7 @@ const MAX_GRANTS = 20_000
 export type DocumentAccessKind = 'vehicle_document' | 'customer_document' | 'contract_pdf' | 'evidence_photos'
 
 /** Evidence photos (handover, return, maintenance, damage, transport): one grant opens all photos of one record. */
-export const PHOTO_ACCESS_TTL_MS = 10 * 60 * 1000
+export const PHOTO_ACCESS_TTL_MS = 5 * 60 * 1000
 
 interface Grant {
   kind: DocumentAccessKind
@@ -34,7 +34,7 @@ export interface DocumentAccessGrants {
   /** The expiry of an unexpired grant of this session, company, kind, file and purpose, or null. */
   expiry(q: { sessionId: string; companyId: string; fileId: string; mode: DocumentAccessMode; kind?: DocumentAccessKind }): number | null
   /** True only for an unexpired grant of this session, company, file kind, file and purpose. Not consumed: the PDF viewer may ask again. */
-  allows(q: { sessionId: string; companyId: string; fileId: string; mode: DocumentAccessMode; kind?: DocumentAccessKind }): boolean
+  allows(q: { sessionId: string; companyId: string; fileId: string; mode: DocumentAccessMode; kind?: DocumentAccessKind; userId?: string }): boolean
   revokeSession(sessionId: string): void
   revokeUser(userId: string): void
   size(): number
@@ -65,6 +65,7 @@ export function createDocumentAccessGrants(ttlMs = DOCUMENT_ACCESS_TTL_MS, now: 
         return false
       }
       // A company switch keeps the session but changes the active company: the old grant no longer applies.
+      if (q.userId && g.userId !== q.userId) return false
       return g.companyId === q.companyId
     },
     expiry(q) {
