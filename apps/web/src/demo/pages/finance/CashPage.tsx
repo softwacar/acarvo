@@ -56,7 +56,7 @@ export function CashPage() {
                   <>
                     <p className="tnum text-[22px] font-semibold">{fmt(computeCashExpected(d, s), dr.currency)}</p>
                     <p className="text-[12.5px] text-ink-2">{L('Beklenen nakit', 'Expected cash')} · {L('açılış', 'opened')} {f.dt(s.openedAt, dr.branchId)} · {userName(d, s.openedBy)}</p>
-                    <ul className="mt-3 max-h-40 divide-y divide-line-soft overflow-y-auto text-[13px]">
+                    <ul className="mt-3 divide-y divide-line-soft text-[13px]">
                       {moves.slice(0, 6).map((m) => <li key={m.id} className="flex justify-between gap-2 py-1.5"><span className="min-w-0 truncate">{m.reason}</span><span className={`tnum whitespace-nowrap ${m.kind === 'in' ? 'text-ok' : 'text-alert'}`}>{m.kind === 'in' ? '+' : '−'}{fmt(m.minor, m.cur)}</span></li>)}
                       {moves.length === 0 && <li className="py-1.5 text-ink-2">{L('Henüz hareket yok.', 'No movements yet.')}</li>}
                     </ul>

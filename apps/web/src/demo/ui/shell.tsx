@@ -158,7 +158,7 @@ function BranchFilter() {
           aria-label={L('Şube filtresi', 'Branch filter')}
           value={d.session.branchId}
           onChange={(e) => runAction((x) => setBranchFilter(x, e.target.value))}
-          className="h-10 max-w-[170px] appearance-none rounded-lg border border-line bg-surface pr-7 pl-3 text-[13.5px] text-ink outline-none hover:border-ink-3/50 focus:border-blue focus:ring-3 focus:ring-blue/15"
+          className="h-10 max-w-[104px] appearance-none sm:max-w-[170px] rounded-lg border border-line bg-surface pr-7 pl-3 text-[13.5px] text-ink outline-none hover:border-ink-3/50 focus:border-blue focus:ring-3 focus:ring-blue/15"
         >
           <option value="all">{L('Tüm şubeler', 'All branches')}</option>
           {scope.map((b) => (
@@ -483,7 +483,7 @@ function DemoBanner({ onClock }: { onClock: () => void }) {
       <span className="inline-flex items-center gap-1.5 font-semibold tracking-[0.01em]">
         <Flask size={14} weight="bold" /> {L('ACARVO DEMO — Örnek Veriler', 'ACARVO DEMO — Sample Data')}
       </span>
-      <span className="hidden min-w-0 flex-1 truncate text-hold/85 lg:inline">{L('Etkileşimli ürün konsepti. Ödemeler ve kayıtlar demo ortamında simüle edilir; gerçek POS, banka veya belge gönderimi yoktur.', 'Interactive product concept. Payments and records are simulated in the demo; there is no real POS, bank or document delivery.')}</span>
+      <span className="hidden min-w-0 flex-1 truncate text-hold lg:inline">{L('Etkileşimli ürün konsepti. Ödemeler ve kayıtlar demo ortamında simüle edilir; gerçek POS, banka veya belge gönderimi yoktur.', 'Interactive product concept. Payments and records are simulated in the demo; there is no real POS, bank or document delivery.')}</span>
       <button type="button" onClick={onClock} className="tnum ml-auto inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 font-medium hover:bg-hold/10" title={L('Demo tarihini değiştir', 'Change the demo date')} data-testid="demo-clock">
         <ClockCounterClockwise size={13} /> {L('Demo zamanı', 'Demo time')}: {f.dt(d.clock.now)}
       </button>
@@ -501,7 +501,7 @@ function TopBar({ onMenu, open }: { onMenu: () => void; open: (d: DemoDialog) =>
       <button type="button" aria-label={L('Menüyü aç', 'Open menu')} onClick={onMenu} className="grid size-9 shrink-0 place-items-center rounded-lg text-ink-2 hover:bg-line-soft lg:hidden">
         <List size={20} />
       </button>
-      <nav aria-label={L('Konum', 'Location')} className="flex min-w-0 items-center gap-2 text-ink-3">
+      <nav aria-label={L('Konum', 'Location')} className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden text-ink-3">
         {item && <span className="hidden sm:inline">{L(item.group, demoNav().find((g) => g.key === item.group)?.label ?? item.group)}</span>}
         {item && <span className="hidden text-line sm:inline">/</span>}
         {item ? (
@@ -518,8 +518,8 @@ function TopBar({ onMenu, open }: { onMenu: () => void; open: (d: DemoDialog) =>
         {item && detail && <span className="text-line">/</span>}
         {item && detail && <span className="truncate font-medium text-ink">{L('Ayrıntı', 'Detail')}</span>}
       </nav>
-      <div className="ml-auto flex min-w-0 items-center gap-1.5 sm:gap-2">
-        <button type="button" onClick={() => open('search')} aria-label={L('Ara (Ctrl K)', 'Search (Ctrl K)')} className="inline-flex h-10 items-center gap-2 rounded-lg border border-line px-3 text-ink-3 hover:bg-ground">
+      <div className="ml-auto flex shrink-0 items-center gap-1.5 sm:gap-2">
+        <button type="button" onClick={() => open('search')} aria-label={L('Ara (Ctrl K)', 'Search (Ctrl K)')} className="inline-flex h-10 items-center gap-2 rounded-lg border border-line px-2.5 sm:px-3 text-ink-3 hover:bg-ground">
           <MagnifyingGlass size={16} />
           <span className="hidden md:inline">{L('Ara…', 'Search…')}</span>
           <kbd className="hidden rounded border border-line px-1.5 text-[11px] lg:inline">Ctrl K</kbd>
