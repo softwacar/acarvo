@@ -65,3 +65,44 @@ export async function kpiValue(page: Page, label: string): Promise<string> {
     .not.toBe('')
   return found
 }
+
+/** Reads the integer that follows a label in the main area ('Açık görev 6' → 6), waiting for the page to render. */
+export async function countAfter(page: Page, label: string): Promise<number> {
+  const re = new RegExp(label + ' ([0-9]+)')
+  let found = -1
+  await expect
+    .poll(async () => {
+      const text = (await page.locator('main').innerText()).replace(/\s+/g, ' ')
+      const m = re.exec(text)
+      found = m ? Number(m[1]) : -1
+      return found
+    }, { message: `count "${label}" not found` })
+    .toBeGreaterThanOrEqual(0)
+  return found
+}
+
+/** Completes every Delivery Desk step of the rental that is open on the Delivery Desk tab and delivers it. */
+export async function deliverAtDesk(page: Page) {
+  await page.locator('#gate-docs').check()
+  await page.locator('#gate-drv').check()
+  const ready = page.getByRole('button', { name: 'Temiz ve hazır kaydet' })
+  if (await ready.count()) await ready.click()
+  await page.getByRole('button', { name: 'Kiracı imzalasın' }).click()
+  let dlg = page.getByRole('dialog')
+  const hint = await dlg.locator('#sg-n-hint').innerText()
+  await dlg.locator('#sg-n').fill(hint.replace(/^.*?:\s*/, '').trim())
+  await dlg.locator('#sg-ok').check()
+  await dlg.getByRole('button', { name: 'İmzayı kaydet' }).click()
+  await expect(dlg).toBeHidden()
+  const dep = page.getByRole('button', { name: 'Depozito al' })
+  if (await dep.count()) {
+    await dep.click()
+    dlg = page.getByRole('dialog')
+    await dlg.getByRole('button', { name: 'Depozitoyu kaydet' }).click()
+    await expect(dlg).toBeHidden()
+  }
+  const photos = page.getByRole('group', { name: /Fotoğraflar/ }).getByRole('button')
+  for (let i = 0; i < 4; i++) await photos.nth(i).click()
+  await page.getByRole('button', { name: 'Teslimi tamamla' }).click()
+  await expect(page.getByText('Teslim edildi').first()).toBeVisible()
+}

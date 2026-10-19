@@ -128,7 +128,7 @@ export function DashboardPage() {
           { label: L('Bugün teslim', 'Pickups today'), value: pickups.length, hint: L('Onaylı rezervasyon + hazır kiralama', 'Confirmed reservations + prepared rentals'), to: '/kiralamalar?durum=prepared' },
           { label: L('Bugün iade', 'Returns today'), value: returns.length, hint: L('Müşterideki araçlar', 'Vehicles with customers'), to: '/kiralamalar?durum=delivered' },
           { label: L('Aktif kiralama', 'Active rentals'), value: rentalsOut.length, hint: L('Araç müşteride', 'Vehicle out'), to: '/kiralamalar?durum=delivered' },
-          { label: L('Geciken iade', 'Overdue returns'), value: overdue.length, hint: L('Planlanan iade geçti', 'Planned return passed'), to: '/kiralamalar?durum=overdue', tone: overdue.length ? 'alert' : undefined },
+          { label: L('Geciken iade', 'Overdue returns'), value: overdue.length, hint: L('Planlanan iade geçti', 'Planned return passed'), to: '/kiralamalar?gecikme=1', tone: overdue.length ? 'alert' : undefined },
           { label: L('Müsait (şimdi)', 'Available (now)'), value: fleet.buckets.available, hint: L(`${fleet.total} araçtan`, `of ${fleet.total} vehicles`), to: '/araclar?durum=available', tone: 'ok' },
           { label: L('Bekleyen rezervasyon', 'Pending reservations'), value: pending, hint: L(`${confirmed} onaylı yaklaşan`, `${confirmed} confirmed upcoming`), to: '/rezervasyonlar?durum=pending', tone: pending ? 'hold' : undefined },
         ]}
@@ -239,7 +239,7 @@ export function DashboardPage() {
                 { l: L('Açık hasar dosyası', 'Open damage files'), v: d.damages.filter((x) => x.status !== 'closed').length, to: '/hasar-kayitlari' },
                 { l: L('Yolda (transfer)', 'In transit'), v: d.transfers.filter((t) => t.status === 'in_transit').length, to: '/araclar?durum=transfer' },
                 { l: L('Onay bekleyen', 'Awaiting approval'), v: waitingApprovals, to: '/onay-merkezi', tone: waitingApprovals ? 'hold' : undefined },
-                { l: L('Açık görev', 'Open tasks'), v: d.tasks.filter((t) => t.status !== 'done').length, to: '/gorevler' },
+                { l: L('Açık görev', 'Open tasks'), v: d.tasks.filter((t) => t.status !== 'done' && (!t.branchId || active.includes(t.branchId))).length, to: '/gorevler?gorunum=ekip' },
               ].map((r) => (
                 <li key={r.l}>
                   <Link to={r.to as never} className="flex items-center gap-3 px-4 py-2.5 hover:bg-ground/60 sm:px-5">

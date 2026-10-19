@@ -60,7 +60,9 @@ type SearchBag = Record<string, string>
 export function useUrlState(key: string, initial = ''): [string, (v: string) => void] {
   const navigate = useNavigate()
   const search = useRouterState({ select: (s) => s.location.search as SearchBag })
-  const value = typeof search[key] === 'string' ? (search[key] as string) : initial
+  // The router parses numeric-looking values (?gecikme=1) into numbers; the screens work with strings.
+  const raw = search[key]
+  const value = typeof raw === 'string' ? raw : typeof raw === 'number' || typeof raw === 'boolean' ? String(raw) : initial
   const set = useCallback(
     (v: string) => {
       void navigate({ to: '.', search: ((prev: SearchBag) => {
