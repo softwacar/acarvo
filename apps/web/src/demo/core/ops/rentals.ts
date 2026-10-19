@@ -611,7 +611,7 @@ export function financialCloseChecks(d: Db, rentalId: Id): { items: { key: strin
   const items: { key: string; label: string; ok: boolean; detail: string }[] = []
   if (!r) return { items, canClose: false }
   const f = rentalFinance(d, rentalId)
-  items.push({ key: 'op', label: 'Operasyonel durum', ok: r.status === 'closed' || r.status === 'exception_closed' || r.status === 'loss_closed' || r.status === 'cancelled', detail: `Durum: ${r.status}` })
+  items.push({ key: 'op', label: 'Operasyonel durum', ok: r.status === 'closed' || r.status === 'exception_closed' || r.status === 'loss_closed' || r.status === 'cancelled', detail: `Durum: ${({ prepared: 'Hazırlanıyor', delivered: 'Teslim edildi (araç müşteride)', returned: 'İade alındı, kapanmadı', closed: 'Kapandı', cancelled: 'İptal', exception_closed: 'İstisnai kapandı', loss_closed: 'Kayıp kapanışı' } as Record<string, string>)[r.status] ?? r.status}` })
   items.push({ key: 'outstanding', label: 'Açık bakiye', ok: f.outstandingMinor === 0, detail: f.outstandingMinor ? `${fmt(f.outstandingMinor, f.cur)} ödenmemiş` : 'Bakiye yok' })
   items.push({ key: 'unapplied', label: 'Uygulanmamış ödeme', ok: f.unappliedMinor === 0, detail: f.unappliedMinor ? `${fmt(f.unappliedMinor, f.cur)} uygulanmadı` : 'Yok' })
   const held = d.deposits.filter((x) => x.rentalId === rentalId && x.state === 'held')

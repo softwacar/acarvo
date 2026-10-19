@@ -64,28 +64,28 @@ export function PriceBreakdown({ price, compact }: { price: PriceSnapshot | null
               {price.lines.map((l, i) => (
                 <tr key={i}>
                   <td className="py-2 pr-3">{l.label}</td>
-                  {!compact && <td className="tnum px-2 py-2 text-right">{l.qty}</td>}
-                  {!compact && <td className="tnum px-2 py-2 text-right">{fmt(l.unitMinor, price.cur)}</td>}
-                  <td className={cn('tnum py-2 pl-2 text-right font-medium', l.totalMinor < 0 && 'text-ok')}>{fmt(l.totalMinor, price.cur)}</td>
+                  {!compact && <td className="tnum whitespace-nowrap px-2 py-2 text-right">{l.qty}</td>}
+                  {!compact && <td className="tnum whitespace-nowrap px-2 py-2 text-right">{fmt(l.unitMinor, price.cur)}</td>}
+                  <td className={cn('tnum whitespace-nowrap py-2 pl-2 text-right font-medium', l.totalMinor < 0 && 'text-ok')}>{fmt(l.totalMinor, price.cur)}</td>
                 </tr>
               ))}
             </tbody>
             <tfoot className="text-[13px]">
               <tr className="border-t border-line">
                 <td colSpan={compact ? 1 : 3} className="py-1.5 pr-3 text-ink-2">{L('Net', 'Net')}</td>
-                <td className="tnum py-1.5 pl-2 text-right">{fmt(price.netMinor, price.cur)}</td>
+                <td className="tnum whitespace-nowrap py-1.5 pl-2 text-right">{fmt(price.netMinor, price.cur)}</td>
               </tr>
               {price.taxLines.map((t) => (
                 <tr key={t.ruleId}>
                   <td colSpan={compact ? 1 : 3} className="py-1 pr-3 text-ink-2">
                     {t.name} ({t.mode === 'inclusive' ? L('dahil', 'incl.') : L('hariç', 'excl.')})
                   </td>
-                  <td className="tnum py-1 pl-2 text-right">{fmt(t.taxMinor, price.cur)}</td>
+                  <td className="tnum whitespace-nowrap py-1 pl-2 text-right">{fmt(t.taxMinor, price.cur)}</td>
                 </tr>
               ))}
               <tr className="border-t border-line text-[14px] font-semibold">
                 <td colSpan={compact ? 1 : 3} className="py-2 pr-3">{L('Toplam', 'Total')} ({price.cur})</td>
-                <td className="tnum py-2 pl-2 text-right">{fmt(price.grossMinor, price.cur)}</td>
+                <td className="tnum whitespace-nowrap py-2 pl-2 text-right">{fmt(price.grossMinor, price.cur)}</td>
               </tr>
             </tfoot>
           </table>

@@ -60,4 +60,11 @@ const ROUTES: [string, string, Loader][] = [
   ['/araclar', 'vehicles:view', () => import('./pages/vehicles/VehiclesPage').then((m) => ({ default: m.VehiclesPage }))],
   ['/araclar/yeni', 'vehicles:manage', () => import('./pages/vehicles/VehicleFormPage').then((m) => ({ default: m.VehicleFormPage }))],
   ['/araclar/$id', 'vehicles:view', () => import('./pages/vehicles/Vehicle360Page').then((m) => ({ default: m.Vehicle360Page }))],
+  ['/rezervasyonlar', 'reservations:view', () => import('./pages/reservations/ReservationsPage').then((m) => ({ default: m.ReservationsPage }))],
+  ['/rezervasyonlar/yeni', 'reservations:manage', () => import('./pages/reservations/ReservationFormPage').then((m) => ({ default: m.ReservationFormPage }))],
+  ['/rezervasyonlar/$id', 'reservations:view', () => import('./pages/reservations/Reservation360Page').then((m) => ({ default: m.Reservation360Page }))],
+  ['/kiralamalar', 'rentals:view', () => import('./pages/rentals/RentalsPage').then((m) => ({ default: m.RentalsPage }))],
+  ['/kiralamalar/yeni', 'rentals:manage', () => import('./pages/rentals/RentalFormPage').then((m) => ({ default: m.RentalFormPage }))],
+  ['/kiralamalar/$id', 'rentals:view', () => import('./pages/rentals/Rental360Page').then((m) => ({ default: m.Rental360Page }))],
+  ['/rezervasyonlar/$id/duzenle', 'reservations:manage', () => import('./pages/reservations/ReservationFormPage').then((m) => ({ default: m.ReservationFormPage }))],
 ]
