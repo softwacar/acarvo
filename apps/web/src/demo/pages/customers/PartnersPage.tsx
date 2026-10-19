@@ -95,7 +95,7 @@ function Drawer({ p, onClose }: { p: Partner; onClose: () => void }) {
       {payments.length > 0 && <DrawerSection title={L('Komisyon ödemeleri', 'Commission payments')}><ul className="divide-y divide-line-soft text-[13.5px]">{payments.map((x) => <li key={x.id} className="flex justify-between gap-2 py-2"><span>{x.reference}<span className="block text-[12.5px] text-ink-2">{f.date(x.paidAt)}</span></span><span className="tnum font-medium">{fmt(x.amount.minor, x.amount.cur)}</span></li>)}</ul></DrawerSection>}
       {dlg === 'terms' && <TermsDialog p={p} onClose={() => setDlg(null)} />}
       {dlg === 'pay' && <PayDialog p={p} onClose={() => setDlg(null)} />}
-      {dlg === 'adjust' && <ApprovalRequestDialog type="partner_commission_adjustment" target={{ type: 'partner', id: p.id }} onClose={() => setDlg(null)} hint={L('Doğmuş komisyon tutarını düzeltmek için talep açın.', 'Open a request to correct an earned commission amount.')} />}
+      {dlg === 'adjust' && <AdjustDialog p={p} onClose={() => setDlg(null)} />}
     </RecordDrawer>
   )
 }
@@ -154,6 +154,19 @@ function NewPartnerDialog({ onClose, onCreated }: { onClose: () => void; onCreat
         <TextF id="np-pc" label={L('Komisyon (%)', 'Commission (%)')} value={pct} onChange={(v) => setPct(v.replace(/[^\d.]/g, ''))} error={fields.pct} />
       </div>
       <SelectF id="np-t" label={L('Ne zaman doğar', 'Earned when')} value={trigger} onChange={(v) => setTrigger(v as typeof trigger)} options={Object.entries(TRIGGER()).map(([id, label]) => ({ id, label }))} />
+    </FinanceDialog>
+  )
+}
+
+function AdjustDialog({ p, onClose }: { p: Partner; onClose: () => void }) {
+  const d = useDb()
+  const coms = d.commissions.filter((c) => c.partnerId === p.id)
+  const [id, setId] = useState('')
+  const chosen = coms.find((c) => c.id === id)
+  if (chosen) return <ApprovalRequestDialog type="partner_commission_adjustment" target={{ type: 'partner', id: chosen.id }} cur={chosen.amount.cur} onClose={onClose} hint={L('Doğmuş komisyon tutarını düzeltmek için talep açın; ödenmişse ödeme değişmez.', 'Open a request to correct an earned commission amount; a payment already made does not change.')} />
+  return (
+    <FinanceDialog title={L('Komisyon düzeltme talebi', 'Commission adjustment request')} description={L('Düzeltilecek komisyon kaydını seçin.', 'Choose the commission record to adjust.')} confirm={L('Devam', 'Continue')} onClose={onClose} onSubmit={() => (id ? undefined : L('Komisyon seçin.', 'Choose a commission.'))}>
+      <SelectF id="aj-c" label={L('Komisyon', 'Commission')} value={id} onChange={setId} placeholder={L('Seçin', 'Choose')} options={coms.map((c) => ({ id: c.id, label: `${d.rentals.find((r) => r.id === c.rentalId)?.no} · ${fmt(c.amount.minor, c.amount.cur)}` }))} />
     </FinanceDialog>
   )
 }
