@@ -1,0 +1,131 @@
+{
+ "lang": "tr",
+ "findings": [
+  {
+   "route": "/filo-asistani",
+   "name": "Sor",
+   "kind": "inert"
+  },
+  {
+   "route": "/rezervasyonlar",
+   "name": "Önceki sayfa",
+   "kind": "disabled",
+   "title": ""
+  },
+  {
+   "route": "/rezervasyonlar",
+   "name": "Sonraki sayfa",
+   "kind": "click-failed",
+   "detail": "TimeoutError: elementHandle.click: Timeout 4000ms exceeded.\nCall log:\n\u001b[2m  - attempting click action\u001b[22m\n\u001b[2m    2 × w"
+  },
+  {
+   "route": "/rezervasyonlar/yeni",
+   "name": "Rezervasyonu kaydet",
+   "kind": "disabled",
+   "title": ""
+  },
+  {
+   "route": "/rezervasyonlar/rsv16",
+   "name": "Kiralamaya dönüştür",
+   "kind": "disabled",
+   "title": "Önce araç atayın"
+  },
+  {
+   "route": "/kiralamalar",
+   "name": "Önceki sayfa",
+   "kind": "disabled",
+   "title": ""
+  },
+  {
+   "route": "/kiralamalar/yeni",
+   "name": "Kiralamayı hazırla",
+   "kind": "disabled",
+   "title": ""
+  },
+  {
+   "route": "/kiralamalar/rn37",
+   "name": "Teslim Masası",
+   "kind": "inert"
+  },
+  {
+   "route": "/kiralamalar/rn37",
+   "name": "Üst",
+   "kind": "inert"
+  },
+  {
+   "route": "/kiralamalar/rn37",
+   "name": "Teslimi tamamla",
+   "kind": "disabled",
+   "title": ""
+  },
+  {
+   "route": "/kiralamalar/rn36",
+   "name": "İade al",
+   "kind": "inert"
+  },
+  {
+   "route": "/kiralamalar/rn36",
+   "name": "Üst",
+   "kind": "inert"
+  },
+  {
+   "route": "/kiralamalar/rn36",
+   "name": "Aracı iade al",
+   "kind": "disabled",
+   "title": ""
+  },
+  {
+   "route": "/takvim",
+   "name": "Bugün",
+   "kind": "inert"
+  },
+  {
+   "route": "/araclar",
+   "name": "Önceki sayfa",
+   "kind": "disabled",
+   "title": ""
+  },
+  {
+   "route": "/musteriler",
+   "name": "Önceki sayfa",
+   "kind": "disabled",
+   "title": ""
+  },
+  {
+   "route": "/kapasite-planlama",
+   "name": "Bugün",
+   "kind": "inert"
+  },
+  {
+   "route": "/filo-analizi",
+   "name": "Önceki sayfa",
+   "kind": "disabled",
+   "title": ""
+  },
+  {
+   "route": "/raporlar",
+   "name": "Yazdır",
+   "kind": "inert"
+  },
+  {
+   "route": "/sozlesmeler",
+   "name": "Önceki sayfa",
+   "kind": "disabled",
+   "title": ""
+  },
+  {
+   "route": "/belge-merkezi",
+   "name": "Önceki sayfa",
+   "kind": "disabled",
+   "title": ""
+  },
+  {
+   "route": "/islem-gecmisi",
+   "name": "Önceki sayfa",
+   "kind": "disabled",
+   "title": ""
+  }
+ ],
+ "errors": [],
+ "apiReqs": []
+}

@@ -1,5 +1,5 @@
 import { useSyncExternalStore } from 'react'
-import { setLangGlobal } from '../i18n'
+import { getLang, type Lang, localize, setLangGlobal } from '../i18n'
 import { buildSeed } from './seed'
 import type { Db } from './types'
 
@@ -13,6 +13,8 @@ const KEY = 'db'
 const LS_KEY = 'acarvo-demo-db-v3'
 
 let db: Db | null = null
+let version = 0
+let projected: { v: number; lang: Lang; value: Db } | null = null
 const listeners = new Set<() => void>()
 let saveTimer: ReturnType<typeof setTimeout> | null = null
 let persistEnabled = true
@@ -23,13 +25,24 @@ export const getDb = (): Db => {
 }
 export const isLoaded = () => db !== null
 
+/**
+ * The database as the UI reads it: every bilingual string resolved to the current language. The stored state keeps both
+ * languages, so a language change only re-projects it and nothing is lost. Cached per state version and language.
+ */
+export const getProjected = (): Db => {
+  const raw = getDb()
+  const lang = getLang()
+  if (!projected || projected.v !== version || projected.lang !== lang) projected = { v: version, lang, value: localize(raw, lang) }
+  return projected.value
+}
+
 export function useDb(): Db {
   return useSyncExternalStore(
     (l) => {
       listeners.add(l)
       return () => listeners.delete(l)
     },
-    getDb,
+    getProjected,
   )
 }
 
@@ -117,6 +130,7 @@ export async function loadDemo(opts: { persist?: boolean } = {}): Promise<{ migr
   persistEnabled = opts.persist !== false
   let migratedFrom: number | null = null
   const saved = persistEnabled ? await readSaved() : null
+  version++
   if (saved && saved.meta?.schema === DB_SCHEMA) db = saved
   else {
     if (saved) migratedFrom = saved.meta?.schema ?? 0
@@ -130,6 +144,7 @@ export async function loadDemo(opts: { persist?: boolean } = {}): Promise<{ migr
 
 /** Starts again from the initial scenario. Only the demo state is affected. */
 export async function resetDemo(): Promise<void> {
+  version++
   db = buildSeed(new Date())
   setLangGlobal(db.session.lang)
   try {
@@ -153,6 +168,7 @@ export function commit<T>(fn: (d: Db) => T): T {
   const draft = structuredClone(getDb())
   const result = fn(draft)
   draft.meta.modified = true
+  version++
   db = draft
   scheduleSave()
   emit()

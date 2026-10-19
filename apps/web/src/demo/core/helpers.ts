@@ -1,3 +1,4 @@
+import { loc } from '../i18n'
 import type { Db, DemoEvent, HistoryEntry, Id, LinkType } from './types'
 
 // Pure helpers over a Db draft. They have no React, storage or store imports so the seed, the domain operations and
@@ -9,7 +10,8 @@ export class DemoError extends Error {
     readonly code = 'DEMO_RULE',
     readonly fields: Record<string, string> = {},
   ) {
-    super(message)
+    super(loc(message))
+    this.fields = Object.fromEntries(Object.entries(fields).map(([k, v]) => [k, loc(v)]))
   }
 }
 export const fail = (message: string, fields: Record<string, string> = {}, code = 'DEMO_RULE'): never => {
