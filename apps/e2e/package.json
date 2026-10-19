@@ -4,6 +4,7 @@
   "type": "module",
   "scripts": {
     "test": "playwright test",
+    "test:demo": "playwright test --config playwright.demo.config.ts",
     "test:headed": "playwright test --headed",
     "report": "playwright show-report",
     "typecheck": "tsc --noEmit"

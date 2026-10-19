@@ -84,20 +84,32 @@ async function readSaved(): Promise<Db | null> {
     }
   }
 }
+function writeNow() {
+  saveTimer = null
+  if (!db) return
+  idbPut(db).catch(() => {
+    try {
+      localStorage.setItem(LS_KEY, JSON.stringify(db))
+    } catch {
+      // storage unavailable: the demo keeps working in memory for this tab
+    }
+  })
+}
+// A short debounce keeps rapid edits to one write; leaving the page flushes immediately so the last action is not lost.
 function scheduleSave() {
   if (!persistEnabled) return
   if (saveTimer) clearTimeout(saveTimer)
-  saveTimer = setTimeout(() => {
-    saveTimer = null
-    if (!db) return
-    idbPut(db).catch(() => {
-      try {
-        localStorage.setItem(LS_KEY, JSON.stringify(db))
-      } catch {
-        // storage unavailable: the demo keeps working in memory for this tab
-      }
-    })
-  }, 250)
+  saveTimer = setTimeout(writeNow, 40)
+}
+if (typeof window !== 'undefined') {
+  const flush = () => {
+    if (saveTimer && persistEnabled) {
+      clearTimeout(saveTimer)
+      writeNow()
+    }
+  }
+  window.addEventListener('pagehide', flush)
+  document.addEventListener('visibilitychange', () => document.visibilityState === 'hidden' && flush())
 }
 
 /** Loads the saved demo state. A state written by another schema version is replaced by a fresh seed (never silently reused). */
