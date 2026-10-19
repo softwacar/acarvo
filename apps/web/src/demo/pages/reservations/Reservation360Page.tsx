@@ -162,7 +162,7 @@ function Detail({ r }: { r: Reservation }) {
                   <li key={p.id} className="flex flex-wrap items-center justify-between gap-2 py-2.5 text-[13.5px]">
                     <span>
                       <span className="tnum font-medium">{p.no}</span> · {fmt(p.tender.minor, p.tender.cur)}
-                      <span className="block text-[12.5px] text-ink-2">{f.dt(p.recordedAt, p.branchId)} · {p.method}{p.tender.cur !== p.obligationCur ? ` · ${L('eşdeğer', 'equiv.')} ${fmt(p.appliedMinor, p.obligationCur)}` : ''}</span>
+                      <span className="block text-[12.5px] text-ink-2">{f.dt(p.recordedAt, p.branchId)} · {METHOD_LABEL()[p.method]}{p.tender.cur !== p.obligationCur ? ` · ${L('eşdeğer', 'equiv.')} ${fmt(p.appliedMinor, p.obligationCur)}` : ''}</span>
                     </span>
                     <span className="flex gap-1.5">
                       <Status kind="payment" value={p.status} />
