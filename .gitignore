@@ -42,3 +42,7 @@ Thumbs.db
 
 # Database backups (contain personal data and password hashes)
 backups/
+
+apps/web/dist-demo/
+apps/e2e/playwright-report-demo/
+apps/e2e/test-results-demo/
