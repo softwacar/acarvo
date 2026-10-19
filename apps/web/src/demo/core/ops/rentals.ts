@@ -379,7 +379,7 @@ export function issueContract(d: Db, rentalId: Id, templateId: Id): Contract {
       renterName: customer.name + (rental!.drivers.length > 1 ? ` + ${rental!.drivers.length - 1} ek sürücü` : ''),
       vehicle: `${vehicle.plate} · ${vehicle.make} ${vehicle.model} (${vehicle.year})`,
       period: `${new Intl.DateTimeFormat('tr-TR', { timeZone: tz, dateStyle: 'short', timeStyle: 'short' }).format(new Date(rental!.plannedPickupAt))} → ${new Intl.DateTimeFormat('tr-TR', { timeZone: tz, dateStyle: 'short', timeStyle: 'short' }).format(new Date(rental!.plannedReturnAt))}`,
-      totals: price ? `${fmt(price.grossMinor, price.cur)} (KDV dahil/hariç kural: ${price.taxLines[0]?.mode ?? '—'})` : 'Hesaplanmadı',
+      totals: price ? `${fmt(price.grossMinor, price.cur)} (KDV ${price.taxLines[0]?.mode === 'exclusive' ? 'hariç' : 'dahil'})` : 'Hesaplanmadı',
       coverage: rental!.coverageSnapshot ? `${rental!.coverageSnapshot.name} · muafiyet ${fmt(rental!.coverageSnapshot.deductible.minor, rental!.coverageSnapshot.deductible.cur)}` : 'Sigorta paketi seçilmedi',
       deposit: rental!.deposit.required.minor > 0 ? fmt(rental!.deposit.required.minor, rental!.deposit.required.cur) : 'Depozito yok',
     },

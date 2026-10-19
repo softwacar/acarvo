@@ -63,7 +63,7 @@ export function ContractSheet({ c }: { c: Contract }) {
           {s.clauses.map((cl, i) => (
             <li key={i}>
               <p className="font-semibold">
-                {i + 1}. {cl.title}
+                {/^\d+\./.test(cl.title) ? cl.title : `${i + 1}. ${cl.title}`}
               </p>
               <p className="text-[#3b4558]">{cl.body}</p>
             </li>
