@@ -66,9 +66,10 @@ function DemoRoot({ router }: { router: ReturnType<typeof createDemoRouter> }) {
     document.documentElement.lang = d.session.lang
     document.title = `${L('ACARVO Demo', 'ACARVO Demo')} · ${d.settings.company.name}`
   }, [d.session.lang, d.settings.company.name])
-  // The tree is re-mounted when the language changes so every screen reads the new language.
+  // A language change re-renders the mounted screens (they read the language-projected state) without re-mounting
+  // them, so typed form input, open drawers and scroll positions stay.
   return (
-    <div key={d.session.lang}>
+    <div>
       <RouterProvider router={router} />
       <Toaster />
     </div>

@@ -11,7 +11,7 @@ import { L, setLangGlobal } from '../i18n'
 import { demoNav, navItemOf } from '../nav'
 import { SCENARIOS } from '../core/scenarios'
 import { searchAll } from '../core/search'
-import { commit, resetDemo } from '../core/store'
+import { commit, resetDemo, usePersistFailed } from '../core/store'
 import { markNotificationsRead, setBranchFilter, setClock, setLanguage, switchUser } from '../core/ops/control'
 import { DAY, HOUR, zonedIso, dayOf, addDaysYmd } from '../core/time'
 import { entityHref, runAction, useAlerts, useCan, useDb, useFmt, useMe } from './hooks'
@@ -478,12 +478,18 @@ function DemoMenu({ open }: { open: (d: DemoDialog) => void }) {
 function DemoBanner({ onClock }: { onClock: () => void }) {
   const d = useDb()
   const f = useFmt()
+  const saveFailed = usePersistFailed()
   return (
     <div role="note" className="flex min-h-9 flex-wrap items-center gap-x-3 gap-y-0.5 border-b border-hold/25 bg-hold-soft px-4 py-1.5 text-[12.5px] text-hold lg:px-6">
       <span className="inline-flex items-center gap-1.5 font-semibold tracking-[0.01em]">
         <Flask size={14} weight="bold" /> {L('ACARVO DEMO — Örnek Veriler', 'ACARVO DEMO — Sample Data')}
       </span>
       <span className="hidden min-w-0 flex-1 truncate text-hold lg:inline">{L('Etkileşimli ürün konsepti. Ödemeler ve kayıtlar demo ortamında simüle edilir; gerçek POS, banka veya belge gönderimi yoktur.', 'Interactive product concept. Payments and records are simulated in the demo; there is no real POS, bank or document delivery.')}</span>
+      {saveFailed && (
+        <span role="alert" className="font-semibold text-alert">
+          {L('Bu tarayıcıda kayıt yapılamıyor: değişiklikler yalnız bu sekmede kalır, sayfayı yenileyince kaybolur.', 'This browser cannot save: changes stay in this tab only and are lost when the page is reloaded.')}
+        </span>
+      )}
       <button type="button" onClick={onClock} className="tnum ml-auto inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 font-medium hover:bg-hold/10" title={L('Demo tarihini değiştir', 'Change the demo date')} data-testid="demo-clock">
         <ClockCounterClockwise size={13} /> {L('Demo zamanı', 'Demo time')}: {f.dt(d.clock.now)}
       </button>
@@ -534,6 +540,8 @@ function TopBar({ onMenu, open }: { onMenu: () => void; open: (d: DemoDialog) =>
 
 /** Company application frame: demo banner, §4 sidebar, top bar, page outlet. */
 export function DemoShell() {
+  // Subscribing to the projected state makes the whole frame re-render when the language changes (nothing is re-mounted).
+  void useDb().session.lang
   const [menu, setMenu] = useState(false)
   const [dialog, setDialog] = useState<DemoDialog>(null)
   const pathname = useRouterState({ select: (s) => s.location.pathname })

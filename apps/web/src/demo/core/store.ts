@@ -98,16 +98,37 @@ async function readSaved(): Promise<Db | null> {
     }
   }
 }
+// Saving can fail (private window, blocked site data, full storage). The demo keeps working in memory for this tab and
+// says so, so nobody mistakes the demo state for something durable.
+let persistFailed = false
+const persistListeners = new Set<() => void>()
+function setPersistFailed(v: boolean) {
+  if (persistFailed === v) return
+  persistFailed = v
+  persistListeners.forEach((l) => l())
+}
+export function usePersistFailed(): boolean {
+  return useSyncExternalStore(
+    (l) => {
+      persistListeners.add(l)
+      return () => persistListeners.delete(l)
+    },
+    () => persistFailed,
+  )
+}
 function writeNow() {
   saveTimer = null
   if (!db) return
-  idbPut(db).catch(() => {
-    try {
-      localStorage.setItem(LS_KEY, JSON.stringify(db))
-    } catch {
-      // storage unavailable: the demo keeps working in memory for this tab
-    }
-  })
+  idbPut(db)
+    .then(() => setPersistFailed(false))
+    .catch(() => {
+      try {
+        localStorage.setItem(LS_KEY, JSON.stringify(db))
+        setPersistFailed(false)
+      } catch {
+        setPersistFailed(true)
+      }
+    })
 }
 // A short debounce keeps rapid edits to one write; leaving the page flushes immediately so the last action is not lost.
 function scheduleSave() {
