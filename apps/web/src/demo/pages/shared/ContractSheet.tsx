@@ -16,9 +16,12 @@ const PRINT_CSS = `@media print {
 
 export function PrintButton({ label }: { label?: string }) {
   return (
-    <button type="button" className={btnSecondary} onClick={() => window.print()}>
-      <Printer size={16} /> {label ?? L('Yazdır / PDF', 'Print / PDF')}
-    </button>
+    <>
+      <style>{PRINT_CSS}</style>
+      <button type="button" className={btnSecondary} onClick={() => window.print()}>
+        <Printer size={16} /> {label ?? L('Yazdır / PDF', 'Print / PDF')}
+      </button>
+    </>
   )
 }
 

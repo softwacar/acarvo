@@ -795,7 +795,7 @@ function seedControl(d: Db, T: (o: number, hm?: string, z?: string) => string, a
   // Rules
   as('u-owner')
   setNow(T(-30, '10:00'))
-  saveRule(d, { name: 'İade 12 saatten fazla gecikti', conditions: [{ field: 'rental.overdueHours', op: '>=', value: 12 }], join: 'AND', action: 'alert', severity: 'critical', message: 'Kiralama iadesi 12 saatten fazla gecikti: müşteriyle iletişime geçin.', status: 'active' })
+  saveRule(d, { name: 'İade 24 saatten fazla gecikti', conditions: [{ field: 'rental.overdueHours', op: '>=', value: 24 }], join: 'AND', action: 'alert', severity: 'critical', message: 'Kiralama iadesi 24 saatten fazla gecikti: kayıp/çalıntı değerlendirmesi için yetkiliye bildirin.', status: 'active' })
   saveRule(d, { name: 'Rezervasyon 24 saattir onaysız', conditions: [{ field: 'reservation.pendingHours', op: '>=', value: 24 }], join: 'AND', action: 'review_flag', severity: 'warning', message: 'Pending rezervasyon 24 saati geçti: onaylayın veya iptal edin.', status: 'active' })
   saveRule(d, { name: 'Periyodik bakım 500 km aşıldı', conditions: [{ field: 'vehicle.serviceKmOver', op: '>=', value: 500 }], join: 'AND', action: 'alert', severity: 'warning', message: 'Aracın periyodik bakımı gecikti.', status: 'active' })
   saveRule(d, { name: 'Araç belgesi 15 günden az', conditions: [{ field: 'vehicle.docDaysLeft', op: '<=', value: 15 }], join: 'AND', action: 'review_flag', severity: 'warning', message: 'Araç belgesinin süresi dolmak üzere.', status: 'active' })

@@ -15,7 +15,7 @@ import { statusOf } from '../../ui/status'
 
 const BUCKET_COLOR: Record<Bucket, string> = { available: 'bg-ok', reserved: 'bg-blue', rented: 'bg-ink', maintenance: 'bg-hold', transfer: 'bg-ink-3', unavailable: 'bg-alert' }
 
-function ItemRows({ items, showTime = true, empty }: { items: DayItem[]; showTime?: boolean; empty: string }) {
+export function ItemRows({ items, showTime = true, empty }: { items: DayItem[]; showTime?: boolean; empty: string }) {
   const d = useDb()
   const f = useFmt()
   if (!items.length) return <p className="px-4 py-5 text-[13px] text-ink-2 sm:px-5">{empty}</p>

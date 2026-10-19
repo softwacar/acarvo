@@ -66,5 +66,11 @@ const ROUTES: [string, string, Loader][] = [
   ['/kiralamalar', 'rentals:view', () => import('./pages/rentals/RentalsPage').then((m) => ({ default: m.RentalsPage }))],
   ['/kiralamalar/yeni', 'rentals:manage', () => import('./pages/rentals/RentalFormPage').then((m) => ({ default: m.RentalFormPage }))],
   ['/kiralamalar/$id', 'rentals:view', () => import('./pages/rentals/Rental360Page').then((m) => ({ default: m.Rental360Page }))],
+  ['/bakim-servis', 'maintenance:view', () => import('./pages/fleet/MaintenancePage').then((m) => ({ default: m.MaintenancePage }))],
+  ['/hasar-kayitlari', 'damages:view', () => import('./pages/fleet/DamagesPage').then((m) => ({ default: m.DamagesPage }))],
+  ['/olay-merkezi', 'incidents:view', () => import('./pages/fleet/IncidentsPage').then((m) => ({ default: m.IncidentsPage }))],
+  ['/ceza-modulu', 'fines:view', () => import('./pages/fleet/FinesPage').then((m) => ({ default: m.FinesPage }))],
+  ['/gorevler', 'tasks:view', () => import('./pages/work/TasksPage').then((m) => ({ default: m.TasksPage }))],
+  ['/komuta-merkezi', 'command:view', () => import('./pages/work/CommandPage').then((m) => ({ default: m.CommandPage }))],
   ['/rezervasyonlar/$id/duzenle', 'reservations:manage', () => import('./pages/reservations/ReservationFormPage').then((m) => ({ default: m.ReservationFormPage }))],
 ]
