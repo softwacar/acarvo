@@ -78,3 +78,7 @@ export const FUEL_TYPE_LABEL = () => ({ petrol: L('Benzin', 'Petrol'), diesel: L
 export const MAINT_TYPE_LABEL = () => ({ periodic: L('Periyodik bakım', 'Periodic service'), repair: L('Onarım', 'Repair'), tire: L('Lastik', 'Tyres'), cleaning: L('Temizlik', 'Cleaning'), inspection: L('Muayene', 'Inspection') })
 export const INCIDENT_KIND_LABEL = () => ({ accident: L('Kaza', 'Accident'), breakdown: L('Arıza', 'Breakdown'), theft: L('Hırsızlık / kayıp', 'Theft / loss'), complaint: L('Şikayet', 'Complaint'), safety: L('Güvenlik', 'Safety'), other: L('Diğer', 'Other') })
 export const LIABILITY_LABEL = () => ({ undetermined: L('Belirlenmedi', 'Undetermined'), customer: L('Müşteri (muafiyet kadar)', 'Customer (up to excess)'), insurer: L('Sigorta / üçüncü taraf', 'Insurer / third party'), company: L('Şirket', 'Company') })
+
+/** Expense categories are stored as identifiers (Turkish names); this is the display label in the current language. */
+const EXPENSE_CATEGORY_EN: Record<string, string> = { 'Bakım ve servis': 'Maintenance and service', Yakıt: 'Fuel', Temizlik: 'Cleaning', 'Sigorta primi': 'Insurance premium', 'Kira ve işletme': 'Rent and operations', 'Personel dışı genel gider': 'General (non-staff)', 'Ceza (otorite ödemesi)': 'Fine (authority payment)', 'Yol yardım / çekici': 'Roadside / towing', Diğer: 'Other' }
+export const expenseCategoryLabel = (c: string) => L(c, EXPENSE_CATEGORY_EN[c] ?? c)

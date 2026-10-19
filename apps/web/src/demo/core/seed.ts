@@ -1,3 +1,4 @@
+import { B } from '../i18n'
 import { rentalFinance } from './calc/finance'
 import { addHistory, logEvent, nextId, nextNo } from './helpers'
 import { addDaysYmd, dayOf, zonedIso } from './time'
@@ -119,7 +120,7 @@ export function buildSeed(real: Date): Db {
         as('u-mgr')
         d.rentals.find((x) => x.id === r.id)!.deposit.state = 'waived'
         as(user)
-      } else holdDeposit(d, r.id, dm, 'Teslimde alındı')
+      } else holdDeposit(d, r.id, dm, B('Teslimde alındı', 'Received at handover'))
     }
     const startKm = vh.odometerKm
     deliverRental(d, r.id, { km: startKm, fuel: 'full', photos: 5, pins: [], note: '' })
@@ -217,7 +218,7 @@ export function buildSeed(real: Date): Db {
   mk('rx1', { c: 18, v: 10, from: [-14, '10:00'], to: [-9, '10:00'], cur: 'EUR', pay: 'full', payMethod: 'card', stopAt: 'delivered' })
   setNow(T(-12, '15:00'))
   as('u-mgr')
-  exceptionClose(d, rentals.rx1!, 'exception', 'Müşteri araç arızası sonrası aracı yetkili serviste bıraktı; normal iade yapılamadı.')
+  exceptionClose(d, rentals.rx1!, 'exception', B('Müşteri araç arızası sonrası aracı yetkili serviste bıraktı; normal iade yapılamadı.', 'After a breakdown the customer left the vehicle at an authorised service; a normal return was not possible.'))
   find.vehicle(d, veh(10).id)!.location = veh(10).homeBranchId
   rentalFinance(d, rentals.rx1!)
 
@@ -244,7 +245,7 @@ export function buildSeed(real: Date): Db {
       if (v.fuel === 'empty' || v.fuel === 'quarter') v.fuel = 'half'
     }
   }
-  veh(7).readiness = { clean: false, fuelOk: true, checkedAt: null, checkedBy: null, note: 'Yıkama bekliyor' }
+  veh(7).readiness = { clean: false, fuelOk: true, checkedAt: null, checkedBy: null, note: B('Yıkama bekliyor', 'Awaiting washing') }
   veh(2).fuel = 'half'
   d.events.sort((a, b) => a.at.localeCompare(b.at))
   d.notifications.sort((a, b) => b.at.localeCompare(a.at))
@@ -257,7 +258,7 @@ export function buildSeed(real: Date): Db {
 function seedCorporates(d: Db, C: (n: number) => Customer) {
   const mkc = (no: number, name: string, tax: string, country: string, limits: Record<string, number>, agreement: string | undefined, drivers: number[], terms: number) => {
     const id = `co${no}`
-    d.corporates.push({ id, no: nextNo(d, 'KH'), name, taxId: tax, country, address: `${name} · kurgusal adres`, contacts: [{ name: 'Finans Sorumlusu', role: 'Finans', phone: '+387 61 000 0' + no + '0', email: `finans@${name.split(' ')[0]!.toLowerCase()}-demo.example` }], creditLimits: limits, overrides: [], agreementId: agreement, driverCustomerIds: drivers.map((n) => C(n).id), paymentTermsDays: terms, status: 'active' })
+    d.corporates.push({ id, no: nextNo(d, 'KH'), name, taxId: tax, country, address: `${name} · kurgusal adres`, contacts: [{ name: 'Finans Sorumlusu', role: B('Finans', 'Finance'), phone: '+387 61 000 0' + no + '0', email: `finans@${name.split(' ')[0]!.toLowerCase()}-demo.example` }], creditLimits: limits, overrides: [], agreementId: agreement, driverCustomerIds: drivers.map((n) => C(n).id), paymentTermsDays: terms, status: 'active' })
     for (const n of drivers) C(n).corporateId = id
   }
   mkc(1, 'Neretva Logistics d.o.o.', 'DEMO-4300000000011', 'BA', { EUR: 2000000, BAM: 1000000 }, 'ag-gold', [4, 5], 30)
@@ -268,21 +269,21 @@ function seedCorporates(d: Db, C: (n: number) => Customer) {
 
 const VEHICLES: [string, string, number, string, string, 'SJJ' | 'MST' | 'DBV', string, number, 'petrol' | 'diesel' | 'hybrid' | 'electric'][] = [
   ['S11-K-101', 'Volkswagen Polo', 2023, 'Beyaz', 'cl-eco', 'SJJ', 'ECO', 41200, 'petrol'],
-  ['S11-K-102', 'Škoda Fabia', 2022, 'Gümüş', 'cl-eco', 'SJJ', 'ECO', 58200, 'petrol'],
-  ['S11-K-103', 'Opel Corsa', 2023, 'Kırmızı', 'cl-eco', 'SJJ', 'ECO', 33400, 'petrol'],
+  ['S11-K-102', 'Škoda Fabia', 2022, B('Gümüş', 'Silver'), 'cl-eco', 'SJJ', 'ECO', 58200, 'petrol'],
+  ['S11-K-103', 'Opel Corsa', 2023, B('Kırmızı', 'Red'), 'cl-eco', 'SJJ', 'ECO', 33400, 'petrol'],
   ['S11-K-104', 'Volkswagen Golf', 2023, 'Mavi', 'cl-cmp', 'SJJ', 'CMP', 29800, 'diesel'],
   ['S11-K-105', 'Škoda Octavia', 2022, 'Siyah', 'cl-cmp', 'SJJ', 'CMP', 72100, 'diesel'],
   ['S11-K-106', 'Volkswagen Tiguan', 2023, 'Gri', 'cl-suv', 'SJJ', 'SUV', 38900, 'diesel'],
   ['S11-K-107', 'Dacia Duster', 2022, 'Turuncu', 'cl-suv', 'SJJ', 'SUV', 61300, 'diesel'],
   ['S11-K-108', 'BMW 320d', 2023, 'Siyah', 'cl-prm', 'SJJ', 'PRM', 27600, 'diesel'],
   ['S11-K-109', 'Volkswagen Transporter', 2021, 'Beyaz', 'cl-van', 'SJJ', 'VAN', 98500, 'diesel'],
-  ['S11-K-110', 'Renault Clio', 2022, 'Sarı', 'cl-eco', 'SJJ', 'ECO', 52100, 'petrol'],
+  ['S11-K-110', 'Renault Clio', 2022, B('Sarı', 'Yellow'), 'cl-eco', 'SJJ', 'ECO', 52100, 'petrol'],
   ['M22-K-201', 'Volkswagen Polo', 2023, 'Gri', 'cl-eco', 'MST', 'ECO', 36700, 'petrol'],
   ['M22-K-202', 'Renault Clio', 2022, 'Beyaz', 'cl-eco', 'MST', 'ECO', 49800, 'petrol'],
-  ['M22-K-203', 'Toyota Corolla', 2023, 'Gümüş', 'cl-cmp', 'MST', 'CMP', 31500, 'hybrid'],
+  ['M22-K-203', 'Toyota Corolla', 2023, B('Gümüş', 'Silver'), 'cl-cmp', 'MST', 'CMP', 31500, 'hybrid'],
   ['M22-K-204', 'Volkswagen Golf', 2022, 'Siyah', 'cl-cmp', 'MST', 'CMP', 64400, 'petrol'],
   ['M22-K-205', 'Toyota RAV4', 2023, 'Beyaz', 'cl-suv', 'MST', 'SUV', 40700, 'hybrid'],
-  ['M22-K-206', 'Kia Sportage', 2022, 'Kırmızı', 'cl-suv', 'MST', 'SUV', 55900, 'diesel'],
+  ['M22-K-206', 'Kia Sportage', 2022, B('Kırmızı', 'Red'), 'cl-suv', 'MST', 'SUV', 55900, 'diesel'],
   ['M22-K-207', 'Audi A4', 2022, 'Gri', 'cl-prm', 'MST', 'PRM', 59100, 'diesel'],
   ['M22-K-208', 'Mercedes Vito', 2021, 'Beyaz', 'cl-van', 'MST', 'VAN', 87300, 'diesel'],
   ['DU 101-AB', 'Škoda Fabia', 2023, 'Beyaz', 'cl-eco', 'DBV', 'ECO', 30200, 'petrol'],
@@ -319,12 +320,12 @@ function seedVehicles(d: Db, T: (o: number, hm?: string, z?: string) => string):
       readiness: { clean: true, fuelOk: true, checkedAt: T(-30), checkedBy: 'u-ops1', note: '' },
       tire: { type: 'all_season', mountedAt: T(-120), treadMm: 6 + (i % 3) },
       service: { intervalKm: 15000, lastKm: km - 4000 - (i % 5) * 1500, lastAt: T(-90 - i) },
-      keys: { count: 2, holder: 'Şube anahtar dolabı' },
+      keys: { count: 2, holder: B('Şube anahtar dolabı', 'Branch key cabinet') },
     }
     d.vehicles.push(v)
     out.push(v)
     d.odometer.push({ id: nextId(d, 'od'), vehicleId: v.id, km, at: T(-200), source: 'initial', by: 'u-owner' })
-    d.locations.push({ id: nextId(d, 'lc'), vehicleId: v.id, at: T(-200), location: v.location, reason: 'Filoya giriş' })
+    d.locations.push({ id: nextId(d, 'lc'), vehicleId: v.id, at: T(-200), location: v.location, reason: B('Filoya giriş', 'Added to the fleet') })
   })
   // Service due examples: v5 (km over) and v9 are due; v16 close to due.
   out[4]!.service.lastKm = out[4]!.odometerKm - 16200
@@ -362,7 +363,7 @@ function seedVehicles(d: Db, T: (o: number, hm?: string, z?: string) => string):
       readiness: { clean: true, fuelOk: true, checkedAt: T(-5), checkedBy: 'u-ops1', note: '' },
       tire: { type: 'all_season', mountedAt: T(-60), treadMm: 7 },
       service: { intervalKm: 15000, lastKm: km - 3000, lastAt: T(-60) },
-      keys: { count: 0, holder: 'Tedarikçi' },
+      keys: { count: 0, holder: B('Tedarikçi', 'Supplier') },
     }
     d.vehicles.push(v)
     out.push(v)
@@ -374,7 +375,7 @@ function seedVehicleDocs(d: Db, T: (o: number, hm?: string, z?: string) => strin
   const ymd = (off: number) => T(off, '12:00').slice(0, 10)
   let n = 0
   const add = (v: Vehicle, kind: string, validOff: number) => {
-    const doc: DemoDocument = { id: nextId(d, 'doc'), ownerType: 'vehicle', ownerId: v.id, kind, name: `${kind} · ${v.plate} (örnek belge)`, version: 1, validUntil: ymd(validOff), placeholder: true, uploadedAt: T(-100), uploadedBy: 'u-ops1' }
+    const doc: DemoDocument = { id: nextId(d, 'doc'), ownerType: 'vehicle', ownerId: v.id, kind, name: B(`${kind} · ${v.plate} (örnek belge)`, `${kind} · ${v.plate} (placeholder document)`), version: 1, validUntil: ymd(validOff), placeholder: true, uploadedAt: T(-100), uploadedBy: 'u-ops1' }
     d.documents.push(doc)
     n++
   }
@@ -400,17 +401,17 @@ function seedVehicleDocs(d: Db, T: (o: number, hm?: string, z?: string) => strin
 
 function seedDrawers(d: Db, T: (o: number, hm?: string, z?: string) => string, as: (u: string) => void, setNow: (i: string) => void) {
   const mk = (branch: string, cur: Cur, name: string) => d.drawers.push({ id: `dr-${branch}-${cur}`, branchId: `b-${branch}`, currency: cur, name, status: 'closed' })
-  mk('sjj', 'EUR', 'SJJ · EUR kasası')
-  mk('sjj', 'BAM', 'SJJ · BAM kasası')
-  mk('sjj', 'USD', 'SJJ · USD kasası')
-  mk('mst', 'BAM', 'MST · BAM kasası')
-  mk('mst', 'EUR', 'MST · EUR kasası')
-  mk('dbv', 'EUR', 'DBV · EUR kasası')
+  mk('sjj', 'EUR', B('SJJ · EUR kasası', 'SJJ · EUR drawer'))
+  mk('sjj', 'BAM', B('SJJ · BAM kasası', 'SJJ · BAM drawer'))
+  mk('sjj', 'USD', B('SJJ · USD kasası', 'SJJ · USD drawer'))
+  mk('mst', 'BAM', B('MST · BAM kasası', 'MST · BAM drawer'))
+  mk('mst', 'EUR', B('MST · EUR kasası', 'MST · EUR drawer'))
+  mk('dbv', 'EUR', B('DBV · EUR kasası', 'DBV · EUR drawer'))
   as('u-owner')
   // A few closed shifts for history (with a small count difference on one of them)
   const closed: [string, number, number, number, string, string][] = [
-    ['dr-sjj-EUR', -58, 50000, 50000, '', 'Vardiya sorunsuz kapandı'],
-    ['dr-sjj-EUR', -57, 50000, 49800, 'Para üstü hatası (2,00 EUR eksik)', 'Fark yöneticiye bildirildi'],
+    ['dr-sjj-EUR', -58, 50000, 50000, '', B('Vardiya sorunsuz kapandı', 'The shift closed without problems')],
+    ['dr-sjj-EUR', -57, 50000, 49800, B('Para üstü hatası (2,00 EUR eksik)', 'Change error (2.00 EUR short)'), B('Fark yöneticiye bildirildi', 'The variance was reported to the manager')],
     ['dr-sjj-BAM', -57, 100000, 100000, '', ''],
     ['dr-mst-BAM', -58, 80000, 80000, '', ''],
   ]
@@ -433,46 +434,46 @@ function seedDrawers(d: Db, T: (o: number, hm?: string, z?: string) => string, a
 function seedSuppliers(d: Db, T: (o: number, hm?: string, z?: string) => string, as: (u: string) => void, setNow: (i: string) => void, veh: (n: number) => Vehicle) {
   as('u-owner')
   setNow(T(-60, '09:00'))
-  createSupplier(d, { name: 'Balkan Fleet Partners d.o.o.', country: 'BA', contactName: 'Amar Delić (Demo)', email: 'amar@balkanfleet-demo.example', phone: '+387 61 000 901', terms: '30 gün vadeli, günlük bedel' })
-  createSupplier(d, { name: 'Coast Cars Supply d.o.o.', country: 'HR', contactName: 'Mia Perić (Demo)', email: 'mia@coastcars-demo.example', phone: '+385 91 000 902', terms: 'Aylık mutabakat' })
-  createSupplier(d, { name: 'Herzegovina Auto Supply', country: 'BA', contactName: 'Ivan Jurić (Demo)', email: 'ivan@hercegovina-demo.example', phone: '+387 63 000 903', terms: 'Haftalık mutabakat' })
+  createSupplier(d, { name: 'Balkan Fleet Partners d.o.o.', country: 'BA', contactName: 'Amar Delić (Demo)', email: 'amar@balkanfleet-demo.example', phone: '+387 61 000 901', terms: B('30 gün vadeli, günlük bedel', '30-day terms, daily rate') })
+  createSupplier(d, { name: 'Coast Cars Supply d.o.o.', country: 'HR', contactName: 'Mia Perić (Demo)', email: 'mia@coastcars-demo.example', phone: '+385 91 000 902', terms: B('Aylık mutabakat', 'Monthly settlement') })
+  createSupplier(d, { name: 'Herzegovina Auto Supply', country: 'BA', contactName: 'Ivan Jurić (Demo)', email: 'ivan@hercegovina-demo.example', phone: '+387 63 000 903', terms: B('Haftalık mutabakat', 'Weekly settlement') })
   // ids su1..su3 were used in the external vehicle masters
   d.suppliers.forEach((s, i) => (s.id = `su${i + 1}`))
   void veh
   // Past engagement for v26: requested, offered, accepted, received, returned, settled and paid
   setNow(T(-45, '09:00'))
-  const sr = createSourcingRequest(d, { classId: 'cl-suv', from: T(-40, '08:00'), to: T(-30, '18:00'), branchId: 'b-sjj', reason: 'Yaz sezonu talep artışı' })
+  const sr = createSourcingRequest(d, { classId: 'cl-suv', from: T(-40, '08:00'), to: T(-30, '18:00'), branchId: 'b-sjj', reason: B('Yaz sezonu talep artışı', 'Summer season demand increase') })
   addSupplierOffer(d, sr.id, { supplierId: 'su1', vehicle: 'Hyundai Tucson 2024', dailyRate: { minor: 3800, cur: 'EUR' }, validUntil: T(-38, '18:00') })
   const eg = acceptOffer(d, sr.id, d.sourcing[0]!.offers[0]!.id, 'S11-X-901', 'Hyundai', 'Tucson')
   setNow(T(-40, '08:30'))
-  receiveEngagement(d, eg.id, 17500, 'full', 5, 'Teslim alındı, hasar yok')
+  receiveEngagement(d, eg.id, 17500, 'full', 5, B('Teslim alındı, hasar yok', 'Received, no damage'))
   setNow(T(-30, '18:30'))
-  returnEngagement(d, eg.id, 18200, 'full', 5, 'İade edildi')
+  returnEngagement(d, eg.id, 18200, 'full', 5, B('İade edildi', 'Returned'))
   setNow(T(-28, '10:00'))
   createSettlement(d, eg.id)
   setNow(T(-20, '10:00'))
   paySettlement(d, d.settlements[0]!.id, 'EFT-DEMO-0042')
   // Future engagement for the same external master (confirmed, not received): not deliverable yet
   setNow(T(-3, '09:00'))
-  const sr2 = createSourcingRequest(d, { classId: 'cl-suv', from: T(8, '08:00'), to: T(20, '18:00'), branchId: 'b-sjj', reason: 'Kurumsal etkinlik dönemi' })
+  const sr2 = createSourcingRequest(d, { classId: 'cl-suv', from: T(8, '08:00'), to: T(20, '18:00'), branchId: 'b-sjj', reason: B('Kurumsal etkinlik dönemi', 'Corporate event period') })
   addSupplierOffer(d, sr2.id, { supplierId: 'su1', vehicle: 'Hyundai Tucson 2024', dailyRate: { minor: 4000, cur: 'EUR' }, validUntil: T(5, '18:00') })
   acceptOffer(d, sr2.id, d.sourcing[1]!.offers[0]!.id, 'S11-X-901', 'Hyundai', 'Tucson')
   // v28: confirmed engagement for later this month, a second open request awaiting offers
   const sr3 = createSourcingRequest(d, { classId: 'cl-van', from: T(3, '08:00'), to: T(15, '18:00'), branchId: 'b-mst', reason: 'Grup transferi' })
   addSupplierOffer(d, sr3.id, { supplierId: 'su3', vehicle: 'Ford Tourneo 2023', dailyRate: { minor: 6500, cur: 'EUR' }, validUntil: T(2, '18:00') })
   acceptOffer(d, sr3.id, d.sourcing[2]!.offers[0]!.id, 'M22-X-902', 'Ford', 'Tourneo')
-  createSourcingRequest(d, { classId: 'cl-prm', from: T(10, '08:00'), to: T(17, '18:00'), branchId: 'b-dbv', reason: 'Düğün transferi talebi (teklif bekleniyor)' })
+  createSourcingRequest(d, { classId: 'cl-prm', from: T(10, '08:00'), to: T(17, '18:00'), branchId: 'b-dbv', reason: B('Düğün transferi talebi (teklif bekleniyor)', 'Wedding transfer request (awaiting a quote)') })
 }
 
 function seedExternalReceive(d: Db, T: (o: number, hm?: string, z?: string) => string, as: (u: string) => void, setNow: (i: string) => void, veh: (n: number) => Vehicle) {
   as('u-owner')
   setNow(T(-8, '09:00'))
-  const sr = createSourcingRequest(d, { classId: 'cl-prm', from: T(-6, '08:00'), to: T(9, '18:00'), branchId: 'b-dbv', reason: 'Premium sınıf kapasitesi' })
+  const sr = createSourcingRequest(d, { classId: 'cl-prm', from: T(-6, '08:00'), to: T(9, '18:00'), branchId: 'b-dbv', reason: B('Premium sınıf kapasitesi', 'Premium class capacity') })
   addSupplierOffer(d, sr.id, { supplierId: 'su2', vehicle: 'Volvo S90 2024', dailyRate: { minor: 6800, cur: 'EUR' }, validUntil: T(-7, '18:00') })
   const sr0 = d.sourcing.find((x) => x.id === sr.id)!
   const eg = acceptOffer(d, sr.id, sr0.offers[0]!.id, 'DU 901-XY', 'Volvo', 'S90')
   setNow(T(-5, '09:00'))
-  receiveEngagement(d, eg.id, veh(27).odometerKm, 'full', 5, 'Teslim alındı, hasarsız')
+  receiveEngagement(d, eg.id, veh(27).odometerKm, 'full', 5, B('Teslim alındı, hasarsız', 'Received, undamaged'))
   veh(27).readiness = { clean: true, fuelOk: true, checkedAt: T(-5, '10:00'), checkedBy: 'u-ops3', note: '' }
 }
 
@@ -511,10 +512,10 @@ function seedReservations(d: Db, T: (o: number, hm?: string, z?: string) => stri
   const cx = mk(1, null, 'cl-eco', 'b-sjj', [-4, '10:00'], [-1, '10:00'], 'BAM', { created: -10 })
   as('u-ops1')
   setNow(T(-6, '12:00'))
-  cancelReservation(d, cx.id, 'Müşteri uçuşunu iptal etti')
+  cancelReservation(d, cx.id, B('Müşteri uçuşunu iptal etti', 'The customer cancelled their flight'))
   const cx2 = mk(2, null, 'cl-cmp', 'b-mst', [3, '10:00'], [6, '10:00'], 'EUR', { created: -2, status: 'pending' })
   setNow(T(-1, '10:00'))
-  cancelReservation(d, cx2.id, 'Fiyat uygun bulunmadı')
+  cancelReservation(d, cx2.id, B('Fiyat uygun bulunmadı', 'The price was not acceptable'))
   const ns = mk(16, null, 'cl-eco', 'b-dbv', [-2, '10:00'], [1, '10:00'], 'EUR', { created: -8 })
   setNow(T(-1, '18:00'))
   as('u-ops3')
@@ -522,8 +523,8 @@ function seedReservations(d: Db, T: (o: number, hm?: string, z?: string) => stri
   // waitlist
   as('u-ops1')
   setNow(T(-1, '16:00'))
-  addWaitlist(d, { customerId: C(3).id, classId: 'cl-suv', branchId: 'b-sjj', from: T(2, '10:00'), to: T(6, '10:00'), note: 'SUV müsait olursa arayın' })
-  addWaitlist(d, { customerId: C(7).id, classId: 'cl-prm', branchId: 'b-sjj', from: T(4, '10:00'), to: T(8, '10:00'), note: 'Premium sınıf bekliyor' })
+  addWaitlist(d, { customerId: C(3).id, classId: 'cl-suv', branchId: 'b-sjj', from: T(2, '10:00'), to: T(6, '10:00'), note: B('SUV müsait olursa arayın', 'Call if an SUV becomes available') })
+  addWaitlist(d, { customerId: C(7).id, classId: 'cl-prm', branchId: 'b-sjj', from: T(4, '10:00'), to: T(8, '10:00'), note: B('Premium sınıf bekliyor', 'Waiting for a Premium class') })
   addWaitlist(d, { customerId: C(13).id, classId: 'cl-eco', branchId: 'b-mst', from: T(1, '10:00'), to: T(3, '10:00'), note: '' })
 }
 
@@ -532,11 +533,11 @@ function seedOperations(d: Db, T: (o: number, hm?: string, z?: string) => string
   // Maintenance
   as('u-fleet')
   setNow(T(-6, '10:00'))
-  const m1 = planMaintenance(d, { vehicleId: veh(17).id, type: 'periodic', plannedStart: T(-1, '09:00'), plannedEnd: T(0, '16:00'), providerId: 'sp-1', reason: '60.000 km periyodik bakım' })
+  const m1 = planMaintenance(d, { vehicleId: veh(17).id, type: 'periodic', plannedStart: T(-1, '09:00'), plannedEnd: T(0, '16:00'), providerId: 'sp-1', reason: B('60.000 km periyodik bakım', '60,000 km periodic service') })
   setNow(T(-1, '09:00'))
   startMaintenance(d, m1.id)
   setNow(T(-2, '10:00'))
-  planMaintenance(d, { vehicleId: veh(18).id, type: 'tire', plannedStart: T(1, '09:00'), plannedEnd: T(1, '17:00'), providerId: 'sp-2', reason: 'Mevsimlik lastik değişimi' })
+  planMaintenance(d, { vehicleId: veh(18).id, type: 'tire', plannedStart: T(1, '09:00'), plannedEnd: T(1, '17:00'), providerId: 'sp-2', reason: B('Mevsimlik lastik değişimi', 'Seasonal tyre change') })
   // completed ones for history and costs
   setNow(T(-20, '09:00'))
   const m3 = planMaintenance(d, { vehicleId: veh(12).id, type: 'cleaning', plannedStart: T(-19, '09:00'), plannedEnd: T(-19, '12:00'), providerId: 'sp-4', reason: 'Derin temizlik' })
@@ -545,13 +546,13 @@ function seedOperations(d: Db, T: (o: number, hm?: string, z?: string) => string
   setNow(T(-19, '12:00'))
   completeMaintenance(d, m3.id, { cost: { minor: 3000, cur: 'EUR' } })
   setNow(T(-35, '09:00'))
-  const m4 = planMaintenance(d, { vehicleId: veh(22).id, type: 'tire', plannedStart: T(-34, '09:00'), plannedEnd: T(-34, '15:00'), providerId: 'sp-3', reason: 'Yaz lastiği takımı' })
+  const m4 = planMaintenance(d, { vehicleId: veh(22).id, type: 'tire', plannedStart: T(-34, '09:00'), plannedEnd: T(-34, '15:00'), providerId: 'sp-3', reason: B('Yaz lastiği takımı', 'Summer tyre set') })
   setNow(T(-34, '09:00'))
   startMaintenance(d, m4.id)
   setNow(T(-34, '15:00'))
   completeMaintenance(d, m4.id, { cost: { minor: 12000, cur: 'EUR' }, tireTo: 'summer', treadMm: 8 })
   setNow(T(-50, '09:00'))
-  const m5 = planMaintenance(d, { vehicleId: veh(8).id, type: 'periodic', plannedStart: T(-49, '09:00'), plannedEnd: T(-49, '17:00'), providerId: 'sp-1', reason: '20.000 km bakımı' })
+  const m5 = planMaintenance(d, { vehicleId: veh(8).id, type: 'periodic', plannedStart: T(-49, '09:00'), plannedEnd: T(-49, '17:00'), providerId: 'sp-1', reason: B('20.000 km bakımı', '20,000 km service') })
   setNow(T(-49, '09:00'))
   startMaintenance(d, m5.id)
   setNow(T(-49, '17:00'))
@@ -563,13 +564,13 @@ function seedOperations(d: Db, T: (o: number, hm?: string, z?: string) => string
   // v16: severe damage found after a rental was closed yesterday; it blocks the vehicle and a confirmed reservation tomorrow is now at risk
   const pastR = find.rental(d, rentals.p14!)
   void pastR
-  const dm1 = createDamage(d, { vehicleId: veh(16).id, severity: 'severe', area: 'Ön tampon ve far', description: 'Park halinde çarpma: ön tampon kırık, sol far çatlak.', photos: 5, blocksVehicle: true, estimate: { minor: 185000, cur: 'EUR' } })
+  const dm1 = createDamage(d, { vehicleId: veh(16).id, severity: 'severe', area: B('Ön tampon ve far', 'Front bumper and headlight'), description: B('Park halinde çarpma: ön tampon kırık, sol far çatlak.', 'Parking collision: front bumper broken, left headlight cracked.'), photos: 5, blocksVehicle: true, estimate: { minor: 185000, cur: 'EUR' } })
   as('u-fleet')
   linkRepair(d, dm1.id, T(5, '09:00'), T(7, '17:00'), 'sp-1')
   // v20: minor damage found at return of rr3
   as('u-ops3')
   setNow(T(-1, '09:50'))
-  const dm2 = createDamage(d, { vehicleId: veh(20).id, rentalId: rentals.rr3, severity: 'moderate', area: 'Sağ arka kapı', description: 'İade kontrolünde sağ arka kapıda çizik ve göçük bulundu.', photos: 5, blocksVehicle: false, estimate: { minor: 96000, cur: 'EUR' } })
+  const dm2 = createDamage(d, { vehicleId: veh(20).id, rentalId: rentals.rr3, severity: 'moderate', area: B('Sağ arka kapı', 'Rear right door'), description: B('İade kontrolünde sağ arka kapıda çizik ve göçük bulundu.', 'A scratch and a dent were found on the rear right door at the return inspection.'), photos: 5, blocksVehicle: false, estimate: { minor: 96000, cur: 'EUR' } })
   as('u-mgr2')
   setDamageLiability(d, dm2.id, 'customer', { minor: 96000, cur: 'EUR' })
   chargeDamageToCustomer(d, dm2.id)
@@ -577,11 +578,11 @@ function seedOperations(d: Db, T: (o: number, hm?: string, z?: string) => string
   // older damage with insurer liability and repair completed
   as('u-ops2')
   setNow(T(-25, '14:00'))
-  const dm3 = createDamage(d, { vehicleId: veh(15).id, rentalId: rentals.p18, severity: 'minor', area: 'Ön tampon', description: 'Park sensörü çevresinde küçük çizik.', photos: 4, blocksVehicle: false, estimate: { minor: 24000, cur: 'BAM' } })
+  const dm3 = createDamage(d, { vehicleId: veh(15).id, rentalId: rentals.p18, severity: 'minor', area: B('Ön tampon', 'Front bumper'), description: B('Park sensörü çevresinde küçük çizik.', 'Small scratch around the parking sensor.'), photos: 4, blocksVehicle: false, estimate: { minor: 24000, cur: 'BAM' } })
   as('u-mgr2')
   setDamageLiability(d, dm3.id, 'company', { minor: 24000, cur: 'BAM' })
   d.damages.find((x) => x.id === dm3.id)!.status = 'closed'
-  addHistory(d, d.damages.find((x) => x.id === dm3.id)!.history, 'Kapatıldı', 'Şirket üstlendi; kapatıldı.')
+  addHistory(d, d.damages.find((x) => x.id === dm3.id)!.history, B('Kapatıldı', 'Closed'), B('Şirket üstlendi; kapatıldı.', 'The company bore it; closed.'))
   // Repair maintenance for dm2 (planned)
   as('u-fleet')
   setNow(T(-1, '10:30'))
@@ -590,33 +591,33 @@ function seedOperations(d: Db, T: (o: number, hm?: string, z?: string) => string
   // Incidents
   as('u-ops1')
   setNow(T(-2, '14:00'))
-  const in1 = createIncident(d, { kind: 'breakdown', severity: 'medium', title: 'Müşteri yolda akü arızası bildirdi', description: 'Kiracı otobanda aracın çalışmadığını bildirdi; çekici yönlendirildi.', vehicleId: veh(1).id, rentalId: rentals.rd1, ownerId: 'u-mgr' })
-  addIncidentEvidence(d, in1.id, 'Müşteri telefon notu')
+  const in1 = createIncident(d, { kind: 'breakdown', severity: 'medium', title: B('Müşteri yolda akü arızası bildirdi', 'The customer reported a battery failure on the road'), description: B('Kiracı otobanda aracın çalışmadığını bildirdi; çekici yönlendirildi.', 'The renter reported the car would not start on the motorway; a tow truck was sent.'), vehicleId: veh(1).id, rentalId: rentals.rd1, ownerId: 'u-mgr' })
+  addIncidentEvidence(d, in1.id, B('Müşteri telefon notu', 'Customer phone note'))
   as('u-mgr')
-  setIncidentStatus(d, in1.id, 'investigating', 'Servis ile görüşüldü')
+  setIncidentStatus(d, in1.id, 'investigating', B('Servis ile görüşüldü', 'Discussed with the service'))
   as('u-ops3')
   setNow(T(-1, '10:30'))
-  createIncident(d, { kind: 'accident', severity: 'high', title: 'Park halindeki araç hasar gördü', description: 'Havalimanı otoparkında bir araç ön tampondan hasar aldı.', vehicleId: veh(16).id, ownerId: 'u-mgr2', links: [{ type: 'damage', id: dm1.id }] })
+  createIncident(d, { kind: 'accident', severity: 'high', title: B('Park halindeki araç hasar gördü', 'A parked vehicle was damaged'), description: B('Havalimanı otoparkında bir araç ön tampondan hasar aldı.', 'A vehicle was damaged on the front bumper in the airport car park.'), vehicleId: veh(16).id, ownerId: 'u-mgr2', links: [{ type: 'damage', id: dm1.id }] })
   as('u-ops2')
   setNow(T(-6, '12:00'))
-  const in3 = createIncident(d, { kind: 'complaint', severity: 'low', title: 'Temizlik şikayeti', description: 'Müşteri aracın iç temizliğinden memnun kalmadı.', vehicleId: veh(11).id, ownerId: 'u-ops2' })
+  const in3 = createIncident(d, { kind: 'complaint', severity: 'low', title: B('Temizlik şikayeti', 'Cleanliness complaint'), description: B('Müşteri aracın iç temizliğinden memnun kalmadı.', 'The customer was not satisfied with the interior cleanliness.'), vehicleId: veh(11).id, ownerId: 'u-ops2' })
   as('u-mgr')
-  setIncidentStatus(d, in3.id, 'resolved', 'Müşteriye özür ve bir sonraki kiralamada hizmet indirimi önerildi.')
+  setIncidentStatus(d, in3.id, 'resolved', B('Müşteriye özür ve bir sonraki kiralamada hizmet indirimi önerildi.', 'An apology and a discount on the next rental were offered to the customer.'))
   as('u-ops1')
   setNow(T(-12, '09:00'))
-  const in4 = createIncident(d, { kind: 'safety', severity: 'critical', title: 'Fren uyarı lambası yandı', description: 'Teslim öncesi kontrolde fren uyarı lambası yandı; araç servise yönlendirildi.', vehicleId: veh(10).id, ownerId: 'u-fleet' })
+  const in4 = createIncident(d, { kind: 'safety', severity: 'critical', title: B('Fren uyarı lambası yandı', 'Brake warning light came on'), description: B('Teslim öncesi kontrolde fren uyarı lambası yandı; araç servise yönlendirildi.', 'The brake warning light came on at the pre-handover check; the vehicle was sent to service.'), vehicleId: veh(10).id, ownerId: 'u-fleet' })
   as('u-mgr')
-  setIncidentStatus(d, in4.id, 'resolved', 'Fren balataları değiştirildi, test sürüşü tamam.')
+  setIncidentStatus(d, in4.id, 'resolved', B('Fren balataları değiştirildi, test sürüşü tamam.', 'Brake pads replaced, test drive completed.'))
   as('u-mgr2')
-  setIncidentStatus(d, in4.id, 'closed', 'Servis faturası kontrol edildi.')
+  setIncidentStatus(d, in4.id, 'closed', B('Servis faturası kontrol edildi.', 'Service invoice checked.'))
   as('u-ops1')
   setNow(T(0, '08:30'))
-  createIncident(d, { kind: 'theft', severity: 'high', title: 'Anahtar kaybı şüphesi', description: 'Şube anahtar dolabında bir yedek anahtar eksik görünüyor.', ownerId: 'u-mgr' })
+  createIncident(d, { kind: 'theft', severity: 'high', title: B('Anahtar kaybı şüphesi', 'Suspected lost key'), description: B('Şube anahtar dolabında bir yedek anahtar eksik görünüyor.', 'A spare key appears to be missing from the branch key cabinet.'), ownerId: 'u-mgr' })
 
   // Fines
   as('u-mgr')
   setNow(T(-1, '10:00'))
-  const f1 = createFine(d, { vehicleId: veh(1).id, occurredAt: T(-2, '14:20'), kind: 'Hız ihlali', authorityRef: 'BA-2026-778123', authority: 'Sarajevo Kanton Polisi (kurgusal)', amount: { minor: 6000, cur: 'BAM' }, dueDate: T(25, '12:00').slice(0, 10) })
+  const f1 = createFine(d, { vehicleId: veh(1).id, occurredAt: T(-2, '14:20'), kind: B('Hız ihlali', 'Speeding'), authorityRef: 'BA-2026-778123', authority: 'Sarajevo Kanton Polisi (kurgusal)', amount: { minor: 6000, cur: 'BAM' }, dueDate: T(25, '12:00').slice(0, 10) })
   void f1
   setNow(T(-15, '09:00'))
   const f2 = createFine(d, { vehicleId: veh(6).id, occurredAt: T(-4, '08:10'), kind: 'Park ihlali', authorityRef: 'BA-2026-778050', authority: 'Sarajevo Belediyesi (kurgusal)', amount: { minor: 3000, cur: 'EUR' }, dueDate: T(10, '12:00').slice(0, 10) })
@@ -628,13 +629,13 @@ function seedOperations(d: Db, T: (o: number, hm?: string, z?: string) => string
   payFineToAuthority(d, f2.id)
   as('u-mgr2')
   setNow(T(-9, '10:00'))
-  const f3 = createFine(d, { vehicleId: veh(24).id, occurredAt: T(-10, '17:45'), kind: 'Kırmızı ışık', authorityRef: 'HR-2026-33410', authority: 'Dubrovnik Polis Müdürlüğü (kurgusal)', amount: { minor: 15000, cur: 'EUR' }, dueDate: T(12, '12:00').slice(0, 10) })
+  const f3 = createFine(d, { vehicleId: veh(24).id, occurredAt: T(-10, '17:45'), kind: B('Kırmızı ışık', 'Red light'), authorityRef: 'HR-2026-33410', authority: B('Dubrovnik Polis Müdürlüğü (kurgusal)', 'Dubrovnik Police Department (fictional)'), amount: { minor: 15000, cur: 'EUR' }, dueDate: T(12, '12:00').slice(0, 10) })
   void f3
   setNow(T(-2, '11:00'))
-  createFine(d, { vehicleId: veh(23).id, occurredAt: T(-30, '11:00'), kind: 'Hız ihlali', authorityRef: 'HR-2026-33002', authority: 'Dubrovnik Polis Müdürlüğü (kurgusal)', amount: { minor: 9000, cur: 'EUR' }, dueDate: T(2, '12:00').slice(0, 10) })
+  createFine(d, { vehicleId: veh(23).id, occurredAt: T(-30, '11:00'), kind: B('Hız ihlali', 'Speeding'), authorityRef: 'HR-2026-33002', authority: B('Dubrovnik Polis Müdürlüğü (kurgusal)', 'Dubrovnik Police Department (fictional)'), amount: { minor: 9000, cur: 'EUR' }, dueDate: T(2, '12:00').slice(0, 10) })
   as('u-mgr2')
   setNow(T(-1, '09:30'))
-  createFine(d, { vehicleId: veh(15).id, occurredAt: T(-3, '13:05'), kind: 'Şerit ihlali', authorityRef: 'BA-2026-778400', authority: 'Hersek-Neretva Kanton Polisi (kurgusal)', amount: { minor: 4000, cur: 'BAM' }, dueDate: T(18, '12:00').slice(0, 10) })
+  createFine(d, { vehicleId: veh(15).id, occurredAt: T(-3, '13:05'), kind: B('Şerit ihlali', 'Lane violation'), authorityRef: 'BA-2026-778400', authority: 'Hersek-Neretva Kanton Polisi (kurgusal)', amount: { minor: 4000, cur: 'BAM' }, dueDate: T(18, '12:00').slice(0, 10) })
 
   // Tasks
   as('u-mgr')
@@ -642,33 +643,33 @@ function seedOperations(d: Db, T: (o: number, hm?: string, z?: string) => string
     setNow(T(o.created ?? -1, '09:00'))
     return createTask(d, { title, description: desc, priority: prio, dueAt: T(due[0], due[1]), ownerId: o.owner, recipientIds: o.recipients ?? [], pool: !!o.pool, branchId: o.branch, link: o.link })
   }
-  mkTask('Gecikmiş iade için müşteriyi arayın', 'K-… kiralaması planlanan iadeyi geçti. Müşteriyle iletişime geçip yeni iade zamanını not edin.', 'urgent', [0, '12:00'], { owner: 'u-ops1', branch: 'b-sjj', link: { type: 'rental', id: rentals.rd1! } })
-  mkTask('Duster aracı yıkatın', 'Bugün 15:30 teslim öncesi araç temizliği.', 'high', [0, '14:00'], { owner: 'u-ops1', branch: 'b-sjj', link: { type: 'vehicle', id: veh(7).id } })
-  mkTask('Mostar şubesi: sınıf rezervasyonuna araç atayın', 'Bugün 18:00 teslim edilecek Ekonomi sınıfı rezervasyona belirli araç atanmalı.', 'high', [0, '16:00'], { owner: 'u-ops2', branch: 'b-mst' })
-  const t4 = mkTask('Sağ arka kapı onarımı için servis teklifi alın', 'Hasar dosyası bağlı onarım için iki servisten teklif alın.', 'normal', [2, '17:00'], { recipients: ['u-fleet', 'u-mgr2'], branch: 'b-dbv', link: { type: 'damage', id: dm2.id } })
+  mkTask(B('Gecikmiş iade için müşteriyi arayın', 'Call the customer about the overdue return'), B('K-… kiralaması planlanan iadeyi geçti. Müşteriyle iletişime geçip yeni iade zamanını not edin.', 'Rental K-… passed its planned return. Contact the customer and note the new return time.'), 'urgent', [0, '12:00'], { owner: 'u-ops1', branch: 'b-sjj', link: { type: 'rental', id: rentals.rd1! } })
+  mkTask(B('Duster aracı yıkatın', 'Have the Duster washed'), B('Bugün 15:30 teslim öncesi araç temizliği.', 'Vehicle cleaning before the 15:30 handover today.'), 'high', [0, '14:00'], { owner: 'u-ops1', branch: 'b-sjj', link: { type: 'vehicle', id: veh(7).id } })
+  mkTask(B('Mostar şubesi: sınıf rezervasyonuna araç atayın', 'Mostar branch: assign a vehicle to the class reservation'), B('Bugün 18:00 teslim edilecek Ekonomi sınıfı rezervasyona belirli araç atanmalı.', 'A specific vehicle must be assigned to the Economy class reservation due for handover today at 18:00.'), 'high', [0, '16:00'], { owner: 'u-ops2', branch: 'b-mst' })
+  const t4 = mkTask(B('Sağ arka kapı onarımı için servis teklifi alın', 'Get a service quote for the rear right door repair'), B('Hasar dosyası bağlı onarım için iki servisten teklif alın.', 'Get quotes from two services for the repair linked to the damage file.'), 'normal', [2, '17:00'], { recipients: ['u-fleet', 'u-mgr2'], branch: 'b-dbv', link: { type: 'damage', id: dm2.id } })
   void t4
-  mkTask('Havalimanı otopark kartlarını yenileyin', 'Yıllık otopark erişim kartı yenileme.', 'normal', [5, '17:00'], { pool: true, branch: 'b-sjj' })
-  const pool = mkTask('Araç sigorta poliçelerini kontrol edin', 'Süresi yaklaşan poliçelerin listesini çıkarıp yenileme teklifi isteyin.', 'high', [3, '17:00'], { pool: true })
+  mkTask(B('Havalimanı otopark kartlarını yenileyin', 'Renew the airport car park cards'), B('Yıllık otopark erişim kartı yenileme.', 'Annual car park access card renewal.'), 'normal', [5, '17:00'], { pool: true, branch: 'b-sjj' })
+  const pool = mkTask(B('Araç sigorta poliçelerini kontrol edin', 'Check the vehicle insurance policies'), B('Süresi yaklaşan poliçelerin listesini çıkarıp yenileme teklifi isteyin.', 'List the policies that are about to expire and request renewal quotes.'), 'high', [3, '17:00'], { pool: true })
   as('u-fleet')
   claimTask(d, pool.id)
   as('u-mgr')
-  mkTask('DBV: Corolla sigorta belgesi süresi doldu', 'Reservasyon +2 gün: poliçe yenilenmeden teslim yapılamaz.', 'urgent', [1, '12:00'], { owner: 'u-ops3', branch: 'b-dbv', link: { type: 'vehicle', id: veh(22).id } })
-  mkTask('Sportage hasar engeli ve yarınki rezervasyon', 'Araç hasar engelinde; yarınki rezervasyon için alternatif araç bulun.', 'urgent', [0, '17:00'], { recipients: ['u-ops2', 'u-mgr'], branch: 'b-mst', link: { type: 'reservation', id: d.reservations.find((r) => r.vehicleId === veh(16).id && r.status === 'confirmed')?.id ?? d.reservations[0]!.id } })
-  mkTask('Haftalık kasa sayımı', 'Tüm şubelerde nakit kasası sayımı.', 'normal', [6, '17:00'], { recipients: ['u-ops1', 'u-ops2', 'u-ops3'] })
-  const done1 = mkTask('Müşteri sözleşme kopyalarını arşivleyin', 'Geçen haftanın kapanan kiralamaları.', 'normal', [-1, '17:00'], { owner: 'u-ops1', created: -4 })
+  mkTask(B('DBV: Corolla sigorta belgesi süresi doldu', 'DBV: Corolla insurance document expired'), B('Reservasyon +2 gün: poliçe yenilenmeden teslim yapılamaz.', 'Reservation +2 days: no handover is possible until the policy is renewed.'), 'urgent', [1, '12:00'], { owner: 'u-ops3', branch: 'b-dbv', link: { type: 'vehicle', id: veh(22).id } })
+  mkTask(B('Sportage hasar engeli ve yarınki rezervasyon', 'Sportage damage block and tomorrow\'s reservation'), B('Araç hasar engelinde; yarınki rezervasyon için alternatif araç bulun.', 'The vehicle is under a damage block; find an alternative vehicle for tomorrow\'s reservation.'), 'urgent', [0, '17:00'], { recipients: ['u-ops2', 'u-mgr'], branch: 'b-mst', link: { type: 'reservation', id: d.reservations.find((r) => r.vehicleId === veh(16).id && r.status === 'confirmed')?.id ?? d.reservations[0]!.id } })
+  mkTask(B('Haftalık kasa sayımı', 'Weekly cash count'), B('Tüm şubelerde nakit kasası sayımı.', 'Cash drawer count at all branches.'), 'normal', [6, '17:00'], { recipients: ['u-ops1', 'u-ops2', 'u-ops3'] })
+  const done1 = mkTask(B('Müşteri sözleşme kopyalarını arşivleyin', 'Archive the customer contract copies'), B('Geçen haftanın kapanan kiralamaları.', 'Last week\'s closed rentals.'), 'normal', [-1, '17:00'], { owner: 'u-ops1', created: -4 })
   as('u-ops1')
   setNow(T(-1, '16:00'))
   setTaskStatus(d, done1.id, 'done')
   as('u-mgr')
-  mkTask('Yeni sezon fiyat listesi toplantısı', 'Yaz sezonu tarifelerini gözden geçirin.', 'normal', [4, '11:00'], { owner: 'u-owner' })
-  mkTask('Lastik değişimi planı (MST)', 'Vito için lastik değişimi yarın.', 'normal', [1, '09:00'], { owner: 'u-fleet', branch: 'b-mst', link: { type: 'maintenance', id: m1.id } })
-  mkTask('Geçen haftaki şikayet takibi', 'Temizlik şikayeti müşterisini arayın.', 'normal', [-2, '17:00'], { owner: 'u-ops2', created: -5, branch: 'b-mst' })
-  mkTask('Dubrovnik: transfer aracı yakıt kontrolü', 'Gelen araç yakıt seviyesini kayda geçirin.', 'normal', [2, '10:00'], { pool: true, branch: 'b-dbv' })
+  mkTask(B('Yeni sezon fiyat listesi toplantısı', 'New-season price list meeting'), B('Yaz sezonu tarifelerini gözden geçirin.', 'Review the summer season rates.'), 'normal', [4, '11:00'], { owner: 'u-owner' })
+  mkTask(B('Lastik değişimi planı (MST)', 'Tyre change plan (MST)'), B('Vito için lastik değişimi yarın.', 'Tyre change for the Vito tomorrow.'), 'normal', [1, '09:00'], { owner: 'u-fleet', branch: 'b-mst', link: { type: 'maintenance', id: m1.id } })
+  mkTask(B('Geçen haftaki şikayet takibi', 'Follow-up on last week\'s complaint'), B('Temizlik şikayeti müşterisini arayın.', 'Call the customer who complained about cleanliness.'), 'normal', [-2, '17:00'], { owner: 'u-ops2', created: -5, branch: 'b-mst' })
+  mkTask(B('Dubrovnik: transfer aracı yakıt kontrolü', 'Dubrovnik: fuel check of the transfer vehicle'), B('Gelen araç yakıt seviyesini kayda geçirin.', 'Record the fuel level of the arriving vehicle.'), 'normal', [2, '10:00'], { pool: true, branch: 'b-dbv' })
 
   // Transfer in transit (v10 SJJ -> MST)
   as('u-ops1')
   setNow(T(0, '08:00'))
-  d.transfers.push({ id: nextId(d, 'tr'), no: nextNo(d, 'T'), vehicleId: veh(10).id, fromBranchId: 'b-sjj', toBranchId: 'b-mst', status: 'in_transit', plannedAt: T(0, '08:00'), departedAt: T(0, '08:10'), reason: 'MST şube talebi (yoğunluk)' })
+  d.transfers.push({ id: nextId(d, 'tr'), no: nextNo(d, 'T'), vehicleId: veh(10).id, fromBranchId: 'b-sjj', toBranchId: 'b-mst', status: 'in_transit', plannedAt: T(0, '08:00'), departedAt: T(0, '08:10'), reason: B('MST şube talebi (yoğunluk)', 'MST branch request (high demand)') })
   veh(10).location = 'transit'
   d.transfers.push({ id: nextId(d, 'tr'), no: nextNo(d, 'T'), vehicleId: veh(14).id, fromBranchId: 'b-mst', toBranchId: 'b-sjj', status: 'completed', plannedAt: T(-9, '09:00'), departedAt: T(-9, '09:10'), arrivedAt: T(-9, '12:40'), reason: 'Sezon dengeleme' })
   logEvent(d, { module: 'vehicles', type: 'TransferDeparted', sourceType: 'transfer', sourceId: d.transfers[0]!.id, summary: `${d.transfers[0]!.no} yolda`, at: T(0, '08:10') })
@@ -678,10 +679,10 @@ function seedCommercial(d: Db, T: (o: number, hm?: string, z?: string) => string
   void veh
   as('u-mgr')
   setNow(T(-90, '10:00'))
-  createPartner(d, { name: 'Grand Hotel Sarajevo (Demo)', kind: 'hotel', country: 'BA', contactName: 'Resepsiyon Müdürü', email: 'resepsiyon@grandhotel-demo.example', phone: '+387 33 000 801', pct: 8, trigger: 'delivered' })
-  createPartner(d, { name: 'Adria Travel Agency (Demo)', kind: 'agency', country: 'HR', contactName: 'Operasyon', email: 'ops@adriatravel-demo.example', phone: '+385 20 000 802', pct: 10, trigger: 'returned' })
-  createPartner(d, { name: 'Balkan Tours Online (Demo)', kind: 'travel', country: 'BA', contactName: 'Satış', email: 'sales@balkantours-demo.example', phone: '+387 36 000 803', pct: 12, trigger: 'closed' })
-  createPartner(d, { name: 'Corporate Broker Hub (Demo)', kind: 'corporate_broker', country: 'BA', contactName: 'Hesap Yöneticisi', email: 'hub@corpbroker-demo.example', phone: '+387 33 000 804', pct: 6, trigger: 'delivered' })
+  createPartner(d, { name: 'Grand Hotel Sarajevo (Demo)', kind: 'hotel', country: 'BA', contactName: B('Resepsiyon Müdürü', 'Front Desk Manager'), email: 'resepsiyon@grandhotel-demo.example', phone: '+387 33 000 801', pct: 8, trigger: 'delivered' })
+  createPartner(d, { name: 'Adria Travel Agency (Demo)', kind: 'agency', country: 'HR', contactName: B('Operasyon', 'Operations'), email: 'ops@adriatravel-demo.example', phone: '+385 20 000 802', pct: 10, trigger: 'returned' })
+  createPartner(d, { name: 'Balkan Tours Online (Demo)', kind: 'travel', country: 'BA', contactName: B('Satış', 'Sales'), email: 'sales@balkantours-demo.example', phone: '+387 36 000 803', pct: 12, trigger: 'closed' })
+  createPartner(d, { name: 'Corporate Broker Hub (Demo)', kind: 'corporate_broker', country: 'BA', contactName: B('Hesap Yöneticisi', 'Account Manager'), email: 'hub@corpbroker-demo.example', phone: '+387 33 000 804', pct: 6, trigger: 'delivered' })
   d.partners[0]!.portalAccess = true
   d.partners[1]!.portalAccess = true
   // Partner-sourced rentals (reservation channel partner): two earned commissions, one paid
@@ -703,8 +704,8 @@ function seedCommercial(d: Db, T: (o: number, hm?: string, z?: string) => string
     setNow(T(o.created ?? -3, '12:00'))
     return createLead(d, { source, partnerId: o.partner, name, phone: '+387 61 555 0' + String(10 + d.leads.length), email: `${name.split(' ')[0]!.toLowerCase()}@lead-demo.example`, classId: cls, from: T(from, '10:00'), to: T(to, '10:00'), branchId: br, ownerId: owner, notes: o.notes ?? '' })
   }
-  const l1 = ld('Petar Lead-Demo', 'web_form', 'cl-suv', 10, 17, 'b-sjj', 'u-ops1', { notes: 'Aile tatili, 5 kişi' })
-  const l2 = ld('Olivia Demo-Lead', 'partner', 'cl-prm', 12, 15, 'b-dbv', 'u-ops3', { partner: 'pt2', notes: 'Düğün konukları' })
+  const l1 = ld('Petar Lead-Demo', 'web_form', 'cl-suv', 10, 17, 'b-sjj', 'u-ops1', { notes: B('Aile tatili, 5 kişi', 'Family holiday, 5 people') })
+  const l2 = ld('Olivia Demo-Lead', 'partner', 'cl-prm', 12, 15, 'b-dbv', 'u-ops3', { partner: 'pt2', notes: B('Düğün konukları', 'Wedding guests') })
   const l3 = ld('Marta Lead-Test', 'phone', 'cl-eco', 6, 9, 'b-mst', 'u-ops2')
   const l4 = ld('Stefan Prospekt', 'walk_in', 'cl-cmp', 4, 8, 'b-sjj', 'u-ops1', { created: -6 })
   const l5 = ld('Nadia Beispiel-Lead', 'referral', 'cl-van', 14, 21, 'b-sjj', 'u-mgr', { notes: 'Grup tur' })
@@ -716,10 +717,10 @@ function seedCommercial(d: Db, T: (o: number, hm?: string, z?: string) => string
   as('u-ops1')
   setNow(T(-2, '15:00'))
   d.leads[0]!.status = 'contacted'
-  const q1 = createQuote(d, l1.id, { classId: 'cl-suv', from: T(10, '10:00'), to: T(17, '10:00'), insuranceId: 'in-cdw', extras: [{ extraId: 'ex-seat', qty: 2 }], currency: 'EUR', validUntil: T(5, '18:00'), note: 'İlk teklif' })
+  const q1 = createQuote(d, l1.id, { classId: 'cl-suv', from: T(10, '10:00'), to: T(17, '10:00'), insuranceId: 'in-cdw', extras: [{ extraId: 'ex-seat', qty: 2 }], currency: 'EUR', validUntil: T(5, '18:00'), note: B('İlk teklif', 'First quote') })
   void q1
   setNow(T(-1, '11:00'))
-  const q2 = createQuote(d, l1.id, { classId: 'cl-suv', from: T(10, '10:00'), to: T(17, '10:00'), insuranceId: 'in-scdw', extras: [{ extraId: 'ex-seat', qty: 2 }], currency: 'EUR', validUntil: T(5, '18:00'), note: 'Tam koruma ile revize teklif (v2)' })
+  const q2 = createQuote(d, l1.id, { classId: 'cl-suv', from: T(10, '10:00'), to: T(17, '10:00'), insuranceId: 'in-scdw', extras: [{ extraId: 'ex-seat', qty: 2 }], currency: 'EUR', validUntil: T(5, '18:00'), note: B('Tam koruma ile revize teklif (v2)', 'Revised quote with full cover (v2)') })
   void q2
   as('u-ops3')
   setNow(T(-2, '16:00'))
@@ -729,7 +730,7 @@ function seedCommercial(d: Db, T: (o: number, hm?: string, z?: string) => string
   createQuote(d, l3.id, { classId: 'cl-eco', from: T(6, '10:00'), to: T(9, '10:00'), insuranceId: undefined, extras: [], currency: 'BAM', validUntil: T(2, '18:00'), note: '' })
   setLeadStatus(d, l4.id, 'lost', 'Rakip daha ucuz teklif verdi')
   as('u-mgr')
-  createQuote(d, l5.id, { classId: 'cl-van', from: T(14, '10:00'), to: T(21, '10:00'), insuranceId: 'in-cdw', extras: [], currency: 'EUR', validUntil: T(7, '18:00'), note: 'Grup indirimi için onay gerekebilir' })
+  createQuote(d, l5.id, { classId: 'cl-van', from: T(14, '10:00'), to: T(21, '10:00'), insuranceId: 'in-cdw', extras: [], currency: 'EUR', validUntil: T(7, '18:00'), note: B('Grup indirimi için onay gerekebilir', 'Approval may be needed for a group discount') })
   // earned commissions via direct records tied to real rentals (partner pt1 / pt2)
   const closed = d.rentals.filter((r) => r.status === 'closed')
   const c1 = closed[0]!
@@ -761,57 +762,57 @@ function seedControl(d: Db, T: (o: number, hm?: string, z?: string) => string, a
   // Approvals in several states
   as('u-ops1')
   setNow(T(-1, '14:00'))
-  const a1 = requestApproval(d, { type: 'high_discount', target: { type: 'rental', id: rentals.rp1! }, reason: 'Sadık müşteri, geçen yıl 6 kiralama: %18 indirim talep ediliyor.', requested: null, proposedPct: 18 })
+  const a1 = requestApproval(d, { type: 'high_discount', target: { type: 'rental', id: rentals.rp1! }, reason: B('Sadık müşteri, geçen yıl 6 kiralama: %18 indirim talep ediliyor.', 'Loyal customer, 6 rentals last year: an 18% discount is requested.'), requested: null, proposedPct: 18 })
   void a1
   as('u-ops2')
   setNow(T(-1, '16:00'))
-  requestApproval(d, { type: 'deposit_exception', target: { type: 'rental', id: rentals.rp2! }, reason: 'Kurumsal bağlantılı müşteri; depozito yarıya indirilsin.', requested: { minor: 15000, cur: 'EUR' } })
+  requestApproval(d, { type: 'deposit_exception', target: { type: 'rental', id: rentals.rp2! }, reason: B('Kurumsal bağlantılı müşteri; depozito yarıya indirilsin.', 'Customer linked to a corporate account; reduce the deposit by half.'), requested: { minor: 15000, cur: 'EUR' } })
   as('u-ops3')
   setNow(T(-2, '12:00'))
-  const a3 = requestApproval(d, { type: 'financial_correction', target: { type: 'payment', id: d.payments.find((p) => p.rentalId === rentals.rd4 && p.status === 'applied')?.id ?? d.payments[0]!.id }, reason: 'Ödeme yanlış kiralamaya girilmiş; ters kayıt istiyorum.', requested: null })
+  const a3 = requestApproval(d, { type: 'financial_correction', target: { type: 'payment', id: d.payments.find((p) => p.rentalId === rentals.rd4 && p.status === 'applied')?.id ?? d.payments[0]!.id }, reason: B('Ödeme yanlış kiralamaya girilmiş; ters kayıt istiyorum.', 'The payment was entered on the wrong rental; I want a reversal.'), requested: null })
   as('u-mgr2')
   setNow(T(-2, '15:00'))
   decideApproval(d, a3.id, 'approve', 'Evrak kontrol edildi.')
   as('u-ops1')
   setNow(T(-3, '10:00'))
-  const a4 = requestApproval(d, { type: 'corporate_credit_override', target: { type: 'corporate', id: 'co3' }, reason: 'Una Tours kredi limiti dolmak üzere; etkinlik kiralaması için ek pay.', requested: { minor: 100000, cur: 'EUR' } })
+  const a4 = requestApproval(d, { type: 'corporate_credit_override', target: { type: 'corporate', id: 'co3' }, reason: B('Una Tours kredi limiti dolmak üzere; etkinlik kiralaması için ek pay.', 'Una Tours is about to reach its credit limit; an extra allowance for an event rental.'), requested: { minor: 100000, cur: 'EUR' } })
   as('u-mgr')
   setNow(T(-3, '14:00'))
-  decideApproval(d, a4.id, 'approve', 'Yıllık anlaşma yenileme sürecinde.')
+  decideApproval(d, a4.id, 'approve', B('Yıllık anlaşma yenileme sürecinde.', 'The annual agreement is being renewed.'))
   as('u-owner')
   setNow(T(-3, '15:00'))
   applyApproval(d, a4.id)
   as('u-ops1')
   setNow(T(-6, '10:00'))
-  const a5 = requestApproval(d, { type: 'partner_commission_adjustment', target: { type: 'partner', id: d.commissions[0]!.id }, reason: 'Sözleşmedeki özel kampanya oranı uygulanmamış; düzeltme.', requested: { minor: Math.round(d.commissions[0]!.amount.minor * 1.25), cur: d.commissions[0]!.amount.cur } })
+  const a5 = requestApproval(d, { type: 'partner_commission_adjustment', target: { type: 'partner', id: d.commissions[0]!.id }, reason: B('Sözleşmedeki özel kampanya oranı uygulanmamış; düzeltme.', 'The special campaign rate in the contract was not applied; correction.'), requested: { minor: Math.round(d.commissions[0]!.amount.minor * 1.25), cur: d.commissions[0]!.amount.cur } })
   as('u-mgr')
   setNow(T(-5, '10:00'))
-  decideApproval(d, a5.id, 'reject', 'Kampanya bu sözleşme dönemine uygulanmıyor.')
+  decideApproval(d, a5.id, 'reject', B('Kampanya bu sözleşme dönemine uygulanmıyor.', 'The campaign does not apply to this contract period.'))
   as('u-ops2')
   setNow(T(-8, '10:00'))
-  const a6 = requestApproval(d, { type: 'high_discount', target: { type: 'reservation', id: d.reservations.find((r) => r.status === 'pending')!.id }, reason: 'Uzun süreli rezervasyon için %20 indirim talebi.', requested: null, proposedPct: 20 })
+  const a6 = requestApproval(d, { type: 'high_discount', target: { type: 'reservation', id: d.reservations.find((r) => r.status === 'pending')!.id }, reason: B('Uzun süreli rezervasyon için %20 indirim talebi.', 'A 20% discount request for a long reservation.'), requested: null, proposedPct: 20 })
   void a6
   // Applied history example: an approved and applied deposit exception is not repeatable
   // Rules
   as('u-owner')
   setNow(T(-30, '10:00'))
-  saveRule(d, { name: 'İade 24 saatten fazla gecikti', conditions: [{ field: 'rental.overdueHours', op: '>=', value: 24 }], join: 'AND', action: 'alert', severity: 'critical', message: 'Kiralama iadesi 24 saatten fazla gecikti: kayıp/çalıntı değerlendirmesi için yetkiliye bildirin.', status: 'active' })
-  saveRule(d, { name: 'Rezervasyon 24 saattir onaysız', conditions: [{ field: 'reservation.pendingHours', op: '>=', value: 24 }], join: 'AND', action: 'review_flag', severity: 'warning', message: 'Pending rezervasyon 24 saati geçti: onaylayın veya iptal edin.', status: 'active' })
-  saveRule(d, { name: 'Periyodik bakım 500 km aşıldı', conditions: [{ field: 'vehicle.serviceKmOver', op: '>=', value: 500 }], join: 'AND', action: 'alert', severity: 'warning', message: 'Aracın periyodik bakımı gecikti.', status: 'active' })
-  saveRule(d, { name: 'Araç belgesi 15 günden az', conditions: [{ field: 'vehicle.docDaysLeft', op: '<=', value: 15 }], join: 'AND', action: 'review_flag', severity: 'warning', message: 'Araç belgesinin süresi dolmak üzere.', status: 'active' })
-  saveRule(d, { name: 'Büyük açık bakiye (taslak)', conditions: [{ field: 'rental.outstandingMinor', op: '>=', value: 100000 }], join: 'AND', action: 'alert', severity: 'info', message: 'Yüksek açık bakiye.', status: 'draft' })
-  const archived = saveRule(d, { name: 'Eski kasa farkı kuralı', conditions: [{ field: 'cash.varianceMinor', op: '>=', value: 500 }], join: 'AND', action: 'alert', severity: 'info', message: 'Kasa farkı.', status: 'archived' })
+  saveRule(d, { name: B('İade 24 saatten fazla gecikti', 'Return more than 24 hours late'), conditions: [{ field: 'rental.overdueHours', op: '>=', value: 24 }], join: 'AND', action: 'alert', severity: 'critical', message: B('Kiralama iadesi 24 saatten fazla gecikti: kayıp/çalıntı değerlendirmesi için yetkiliye bildirin.', 'The rental return is more than 24 hours late: report it to an authorised person for a loss/theft assessment.'), status: 'active' })
+  saveRule(d, { name: B('Rezervasyon 24 saattir onaysız', 'Reservation unconfirmed for 24 hours'), conditions: [{ field: 'reservation.pendingHours', op: '>=', value: 24 }], join: 'AND', action: 'review_flag', severity: 'warning', message: B('Pending rezervasyon 24 saati geçti: onaylayın veya iptal edin.', 'The pending reservation is over 24 hours old: confirm or cancel it.'), status: 'active' })
+  saveRule(d, { name: B('Periyodik bakım 500 km aşıldı', 'Periodic service overrun by 500 km'), conditions: [{ field: 'vehicle.serviceKmOver', op: '>=', value: 500 }], join: 'AND', action: 'alert', severity: 'warning', message: B('Aracın periyodik bakımı gecikti.', 'The vehicle\'s periodic service is overdue.'), status: 'active' })
+  saveRule(d, { name: B('Araç belgesi 15 günden az', 'Vehicle document has under 15 days left'), conditions: [{ field: 'vehicle.docDaysLeft', op: '<=', value: 15 }], join: 'AND', action: 'review_flag', severity: 'warning', message: B('Araç belgesinin süresi dolmak üzere.', 'The vehicle document is about to expire.'), status: 'active' })
+  saveRule(d, { name: B('Büyük açık bakiye (taslak)', 'Large open balance (draft)'), conditions: [{ field: 'rental.outstandingMinor', op: '>=', value: 100000 }], join: 'AND', action: 'alert', severity: 'info', message: B('Yüksek açık bakiye.', 'High open balance.'), status: 'draft' })
+  const archived = saveRule(d, { name: B('Eski kasa farkı kuralı', 'Old cash variance rule'), conditions: [{ field: 'cash.varianceMinor', op: '>=', value: 500 }], join: 'AND', action: 'alert', severity: 'info', message: B('Kasa farkı.', 'Cash variance.'), status: 'archived' })
   void archived
   // Exceptions
   as('u-mgr')
   setNow(T(-1, '17:00'))
-  createException(d, { type: 'rental', id: rentals.rx1! }, 'Servis sonrası iadesiz kapanan kiralama: depozito çözümü incelensin', 'high')
-  createException(d, { type: 'damage', id: d.damages[0]!.id }, 'Hasar engeli altındaki araç için yarınki rezervasyon alternatifi', 'medium')
-  createException(d, { type: 'vehicle', id: veh(22).id }, 'Süresi dolmuş sigorta ile planlı kiralama', 'high')
+  createException(d, { type: 'rental', id: rentals.rx1! }, B('Servis sonrası iadesiz kapanan kiralama: depozito çözümü incelensin', 'Rental closed without a return after service: review the deposit resolution'), 'high')
+  createException(d, { type: 'damage', id: d.damages[0]!.id }, B('Hasar engeli altındaki araç için yarınki rezervasyon alternatifi', 'Alternative for tomorrow\'s reservation on a vehicle under a damage block'), 'medium')
+  createException(d, { type: 'vehicle', id: veh(22).id }, B('Süresi dolmuş sigorta ile planlı kiralama', 'Rental planned with an expired insurance'), 'high')
   setNow(T(-4, '17:00'))
-  createException(d, { type: 'rental', id: rentals.p14! }, 'Eski gecikme istisnası (örnek)', 'low')
+  createException(d, { type: 'rental', id: rentals.p14! }, B('Eski gecikme istisnası (örnek)', 'Old overdue exception (sample)'), 'low')
   d.exceptions[3]!.status = 'accepted'
-  d.exceptions[3]!.decision = 'Müşteri iletişimi tamamlandı; ek işlem yok.'
+  d.exceptions[3]!.decision = B('Müşteri iletişimi tamamlandı; ek işlem yok.', 'Customer contact completed; no further action.')
   d.exceptions[3]!.reviewerId = 'u-mgr'
   // Expenses (manual, independent operational costs)
   as('u-acc')
@@ -819,17 +820,17 @@ function seedControl(d: Db, T: (o: number, hm?: string, z?: string) => string, a
     setNow(T(off, '12:00'))
     createExpense(d, { category: cat, vendor, branchId: br, date: T(off, '12:00').slice(0, 10), amount: { minor, cur }, note, post })
   }
-  ex(-1, 'Yakıt', 'Petrol Demo d.o.o.', 'b-sjj', 8400, 'BAM', 'Şube araçları yakıt (örnek)')
-  ex(-3, 'Temizlik', 'Express Oto Yıkama', 'b-sjj', 4500, 'EUR', 'Haftalık yıkama paketi')
-  ex(-5, 'Yol yardım / çekici', 'Adria Çekici', 'b-mst', 12000, 'BAM', 'Müşteri aracı çekimi')
-  ex(-8, 'Kira ve işletme', 'Havalimanı İşletme (Demo)', 'b-sjj', 85000, 'EUR', 'Aylık ofis ve otopark kirası')
-  ex(-9, 'Sigorta primi', 'Demo Sigorta A.Ş.', 'b-dbv', 64000, 'EUR', 'Filo poliçesi taksiti')
-  ex(-12, 'Diğer', 'Kırtasiye Demo', 'b-mst', 3200, 'BAM', '')
+  ex(-1, 'Yakıt', 'Petrol Demo d.o.o.', 'b-sjj', 8400, 'BAM', B('Şube araçları yakıt (örnek)', 'Branch vehicles fuel (sample)'))
+  ex(-3, 'Temizlik', B('Express Oto Yıkama', 'Express Car Wash'), 'b-sjj', 4500, 'EUR', B('Haftalık yıkama paketi', 'Weekly washing package'))
+  ex(-5, 'Yol yardım / çekici', B('Adria Çekici', 'Adria Towing'), 'b-mst', 12000, 'BAM', B('Müşteri aracı çekimi', 'Towing of a customer vehicle'))
+  ex(-8, 'Kira ve işletme', B('Havalimanı İşletme (Demo)', 'Airport Operator (Demo)'), 'b-sjj', 85000, 'EUR', B('Aylık ofis ve otopark kirası', 'Monthly office and car park rent'))
+  ex(-9, 'Sigorta primi', B('Demo Sigorta A.Ş.', 'Demo Insurance Co.'), 'b-dbv', 64000, 'EUR', B('Filo poliçesi taksiti', 'Fleet policy instalment'))
+  ex(-12, 'Diğer', B('Kırtasiye Demo', 'Stationery Demo'), 'b-mst', 3200, 'BAM', '')
   ex(-2, 'Yakıt', 'Petrol Demo d.o.o.', 'b-dbv', 6200, 'EUR', '', false)
-  ex(-4, 'Temizlik', 'Express Oto Yıkama', 'b-dbv', 3800, 'EUR', 'Taslak: fatura bekleniyor', false)
+  ex(-4, 'Temizlik', B('Express Oto Yıkama', 'Express Car Wash'), 'b-dbv', 3800, 'EUR', 'Taslak: fatura bekleniyor', false)
   // Extra shift events and notifications
   d.shifts.push({ id: nextId(d, 'sh'), branchId: 'b-sjj', userId: 'u-ops1', openedAt: T(0, '08:00') })
-  d.shifts.push({ id: nextId(d, 'sh'), branchId: 'b-sjj', userId: 'u-old', openedAt: T(-1, '08:00'), closedAt: T(-1, '18:00'), handoverToId: 'u-ops1', handoverNote: 'Kasa sayıldı; USD kasasında 20 USD bozuk para notu.' })
+  d.shifts.push({ id: nextId(d, 'sh'), branchId: 'b-sjj', userId: 'u-old', openedAt: T(-1, '08:00'), closedAt: T(-1, '18:00'), handoverToId: 'u-ops1', handoverNote: B('Kasa sayıldı; USD kasasında 20 USD bozuk para notu.', 'Drawer counted; a note about 20 USD in coins in the USD drawer.') })
   setNow(T(0, '10:00'))
-  manualCashMove(d, 'dr-sjj-EUR', 'in', 5000, 'Yedek para girişi (örnek)')
+  manualCashMove(d, 'dr-sjj-EUR', 'in', 5000, B('Yedek para girişi (örnek)', 'Float top-up (sample)'))
 }

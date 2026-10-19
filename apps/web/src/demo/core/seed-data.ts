@@ -1,3 +1,4 @@
+import { B } from '../i18n'
 import { nextId, nextNo } from './helpers'
 import type { Customer, Db, DemoDocument } from './types'
 
@@ -74,25 +75,25 @@ export function customersData({ d, T }: DbSeedCtx): Customer[] {
     out.push(c)
     d.customers.push(c)
     const doc = (kind: string, validOff: number | null, name2: string): void => {
-      const x: DemoDocument = { id: nextId(d, 'doc'), ownerType: 'customer', ownerId: c.id, kind, name: `${name2} (örnek belge, gerçek kişi verisi değil)`, version: 1, validUntil: validOff === null ? undefined : ymd(validOff), placeholder: true, uploadedAt: T(-200, '10:00'), uploadedBy: 'u-ops1' }
+      const x: DemoDocument = { id: nextId(d, 'doc'), ownerType: 'customer', ownerId: c.id, kind, name: B(`${name2} (örnek belge, gerçek kişi verisi değil)`, `${name2} (sample document, not real personal data)`), version: 1, validUntil: validOff === null ? undefined : ymd(validOff), placeholder: true, uploadedAt: T(-200, '10:00'), uploadedBy: 'u-ops1' }
       d.documents.push(x)
     }
     // Missing passport on purpose for "Kim Missing-Demo" (index 28) to show the document gate.
     if (name.startsWith('Kim Missing')) {
-      doc('driving_license', licOff, 'Sürücü belgesi')
+      doc('driving_license', licOff, B('Sürücü belgesi', 'Driving licence'))
       return
     }
     if (foreign) doc('passport', 2000 + i * 10, 'Pasaport')
-    else doc('national_id', 1500 + i * 12, 'Kimlik kartı')
-    doc('driving_license', licOff, 'Sürücü belgesi')
+    else doc('national_id', 1500 + i * 12, B('Kimlik kartı', 'ID card'))
+    doc('driving_license', licOff, B('Sürücü belgesi', 'Driving licence'))
   })
   // A few notes, restrictions and contact logs for the 360° view
   const c1 = out[0]!
-  c1.notes.push({ id: nextId(d, 'nt'), at: T(-60, '10:00'), by: 'u-ops1', text: 'Sadık müşteri. Otomatik vitesi tercih ediyor.', pinned: true })
-  c1.contacts.push({ id: nextId(d, 'cl'), at: T(-12, '11:00'), by: 'u-ops1', channel: 'phone', summary: 'Hafta sonu için rezervasyon sordu; fiyat bilgisi verildi (telefonla).', followUpAt: T(1, '10:00'), followUpDone: false })
+  c1.notes.push({ id: nextId(d, 'nt'), at: T(-60, '10:00'), by: 'u-ops1', text: B('Sadık müşteri. Otomatik vitesi tercih ediyor.', 'Loyal customer. Prefers an automatic gearbox.'), pinned: true })
+  c1.contacts.push({ id: nextId(d, 'cl'), at: T(-12, '11:00'), by: 'u-ops1', channel: 'phone', summary: B('Hafta sonu için rezervasyon sordu; fiyat bilgisi verildi (telefonla).', 'Asked about a weekend reservation; price information was given (by phone).'), followUpAt: T(1, '10:00'), followUpDone: false })
   const c6 = out[5]!
-  c6.restrictions.push({ id: nextId(d, 'rs'), label: 'Önceki kiralamada geç iade', reason: 'Son iki kiralamada iade 5 saatten fazla gecikti: teslimde iletişim bilgileri tekrar doğrulanır.', at: T(-40, '10:00'), by: 'u-mgr' })
+  c6.restrictions.push({ id: nextId(d, 'rs'), label: B('Önceki kiralamada geç iade', 'Late return on the previous rental'), reason: B('Son iki kiralamada iade 5 saatten fazla gecikti: teslimde iletişim bilgileri tekrar doğrulanır.', 'The return was more than 5 hours late on the last two rentals: contact details are re-verified at handover.'), at: T(-40, '10:00'), by: 'u-mgr' })
   const c8 = out[7]!
-  c8.notes.push({ id: nextId(d, 'nt'), at: T(-30, '10:00'), by: 'u-mgr', text: 'Sürücü belgesi yenileme sürecinde; yeni belge gelmeden kiralama yapılamaz.', pinned: true })
+  c8.notes.push({ id: nextId(d, 'nt'), at: T(-30, '10:00'), by: 'u-mgr', text: B('Sürücü belgesi yenileme sürecinde; yeni belge gelmeden kiralama yapılamaz.', 'The driving licence is being renewed; no rental can be made until the new document arrives.'), pinned: true })
   return out
 }

@@ -4,14 +4,14 @@ import { hasPerm } from '../../core/helpers'
 import { inviteUser, updateUser } from '../../core/ops/control'
 import { ALL_PERMS, PERM_MODULES } from '../../core/permissions'
 import type { DemoUser } from '../../core/types'
-import { L } from '../../i18n'
+import { L, loc } from '../../i18n'
 import { CheckF, SelectF, TextF } from '../../ui/forms'
 import { runAction, useCan, useDb, useMe, useUrlState } from '../../ui/hooks'
 import { btnPrimary, Empty, Facts, FilterBar, FilterSelect, FinanceDialog, Kpis, Notice, Page, SearchBox, Status } from '../../ui/kit'
 import { type Col, DataTable } from '../../ui/table'
 import { ActBtn, ActionRow, DrawerSection, RecordDrawer, useAct } from '../fleet/common'
 
-const permLabel = (id: string) => { const m = PERM_MODULES.find((x) => x.perms.some((p) => p.id === id)); const p = m?.perms.find((x) => x.id === id); return `${m?.label ?? id} · ${p?.label ?? ''}` }
+const permLabel = (id: string) => { const m = PERM_MODULES.find((x) => x.perms.some((p) => p.id === id)); const p = m?.perms.find((x) => x.id === id); return `${m ? loc(m.label) : id} · ${p ? loc(p.label) : ''}` }
 
 export function UsersPage() {
   const d = useDb()

@@ -1,5 +1,5 @@
 import { type ReactNode, useState } from 'react'
-import { Sheet } from '@/components/Sheet'
+import { Sheet } from '../../ui/dialogs'
 import type { Db } from '../../core/types'
 import { L } from '../../i18n'
 import { AreaF } from '../../ui/forms'

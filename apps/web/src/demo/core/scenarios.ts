@@ -4,7 +4,7 @@ import { fail, nowOf } from './helpers'
 import { endFxRate } from './ops/control'
 import { holdDeposit } from './ops/finance'
 import { createRental, deliverRental, find, signContract, updateGate } from './ops/rentals'
-import { L } from '../i18n'
+import {L, B } from '../i18n'
 import type { Db, PriceSnapshot, Rental } from './types'
 
 // Guided demo scenarios (spec §81). Preparing a scenario only creates synthetic demo records in the demo state.
@@ -27,7 +27,7 @@ export function prepareSplitPaymentRental(d: Db): Rental {
   const now = nowOf(d)
   const to = new Date(Date.parse(now) + 3 * 86_400_000).toISOString()
   const veh = d.vehicles.find((v) => v.homeBranchId === 'b-sjj' && v.source === 'internal' && v.status === 'active' && v.classId === 'cl-cmp' && checkVehicleAvailable(d, v, now, to, now).ok) ?? d.vehicles.find((v) => v.homeBranchId === 'b-sjj' && v.source === 'internal' && v.status === 'active' && checkVehicleAvailable(d, v, now, to, now).ok)
-  if (!veh) fail('Senaryo için SJJ şubesinde uygun araç bulunamadı.')
+  if (!veh) fail(B('Senaryo için SJJ şubesinde uygun araç bulunamadı.', 'No suitable vehicle was found at branch SJJ for the scenario.'))
   const v = veh!
   v.readiness = { clean: true, fuelOk: true, checkedAt: now, checkedBy: 'u-ops1', note: '' }
   v.fuel = 'full'
@@ -39,7 +39,7 @@ export function prepareSplitPaymentRental(d: Db): Rental {
     id: `ps-scn-${Date.now()}`,
     cur: 'EUR',
     days: 3,
-    lines: [{ kind: 'other', label: 'Kiralama bedeli (demo senaryosu: 500 EUR)', qty: 1, unitMinor: rule.mode === 'inclusive' ? gross : gross - tax, totalMinor: rule.mode === 'inclusive' ? gross : gross - tax }],
+    lines: [{ kind: 'other', label: B('Kiralama bedeli (demo senaryosu: 500 EUR)', 'Rental charge (demo scenario: 500 EUR)'), qty: 1, unitMinor: rule.mode === 'inclusive' ? gross : gross - tax, totalMinor: rule.mode === 'inclusive' ? gross : gross - tax }],
     netMinor: gross - tax,
     taxLines: [{ ruleId: rule.id, name: rule.name, ratePct: rule.ratePct, mode: rule.mode, baseMinor: gross - tax, taxMinor: tax }],
     taxMinor: tax,
@@ -49,7 +49,7 @@ export function prepareSplitPaymentRental(d: Db): Rental {
     blockers: [],
   }
   d.session.userId = 'u-ops1'
-  const rental = createRental(d, { customerId: customer.id, drivers: [customer.id], vehicleId: v.id, classId: v.classId, pickupBranchId: 'b-sjj', returnBranchId: 'b-sjj', plannedPickupAt: now, plannedReturnAt: to, currency: 'EUR', extras: [], notes: 'Demo senaryosu: çoklu tahsilat (500 EUR)', price })
+  const rental = createRental(d, { customerId: customer.id, drivers: [customer.id], vehicleId: v.id, classId: v.classId, pickupBranchId: 'b-sjj', returnBranchId: 'b-sjj', plannedPickupAt: now, plannedReturnAt: to, currency: 'EUR', extras: [], notes: B('Demo senaryosu: çoklu tahsilat (500 EUR)', 'Demo scenario: split payment (500 EUR)'), price })
   signContract(d, rental.id, customer.name, true)
   updateGate(d, rental.id, { docsChecked: true, driverOk: true })
   if (rental.deposit.required.minor > 0) holdDeposit(d, rental.id, 'card', 'Demo senaryosu')
@@ -106,7 +106,7 @@ export const SCENARIOS: Scenario[] = [
     prepare: (d) => {
       const r = prepareSplitPaymentRental(d)
       d.session.userId = 'u-owner'
-      return { path: `/kiralamalar/${r.id}?sekme=finans`, note: `${r.no}: 500 EUR bakiye, USD kuru yok.` }
+      return { path: `/kiralamalar/${r.id}?sekme=finans`, note: B(`${r.no}: 500 EUR bakiye, USD kuru yok.`, `${r.no}: 500 EUR balance, no USD rate.`) }
     },
   },
   {

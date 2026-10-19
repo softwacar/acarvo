@@ -4,7 +4,7 @@ import { fmt, parseAmount, sumByCur } from '../../core/money'
 import { assignFine, chargeFineToCustomer, closeFine, createFine, payFineToAuthority, setFineDispute } from '../../core/ops/fleet'
 import { addDaysYmd, dayOf, zonedIso } from '../../core/time'
 import type { Fine } from '../../core/types'
-import { L } from '../../i18n'
+import { B, L, loc } from '../../i18n'
 import { ComboF, DateF, DateTimeF, MoneyF, SelectF, TextF } from '../../ui/forms'
 import { runAction, useBranchScope, useCan, useDb, useFmt, useUrlState } from '../../ui/hooks'
 import { btnPrimary, btnSecondary, Empty, Facts, FilterBar, FilterSelect, FinanceDialog, Kpis, Link2, Page, SearchBox, Status, Timeline } from '../../ui/kit'
@@ -13,6 +13,9 @@ import { STATUS } from '../../ui/status'
 import { type Col, DataTable, downloadCsv } from '../../ui/table'
 import { vehicleItems } from '../shared/FleetDialogs'
 import { ActBtn, ActionRow, byCurText, DrawerSection, RecordDrawer, useAct } from './common'
+
+// Stored fine types are bilingual so the record keeps both languages.
+const FINE_KINDS = [B('Hız ihlali', 'Speeding'), B('Park ihlali', 'Parking violation'), B('Kırmızı ışık', 'Red light'), B('Geçiş ücreti', 'Toll'), B('Diğer', 'Other')]
 
 export function FinesPage() {
   const d = useDb()
@@ -127,7 +130,7 @@ function NewFineDialog({ onClose, onCreated }: { onClose: () => void; onCreated:
   const tz = f.zone()
   const [vid, setVid] = useState('')
   const [at, setAt] = useState(zonedIso(addDaysYmd(dayOf(d.clock.now, tz), -2), '12:00', tz))
-  const [kind, setKind] = useState('Hız ihlali')
+  const [kind, setKind] = useState(FINE_KINDS[0]!)
   const [ref, setRef] = useState('')
   const [authority, setAuthority] = useState('')
   const [amount, setAmount] = useState('')
@@ -165,7 +168,7 @@ function NewFineDialog({ onClose, onCreated }: { onClose: () => void; onCreated:
         <TextF id="fn-r" label={L('Resmî referans', 'Official reference')} required value={ref} onChange={setRef} error={fields.ref} />
         <TextF id="fn-a" label={L('Kurum', 'Authority')} value={authority} onChange={setAuthority} />
       </div>
-      <SelectF id="fn-k" label={L('Tür', 'Type')} value={kind} onChange={setKind} options={['Hız ihlali', 'Park ihlali', 'Kırmızı ışık', 'Geçiş ücreti', 'Diğer'].map((x) => ({ id: x, label: x }))} />
+      <SelectF id="fn-k" label={L('Tür', 'Type')} value={kind} onChange={setKind} options={FINE_KINDS.map((x) => ({ id: x, label: loc(x) }))} />
       <MoneyF id="fn-m" label={L('Tutar', 'Amount')} amount={amount} onAmount={setAmount} cur={cur} onCur={setCur} currencies={d.settings.acceptedCurrencies} error={fields.amount} />
       <DateF id="fn-d" label={L('Son ödeme tarihi', 'Due date')} value={due} onChange={setDue} />
     </FinanceDialog>

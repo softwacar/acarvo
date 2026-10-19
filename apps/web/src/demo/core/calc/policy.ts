@@ -1,9 +1,32 @@
+import { L } from '../../i18n'
 import { dayOf, DAY } from '../time'
 import type { Cur, Customer, Db, Id, Iso, Money } from '../types'
 
 // Typed policy evaluators (spec §69, §84.2, §50). Hard policies live in Settings; screens only read these results.
 
-export const DOC_LABEL: Record<string, string> = { national_id: 'Kimlik kartı', passport: 'Pasaport', driving_license: 'Sürücü belgesi', insurance: 'Sigorta poliçesi', registration: 'Ruhsat', inspection: 'Muayene', contract: 'Sözleşme' }
+export const DOC_LABEL: Record<string, string> = {
+  get national_id() {
+    return L('Kimlik kartı', 'ID card')
+  },
+  get passport() {
+    return L('Pasaport', 'Passport')
+  },
+  get driving_license() {
+    return L('Sürücü belgesi', 'Driving licence')
+  },
+  get insurance() {
+    return L('Sigorta poliçesi', 'Insurance policy')
+  },
+  get registration() {
+    return L('Ruhsat', 'Vehicle registration')
+  },
+  get inspection() {
+    return L('Muayene', 'Inspection')
+  },
+  get contract() {
+    return L('Sözleşme', 'Contract')
+  },
+}
 
 export type DocState = 'valid' | 'expiring' | 'expired' | 'missing'
 export interface DocCheck {
@@ -48,12 +71,12 @@ export function evaluateDriverEligibility(db: Db, c: Customer, pickupAt: Iso, re
   if (pick.getUTCMonth() < dob.getUTCMonth() || (pick.getUTCMonth() === dob.getUTCMonth() && pick.getUTCDate() < dob.getUTCDate())) age--
   const licenseYears = pick.getUTCFullYear() - c.license.issuedYear
   const reasons: string[] = []
-  if (age < p.minAge) reasons.push(`Sürücü yaşı ${age}; en az ${p.minAge} olmalı.`)
-  if (licenseYears < p.minLicenseYears) reasons.push(`Ehliyet ${licenseYears} yıllık; en az ${p.minLicenseYears} yıl gerekli.`)
-  if (Date.parse(`${c.license.validUntil}T23:59:59Z`) < Date.parse(returnAt)) reasons.push(`Sürücü belgesi ${c.license.validUntil} tarihinde bitiyor; kiralama süresini kapsamıyor.`)
+  if (age < p.minAge) reasons.push(L(`Sürücü yaşı ${age}; en az ${p.minAge} olmalı.`, `The driver's age is ${age}; it must be at least ${p.minAge}.`))
+  if (licenseYears < p.minLicenseYears) reasons.push(L(`Ehliyet ${licenseYears} yıllık; en az ${p.minLicenseYears} yıl gerekli.`, `The licence is ${licenseYears} year(s) old; at least ${p.minLicenseYears} year(s) are required.`))
+  if (Date.parse(`${c.license.validUntil}T23:59:59Z`) < Date.parse(returnAt)) reasons.push(L(`Sürücü belgesi ${c.license.validUntil} tarihinde bitiyor; kiralama süresini kapsamıyor.`, `The driving licence expires on ${c.license.validUntil}; it does not cover the rental period.`))
   const docReasons = customerDocChecks(db, c, pickupAt, returnAt)
     .filter((x) => x.state === 'missing' || x.state === 'expired')
-    .map((x) => `${DOC_LABEL[x.kind] ?? x.kind}: ${x.state === 'missing' ? 'eksik' : 'süresi dolmuş veya kiralama bitmeden dolacak'}.`)
+    .map((x) => `${DOC_LABEL[x.kind] ?? x.kind}: ${x.state === 'missing' ? 'eksik' : L('süresi dolmuş veya kiralama bitmeden dolacak', 'expired or will expire before the rental ends')}.`)
   return { ok: reasons.length === 0 && docReasons.length === 0, eligible: reasons.length === 0, youngDriver: age >= p.minAge && age <= p.youngDriverMaxAge, age, licenseYears, reasons, docReasons }
 }
 
@@ -66,7 +89,7 @@ export interface DepositRequirement {
 /** Deposit = class policy row in the transaction currency + the coverage package's deposit effect. No FX. */
 export function evaluateDepositPolicy(db: Db, classId: Id, insuranceId: Id | undefined, cur: Cur): DepositRequirement {
   const row = db.settings.deposit.byClass[classId]?.[cur]
-  if (row === undefined) return { ok: false, required: { minor: 0, cur }, message: `Bu sınıf için ${cur} depozito satırı tanımlı değil (Ayarlar → Depozito).` }
+  if (row === undefined) return { ok: false, required: { minor: 0, cur }, message: L(`Bu sınıf için ${cur} depozito satırı tanımlı değil (Ayarlar → Depozito).`, `No ${cur} deposit row is defined for this class (Settings → Deposit).`) }
   const pkg = insuranceId ? db.insurance.find((p) => p.id === insuranceId) : undefined
   const effect = pkg?.depositEffect[cur] ?? 0
   return { ok: true, required: { minor: Math.max(0, row + effect), cur } }

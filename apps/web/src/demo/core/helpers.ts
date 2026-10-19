@@ -1,4 +1,4 @@
-import { loc } from '../i18n'
+import {loc, B } from '../i18n'
 import type { Db, DemoEvent, HistoryEntry, Id, LinkType } from './types'
 
 // Pure helpers over a Db draft. They have no React, storage or store imports so the seed, the domain operations and
@@ -30,8 +30,8 @@ export function hasPerm(d: Db, perm: string, user = meOf(d)): boolean {
   return !!role && (role.perms.includes('*') || role.perms.includes(perm))
 }
 /** Throws a readable error when the acting demo user lacks a permission (demo UX simulation, not server security). */
-export function need(d: Db, perm: string, what = 'Bu işlem'): void {
-  if (!hasPerm(d, perm)) fail(`${what} için yetkiniz yok (${perm}). Demo rolünü değiştirerek deneyebilirsiniz.`, {}, 'FORBIDDEN')
+export function need(d: Db, perm: string, what = B('Bu işlem', 'This action')): void {
+  if (!hasPerm(d, perm)) fail(B(`${what} için yetkiniz yok (${perm}). Demo rolünü değiştirerek deneyebilirsiniz.`, `You do not have permission for ${what} (${perm}). Try switching the demo role.`), {}, 'FORBIDDEN')
 }
 
 /** Branches the acting user may see. Empty branchIds means all branches. */

@@ -1,7 +1,7 @@
 import { RouterProvider } from '@tanstack/react-router'
 import { StrictMode, useEffect } from 'react'
 import { createRoot } from 'react-dom/client'
-import { Toaster } from '@/components/Toaster'
+import { Toaster } from './ui/dialogs'
 import '@/index.css'
 import { createDemoRouter } from './router'
 import { loadDemo, useDb } from './core/store'

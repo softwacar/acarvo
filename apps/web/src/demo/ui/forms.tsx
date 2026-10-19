@@ -1,6 +1,7 @@
 import { CaretDown, Check } from '@phosphor-icons/react'
 import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react'
-import { Field, Input, Select, Textarea, describe } from '@/components/fields'
+import { Input, Select, Textarea, describe } from '@/components/fields'
+import { Field } from './dialogs'
 import { cn } from '@/lib/utils'
 import { L } from '../i18n'
 import { CURRENCIES, parseAmount, toInput } from '../core/money'

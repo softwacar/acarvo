@@ -1,4 +1,4 @@
-import { locale } from '../i18n'
+import {locale, L } from '../i18n'
 
 export const MIN = 60_000
 export const HOUR = 3_600_000
@@ -101,6 +101,6 @@ export function durationText(ms: number, tr: boolean): string {
   const d = Math.floor(m / 1440)
   const h = Math.floor((m % 1440) / 60)
   const mm = m % 60
-  const out = [d && (tr ? `${d} gün` : `${d} d`), h && (tr ? `${h} sa` : `${h} h`), !d && mm && (tr ? `${mm} dk` : `${mm} min`)].filter(Boolean)
+  const out = [d && (tr ? L(`${d} gün`, `${d} day(s)`) : `${d} d`), h && (tr ? `${h} sa` : `${h} h`), !d && mm && (tr ? `${mm} dk` : `${mm} min`)].filter(Boolean)
   return out.join(' ') || (tr ? '1 dk' : '1 min')
 }

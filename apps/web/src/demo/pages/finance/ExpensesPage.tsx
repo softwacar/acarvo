@@ -9,6 +9,7 @@ import { L } from '../../i18n'
 import { AreaF, CheckF, DateF, MoneyF, SelectF, TextF, branchOptions } from '../../ui/forms'
 import { runAction, useBranchScope, useCan, useDb, useUrlState } from '../../ui/hooks'
 import { btnPrimary, btnSecondary, Empty, Facts, FilterBar, FilterSelect, FinanceDialog, Kpis, Link2, Page, SearchBox, Status } from '../../ui/kit'
+import { expenseCategoryLabel } from '../../ui/status'
 import { type Col, DataTable, downloadCsv } from '../../ui/table'
 import { ActBtn, ActionRow, byCurText, DrawerSection, PromptDialog, RecordDrawer, useAct } from '../fleet/common'
 
@@ -32,7 +33,7 @@ export function ExpensesPage() {
     { id: 'no', header: L('Masraf', 'Expense'), cell: (e) => <span className="tnum whitespace-nowrap font-medium text-blue">{e.no}</span>, sort: (e) => e.no, csv: (e) => e.no },
     { id: 'date', header: L('Tarih', 'Date'), cell: (e) => <span className="tnum">{e.date}</span>, sort: (e) => e.date, csv: (e) => e.date },
     { id: 'vendor', header: L('Alıcı', 'Vendor'), cell: (e) => e.vendor, csv: (e) => e.vendor },
-    { id: 'cat', header: L('Kategori', 'Category'), cell: (e) => e.category, hideBelow: 'md', csv: (e) => e.category },
+    { id: 'cat', header: L('Kategori', 'Category'), cell: (e) => expenseCategoryLabel(e.category), hideBelow: 'md', csv: (e) => expenseCategoryLabel(e.category) },
     { id: 'amt', header: L('Tutar', 'Amount'), align: 'right', cell: (e) => <span className={`tnum whitespace-nowrap ${e.status === 'voided' ? 'text-ink-3 line-through' : ''}`}>{fmt(e.amount.minor, e.amount.cur)}</span>, sort: (e) => e.amount.minor, csv: (e) => e.amount.minor },
     { id: 'st', header: L('Durum', 'Status'), cell: (e) => <Status kind="expense" value={e.status} />, csv: (e) => e.status },
   ]
@@ -51,7 +52,7 @@ export function ExpensesPage() {
       <Kpis items={[{ label: L('Kaydedilen masraf', 'Posted expenses'), value: byCurText(sumByCur(posted, (e) => e.amount), fmt), hint: L('Para birimi başına', 'Per currency') }, { label: L('Taslak', 'Drafts'), value: scoped.filter((e) => e.status === 'draft').length }, { label: L('Kaynağa bağlı', 'Source-linked'), value: scoped.filter((e) => e.sourceType).length }]} />
       <FilterBar onReset={() => { setQ(''); setCat('all'); setStatus('all') }} active={q !== '' || cat !== 'all' || status !== 'all'}>
         <SearchBox label={L('Masraflarda ara', 'Search expenses')} placeholder={L('No, alıcı, kategori…', 'No, vendor, category…')} value={q} onChange={setQ} />
-        <FilterSelect label={L('Kategori', 'Category')} value={cat} onChange={setCat} options={[{ id: 'all', label: L('Tümü', 'All') }, ...EXPENSE_CATEGORIES.map((c) => ({ id: c, label: c }))]} />
+        <FilterSelect label={L('Kategori', 'Category')} value={cat} onChange={setCat} options={[{ id: 'all', label: L('Tümü', 'All') }, ...EXPENSE_CATEGORIES.map((c) => ({ id: c, label: expenseCategoryLabel(c) }))]} />
         <FilterSelect label={L('Durum', 'Status')} value={status} onChange={setStatus} options={[{ id: 'all', label: L('Tümü', 'All') }, { id: 'draft', label: L('Taslak', 'Draft') }, { id: 'posted', label: L('Kaydedildi', 'Posted') }, { id: 'voided', label: L('İptal', 'Voided') }]} />
       </FilterBar>
       <DataTable rows={rows} cols={cols} rowKey={(e) => e.id} label={L('Masraf listesi', 'Expense list')} urlKey="ms" defaultSort={{ id: 'date', dir: 'desc' }} onRowClick={(e) => setSel(e.id)} empty={<Empty title={L('Bu filtrelerle masraf yok', 'No expenses match')} />} />
@@ -74,7 +75,7 @@ function Drawer({ e, onClose }: { e: Expense; onClose: () => void }) {
         single
         rows={[
           [L('Durum', 'Status'), <Status key="s" kind="expense" value={e.status} />],
-          [L('Kategori', 'Category'), e.category],
+          [L('Kategori', 'Category'), expenseCategoryLabel(e.category)],
           [L('Tutar', 'Amount'), fmt(e.amount.minor, e.amount.cur)],
           [L('Tarih', 'Date'), e.date],
           [L('Şube', 'Branch'), d.branches.find((b) => b.id === e.branchId)?.name],
@@ -133,7 +134,7 @@ function NewDialog({ onClose }: { onClose: () => void }) {
       }}
     >
       <div className="grid gap-4 sm:grid-cols-2">
-        <SelectF id="ex-c" label={L('Kategori', 'Category')} value={category} onChange={setCategory} options={EXPENSE_CATEGORIES.map((c) => ({ id: c, label: c }))} error={fields.category} />
+        <SelectF id="ex-c" label={L('Kategori', 'Category')} value={category} onChange={setCategory} options={EXPENSE_CATEGORIES.map((c) => ({ id: c, label: expenseCategoryLabel(c) }))} error={fields.category} />
         <SelectF id="ex-b" label={L('Şube', 'Branch')} value={branch} onChange={setBranch} options={branchOptions(d, active)} />
         <TextF id="ex-v" label={L('Alıcı / tedarikçi', 'Vendor')} required value={vendor} onChange={setVendor} error={fields.vendor} />
         <DateF id="ex-d" label={L('Tarih', 'Date')} required value={date} onChange={setDate} error={fields.date} />

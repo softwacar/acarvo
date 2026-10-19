@@ -11,7 +11,7 @@ import { join, basename, dirname, relative } from 'node:path'
 const ROOT = 'src/demo/core'
 const mode = process.argv[2] ?? 'extract'
 const TR = /[çğıİöşüÇĞÖŞÜ]/
-const WORDS = /\b(ve|için|yok|bir|ile|değil|olmalı|girin|seçin|yazın|yetkiniz|kaydı|kayıt|zorunlu|bulunamadı|edilemez|yapılamaz|gerekli|önce|sonra|istisnai|hazır|kapandı)\b/
+const WORDS = /(?<![\p{L}])(ve|için|yok|bir|ile|değil|olmalı|girin|seçin|yazın|yetkiniz|kaydı|kayıt|zorunlu|bulunamadı|edilemez|yapılamaz|gerekli|önce|sonra|istisnai|hazır|kapandı|kiralama|rezervasyon|iade|teslim|araç|kasa|ödeme|depozito|hasar|bakım|müşteri|sözleşme|fiyat|tarife|günlük|saat|talep|onay|görev|belge|ceza|masraf|komisyon|tedarikçi|şube|gün|durum|bakiye|hesap|kalem|tahsilat|sigorta|gecikme|periyodik|engeli|engel|olay|kapasite|sınıf|plaka|yakıt|tutulan|var)(?![\p{L}])/iu
 const RENDER_FUNCS = new Set(['deliveryChecks', 'previewReturnFees', 'financialCloseChecks', 'customerShare', 'driversOf', 'findDuplicates'])
 
 const walk = (dir) => readdirSync(dir, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? (e.name === '__tests__' ? [] : walk(join(dir, e.name))) : e.name.endsWith('.ts') ? [join(dir, e.name)] : []))

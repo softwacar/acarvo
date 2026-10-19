@@ -3,7 +3,7 @@ import { useState } from 'react'
 import { saveRole } from '../../core/ops/control'
 import { ALL_PERMS, PERM_MODULES } from '../../core/permissions'
 import type { Role } from '../../core/types'
-import { L } from '../../i18n'
+import { L, loc } from '../../i18n'
 import { AreaF, TextF } from '../../ui/forms'
 import { runAction, useCan, useDb, useUrlState } from '../../ui/hooks'
 import { btnPrimary, btnSecondary, FinanceDialog, Kpis, Notice, Page, Panel } from '../../ui/kit'
@@ -46,7 +46,7 @@ export function RolesPage() {
           <p className="text-[13.5px] text-ink-2">{role.description}</p>
           {role.system && manage && <Notice tone="blue" action={<button type="button" className={btnSecondary} onClick={() => setDlg('copy')}>{L('Kopyala', 'Copy')}</button>}>{role.id === 'role-owner' ? L('Sahip rolü değiştirilemez.', 'The Owner role cannot be changed.') : L('Sistem rolü de düzenlenebilir; yine de özel bir kopya oluşturmak sistem rolünü korur.', 'A system role can be edited; creating a custom copy still keeps the system role intact.')}</Notice>}
           {groups.map((g) => (
-            <Panel key={g} title={g} flush>
+            <Panel key={g} title={loc(g)} flush>
               <div className="overflow-x-auto">
                 <table className="w-full text-[13.5px]">
                   <tbody className="divide-y divide-line-soft">
@@ -55,8 +55,8 @@ export function RolesPage() {
                       const all = ids.every((i) => perms.includes(i))
                       return (
                         <tr key={m.key}>
-                          <th scope="row" className="w-[200px] px-5 py-2.5 text-left font-medium"><label className="flex items-center gap-2"><input type="checkbox" disabled={!editable} checked={all} onChange={(e) => toggleModule(ids, e.target.checked)} aria-label={`${m.label}: ${L('tümü', 'all')}`} />{m.label}</label></th>
-                          <td className="px-3 py-2.5"><span className="flex flex-wrap gap-x-5 gap-y-1">{m.perms.map((p) => <label key={p.id} className={`flex items-center gap-1.5 ${p.sensitive ? 'text-hold' : ''}`}><input type="checkbox" disabled={!editable} checked={perms.includes(p.id)} onChange={() => toggle(p.id)} />{p.label}{p.sensitive && <span className="text-[11px]">({L('hassas', 'sensitive')})</span>}</label>)}</span></td>
+                          <th scope="row" className="w-[200px] px-5 py-2.5 text-left font-medium"><label className="flex items-center gap-2"><input type="checkbox" disabled={!editable} checked={all} onChange={(e) => toggleModule(ids, e.target.checked)} aria-label={`${loc(m.label)}: ${L('tümü', 'all')}`} />{loc(m.label)}</label></th>
+                          <td className="px-3 py-2.5"><span className="flex flex-wrap gap-x-5 gap-y-1">{m.perms.map((p) => <label key={p.id} className={`flex items-center gap-1.5 ${p.sensitive ? 'text-hold' : ''}`}><input type="checkbox" disabled={!editable} checked={perms.includes(p.id)} onChange={() => toggle(p.id)} />{loc(p.label)}{p.sensitive && <span className="text-[11px]">({L('hassas', 'sensitive')})</span>}</label>)}</span></td>
                         </tr>
                       )
                     })}

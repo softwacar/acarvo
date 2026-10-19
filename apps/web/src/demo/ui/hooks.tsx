@@ -1,7 +1,7 @@
 import { useNavigate, useRouterState } from '@tanstack/react-router'
 import { useCallback, useMemo } from 'react'
 import { visibleAlerts } from '../core/calc/alerts'
-import { toast } from '@/components/Toaster'
+import { toast } from './dialogs'
 import { activeBranches, commit, DemoError, hasPerm, meOf, scopeBranches, useDb } from '../core/store'
 import { fmtDate, fmtDateTime, fmtTime } from '../core/time'
 import type { Db, Id, LinkType } from '../core/types'

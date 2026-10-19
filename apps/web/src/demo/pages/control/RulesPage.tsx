@@ -4,14 +4,14 @@ import { evaluateRule } from '../../core/calc/alerts'
 import { userName } from '../../core/helpers'
 import { RULE_FIELDS, saveRule, setRuleStatus } from '../../core/ops/control'
 import type { Rule } from '../../core/types'
-import { L } from '../../i18n'
+import { L, loc } from '../../i18n'
 import { AreaF, SelectF, TextF } from '../../ui/forms'
 import { runAction, useCan, useDb, useFmt, useUrlState } from '../../ui/hooks'
 import { btnPrimary, Empty, Facts, FinanceDialog, Kpis, Link2, Notice, Page, Status } from '../../ui/kit'
 import { type Col, DataTable } from '../../ui/table'
 import { ActBtn, ActionRow, DrawerSection, RecordDrawer, useAct } from '../fleet/common'
 
-const FIELD_LABEL = (f: string) => RULE_FIELDS.find((x) => x.field === f)
+const FIELD_LABEL = (f: string) => { const x = RULE_FIELDS.find((y) => y.field === f); return x ? { label: loc(x.label), unit: loc(x.unit) } : undefined }
 
 export function RulesPage() {
   const d = useDb()
@@ -21,7 +21,7 @@ export function RulesPage() {
   const manage = can('rules:manage')
   const cols: Col<Rule>[] = [
     { id: 'name', header: L('Kural', 'Rule'), cell: (r) => <span className="font-medium text-blue">{r.name}</span>, sort: (r) => r.name },
-    { id: 'cond', header: L('Koşul', 'Condition'), cell: (r) => <span className="line-clamp-1 text-[13px]">{r.conditions.map((c) => `${FIELD_LABEL(c.field)?.label ?? c.field} ${c.op} ${c.value}`).join(r.join === 'AND' ? ' ve ' : ' veya ')}</span>, hideBelow: 'md' },
+    { id: 'cond', header: L('Koşul', 'Condition'), cell: (r) => <span className="line-clamp-1 text-[13px]">{r.conditions.map((c) => `${FIELD_LABEL(c.field)?.label ?? c.field} ${c.op} ${c.value}`).join(r.join === 'AND' ? L(' ve ', ' and ') : L(' veya ', ' or '))}</span>, hideBelow: 'md' },
     { id: 'act', header: L('Eylem', 'Action'), cell: (r) => (r.action === 'alert' ? L('Uyarı', 'Alert') : L('İnceleme işareti', 'Review flag')), hideBelow: 'lg' },
     { id: 'sev', header: L('Önem', 'Severity'), cell: (r) => ({ info: L('Bilgi', 'Info'), warning: L('Uyarı', 'Warning'), critical: L('Kritik', 'Critical') })[r.severity], hideBelow: 'lg' },
     { id: 'now', header: L('Şu an', 'Now'), align: 'right', cell: (r) => (r.status === 'active' ? evaluateRule(d, r).length : <span className="text-ink-3">—</span>), hideBelow: 'md' },
@@ -110,7 +110,7 @@ function Editor({ r, onClose }: { r: Rule | null; onClose: () => void }) {
         <legend className="mb-1 text-[13px] font-medium">{L('Koşullar', 'Conditions')}</legend>
         {conds.map((c, i) => (
           <div key={i} className="grid grid-cols-[minmax(0,1fr)_70px_90px_36px] items-end gap-2">
-            <SelectF id={`ru-f${i}`} label={i === 0 ? L('Alan', 'Field') : ''} value={c.field} onChange={(v) => setCond(i, { field: v })} options={RULE_FIELDS.map((f) => ({ id: f.field, label: `${f.label} (${f.unit})` }))} />
+            <SelectF id={`ru-f${i}`} label={i === 0 ? L('Alan', 'Field') : ''} value={c.field} onChange={(v) => setCond(i, { field: v })} options={RULE_FIELDS.map((f) => ({ id: f.field, label: `${loc(f.label)} (${loc(f.unit)})` }))} />
             <SelectF id={`ru-o${i}`} label={i === 0 ? L('İşlem', 'Op') : ''} value={c.op} onChange={(v) => setCond(i, { op: v as Rule['conditions'][number]['op'] })} options={['>', '>=', '=', '<=', '<'].map((o) => ({ id: o, label: o }))} />
             <TextF id={`ru-v${i}`} label={i === 0 ? L('Değer', 'Value') : ''} value={String(c.value)} onChange={(v) => setCond(i, { value: v.replace(/[^\d.-]/g, '') })} />
             <button type="button" className="mb-1 grid size-9 place-items-center rounded-md text-ink-2 hover:bg-line-soft disabled:opacity-40" aria-label={L('Koşulu sil', 'Remove condition')} disabled={conds.length === 1} onClick={() => setConds((x) => x.filter((_, j) => j !== i))}><Trash size={15} /></button>

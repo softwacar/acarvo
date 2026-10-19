@@ -1,3 +1,4 @@
+import { L } from '../../i18n'
 import { exponent, roundHalf } from '../money'
 import type { Cur, FxRate, Id, Iso, RateSnapshot } from '../types'
 
@@ -30,11 +31,11 @@ export function resolveRateSnapshot(rates: FxRate[], opts: { tender: Cur; obliga
     const here = candidates.filter((c) => c.rate.scope === scope)
     // A direct and an inverse candidate of the same scope are two different business rates: refuse to choose.
     if (here.length > 1) {
-      return { ok: false, code: 'RATE_CONFLICT', message: `${opts.tender}/${opts.obligation} için aynı kapsamda birden fazla geçerli kur var. Ayarlar → Döviz Kurları'nda düzeltin.` }
+      return { ok: false, code: 'RATE_CONFLICT', message: L(`${opts.tender}/${opts.obligation} için aynı kapsamda birden fazla geçerli kur var. Ayarlar → Döviz Kurları'nda düzeltin.`, `There is more than one valid rate for ${opts.tender}/${opts.obligation} in the same scope. Correct it in Settings → Exchange Rates.`) }
     }
     if (here.length === 1) return { ok: true, ...here[0]! }
   }
-  return { ok: false, code: 'AWAITING_RATE', message: `${opts.tender} → ${opts.obligation} için işletme kuru tanımlı değil (Kur Bekleniyor). Ayarlar → Döviz Kurları'ndan tanımlayın.` }
+  return { ok: false, code: 'AWAITING_RATE', message: L(`${opts.tender} → ${opts.obligation} için işletme kuru tanımlı değil (Kur Bekleniyor). Ayarlar → Döviz Kurları'ndan tanımlayın.`, `No business rate is defined for ${opts.tender} → ${opts.obligation} (Awaiting Rate). Define it in Settings → Exchange Rates.`) }
 }
 
 export type Conversion = { ok: true; appliedMinor: number; snapshot?: RateSnapshot } | { ok: false; code: 'AWAITING_RATE' | 'RATE_CONFLICT'; message: string }

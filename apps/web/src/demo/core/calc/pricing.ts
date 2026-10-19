@@ -1,3 +1,4 @@
+import { B } from '../../i18n'
 import { roundHalf } from '../money'
 import { addDaysYmd, dayOf, diffDaysYmd, HOUR, MIN } from '../time'
 import type { Cur, Db, Id, Iso, PriceLine, PriceSnapshot, Settings, TaxLine } from '../types'
@@ -46,7 +47,7 @@ export function priceQuote(db: Db, input: QuoteInput, now: Iso, snapshotId: Id):
   const lines: PriceLine[] = []
   const cur = input.currency
 
-  if (days <= 0) blockers.push('İade zamanı teslim zamanından sonra olmalı.')
+  if (days <= 0) blockers.push(B('İade zamanı teslim zamanından sonra olmalı.', 'The return time must be after the pickup time.'))
 
   const agreement = input.corporateId ? db.agreements.find((a) => a.id === db.corporates.find((c) => c.id === input.corporateId)?.agreementId && a.active) : undefined
   const agreementActive = agreement && agreement.validFrom <= dayOf(input.from, tz) && dayOf(input.from, tz) <= agreement.validTo
@@ -56,9 +57,9 @@ export function priceQuote(db: Db, input: QuoteInput, now: Iso, snapshotId: Id):
   const cls = db.classes.find((c) => c.id === input.classId)
 
   if (daily === undefined) {
-    blockers.push(`${cls?.name ?? 'Sınıf'} için ${cur} fiyat satırı tanımlı değil. Fiyatlandırma'da ${cur} satırı ekleyin (fiyatlarda kur dönüşümü yapılmaz).`)
+    blockers.push(B(`${cls?.name ?? B('Sınıf', 'Class')} için ${cur} fiyat satırı tanımlı değil. Fiyatlandırma'da ${cur} satırı ekleyin (fiyatlarda kur dönüşümü yapılmaz).`, `No ${cur} price row is defined for ${cls?.name ?? B('Sınıf', 'Class')}. Add a ${cur} row in Pricing (prices are never converted between currencies).`))
   } else if (days > 0) {
-    lines.push({ kind: 'base', label: `${cls?.name ?? 'Sınıf'} · günlük baz tarife${corpRate ? ' (kurumsal anlaşma)' : ''}`, qty: days, unitMinor: daily, totalMinor: lineTotal(days, daily) })
+    lines.push({ kind: 'base', label: B(`${cls?.name ?? B('Sınıf', 'Class')} · günlük baz tarife${corpRate ? B(' (kurumsal anlaşma)', ' (corporate agreement)') : ''}`, `${cls?.name ?? B('Sınıf', 'Class')} · daily base rate${corpRate ? B(' (kurumsal anlaşma)', ' (corporate agreement)') : ''}`), qty: days, unitMinor: daily, totalMinor: lineTotal(days, daily) })
     // Season uplift: days of the rental that fall in an active season.
     let seasonSum = 0
     let seasonDays = 0
@@ -73,20 +74,20 @@ export function priceQuote(db: Db, input: QuoteInput, now: Iso, snapshotId: Id):
         seasonNames.add(season.name)
       }
     }
-    if (seasonSum > 0) lines.push({ kind: 'season', label: `Sezon farkı · ${[...seasonNames].join(', ')}`, qty: seasonDays, unitMinor: roundHalf(seasonSum / seasonDays), totalMinor: seasonSum })
+    if (seasonSum > 0) lines.push({ kind: 'season', label: B(`Sezon farkı · ${[...seasonNames].join(', ')}`, `Season difference · ${[...seasonNames].join(', ')}`), qty: seasonDays, unitMinor: roundHalf(seasonSum / seasonDays), totalMinor: seasonSum })
     // One length tier for the whole rental.
     const sub = lines.reduce((a, l) => a + l.totalMinor, 0)
     const tier = [...s.tiers].sort((a, b) => b.fromDays - a.fromDays).find((t) => days >= t.fromDays)
-    if (tier && tier.discountPct > 0) lines.push({ kind: 'tier', label: `Süre kademesi (${tier.fromDays}+ gün) %${tier.discountPct}`, qty: 1, unitMinor: -roundHalf((sub * tier.discountPct) / 100), totalMinor: -roundHalf((sub * tier.discountPct) / 100) })
+    if (tier && tier.discountPct > 0) lines.push({ kind: 'tier', label: B(`Süre kademesi (${tier.fromDays}+ gün) %${tier.discountPct}`, `Length tier (${tier.fromDays}+ days) ${tier.discountPct}%`), qty: 1, unitMinor: -roundHalf((sub * tier.discountPct) / 100), totalMinor: -roundHalf((sub * tier.discountPct) / 100) })
     if (agreementActive && agreement!.discountPct > 0) {
       const base2 = lines.reduce((a, l) => a + l.totalMinor, 0)
       const d = roundHalf((base2 * agreement!.discountPct) / 100)
-      lines.push({ kind: 'corporate', label: `Kurumsal anlaşma · ${agreement!.name} %${agreement!.discountPct}`, qty: 1, unitMinor: -d, totalMinor: -d })
+      lines.push({ kind: 'corporate', label: B(`Kurumsal anlaşma · ${agreement!.name} %${agreement!.discountPct}`, `Corporate agreement · ${agreement!.name} ${agreement!.discountPct}%`), qty: 1, unitMinor: -d, totalMinor: -d })
     }
     if (input.approvedDiscountPct && input.approvedDiscountPct > 0) {
       const base3 = lines.reduce((a, l) => a + l.totalMinor, 0)
       const d = roundHalf((base3 * input.approvedDiscountPct) / 100)
-      lines.push({ kind: 'discount', label: `Onaylı indirim %${input.approvedDiscountPct} (Onay Merkezi)`, qty: 1, unitMinor: -d, totalMinor: -d })
+      lines.push({ kind: 'discount', label: B(`Onaylı indirim %${input.approvedDiscountPct} (Onay Merkezi)`, `Approved discount ${input.approvedDiscountPct}% (Approval Center)`), qty: 1, unitMinor: -d, totalMinor: -d })
     }
   }
 
@@ -95,34 +96,34 @@ export function priceQuote(db: Db, input: QuoteInput, now: Iso, snapshotId: Id):
     if (!def || ex.qty <= 0) continue
     const price = def.prices[cur]
     if (price === undefined) {
-      blockers.push(`"${def.name}" için ${cur} fiyat satırı yok.`)
+      blockers.push(B(`"${def.name}" için ${cur} fiyat satırı yok.`, `There is no ${cur} price row for "${def.name}".`))
       continue
     }
     const qty = def.kind === 'per_day' ? days * ex.qty : ex.qty
-    lines.push({ kind: 'extra', label: def.name + (def.kind === 'per_day' ? ' · günlük' : ''), qty, unitMinor: price, totalMinor: lineTotal(qty, price) })
+    lines.push({ kind: 'extra', label: def.name + (def.kind === 'per_day' ? B(' · günlük', ' · per day') : ''), qty, unitMinor: price, totalMinor: lineTotal(qty, price) })
   }
   if (input.insuranceId) {
     const pkg = db.insurance.find((p) => p.id === input.insuranceId)
     const price = pkg?.dailyPrice[cur]
-    if (!pkg) blockers.push('Sigorta paketi bulunamadı.')
-    else if (price === undefined) blockers.push(`"${pkg.name}" için ${cur} günlük fiyat satırı yok (sigorta fiyatı kur ile hesaplanmaz).`)
-    else if (days > 0) lines.push({ kind: 'insurance', label: `${pkg.name} (${pkg.code}) · günlük`, qty: days, unitMinor: price, totalMinor: lineTotal(days, price) })
+    if (!pkg) blockers.push(B('Sigorta paketi bulunamadı.', 'Cover package not found.'))
+    else if (price === undefined) blockers.push(B(`"${pkg.name}" için ${cur} günlük fiyat satırı yok (sigorta fiyatı kur ile hesaplanmaz).`, `There is no ${cur} daily price row for "${pkg.name}" (cover prices are not computed by exchange rate).`))
+    else if (days > 0) lines.push({ kind: 'insurance', label: B(`${pkg.name} (${pkg.code}) · günlük`, `${pkg.name} (${pkg.code}) · per day`), qty: days, unitMinor: price, totalMinor: lineTotal(days, price) })
   }
   const addl = input.additionalDrivers ?? 0
   if (addl > 0 && days > 0) {
     const p = s.driver.additionalDriverDaily[cur]
-    if (p === undefined) blockers.push(`Ek sürücü ücreti için ${cur} satırı yok.`)
-    else lines.push({ kind: 'driver', label: 'Ek sürücü · günlük', qty: days * addl, unitMinor: p, totalMinor: lineTotal(days * addl, p) })
+    if (p === undefined) blockers.push(B(`Ek sürücü ücreti için ${cur} satırı yok.`, `There is no ${cur} row for the additional driver fee.`))
+    else lines.push({ kind: 'driver', label: B('Ek sürücü · günlük', 'Additional driver · per day'), qty: days * addl, unitMinor: p, totalMinor: lineTotal(days * addl, p) })
   }
   if (input.youngDriver) {
     const p = s.driver.youngDriverFee[cur]
-    if (p === undefined) blockers.push(`Genç sürücü ücreti için ${cur} satırı yok.`)
-    else lines.push({ kind: 'young_driver', label: 'Genç sürücü ücreti', qty: 1, unitMinor: p, totalMinor: p })
+    if (p === undefined) blockers.push(B(`Genç sürücü ücreti için ${cur} satırı yok.`, `There is no ${cur} row for the young-driver fee.`))
+    else lines.push({ kind: 'young_driver', label: B('Genç sürücü ücreti', 'Young-driver fee'), qty: 1, unitMinor: p, totalMinor: p })
   }
   if (input.pickupBranchId !== input.returnBranchId) {
     const p = s.duration.oneWayFee[cur]
-    if (p === undefined) blockers.push(`Tek yön ücreti için ${cur} satırı yok.`)
-    else if (p > 0) lines.push({ kind: 'oneway', label: 'Farklı şubede iade (tek yön) ücreti', qty: 1, unitMinor: p, totalMinor: p })
+    if (p === undefined) blockers.push(B(`Tek yön ücreti için ${cur} satırı yok.`, `There is no ${cur} row for the one-way fee.`))
+    else if (p > 0) lines.push({ kind: 'oneway', label: B('Farklı şubede iade (tek yön) ücreti', 'Different-branch return (one-way) fee'), qty: 1, unitMinor: p, totalMinor: p })
   }
 
   const subtotal = lines.reduce((a, l) => a + l.totalMinor, 0)

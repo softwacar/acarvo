@@ -4,7 +4,7 @@ import { userName } from '../../core/helpers'
 import { fmt } from '../../core/money'
 import { applyApproval, approvalLabel, APPROVAL_TYPES, decideApproval } from '../../core/ops/control'
 import type { Approval, ApprovalType, Cur, Db, Id, LinkType } from '../../core/types'
-import { L } from '../../i18n'
+import { L, loc } from '../../i18n'
 import { ComboF, SelectF } from '../../ui/forms'
 import { entityHref, useCan, useDb, useFmt, useMe, useUrlState } from '../../ui/hooks'
 import { btnPrimary, btnSecondary, Empty, Facts, FilterBar, FilterSelect, FinanceDialog, Kpis, Notice, Page, Status, Tabs, Timeline } from '../../ui/kit'
@@ -35,7 +35,7 @@ export function ApprovalsPage() {
   const mineToDecide = d.approvals.filter((a) => a.status === 'requested' && a.requesterId !== me.id).length
   const cols: Col<Approval>[] = [
     { id: 'no', header: L('Talep', 'Request'), cell: (a) => <span className="tnum whitespace-nowrap font-medium text-blue">{a.no}</span>, sort: (a) => a.no, csv: (a) => a.no },
-    { id: 'type', header: L('Tür', 'Type'), cell: (a) => approvalLabel(a.type), csv: (a) => approvalLabel(a.type) },
+    { id: 'type', header: L('Tür', 'Type'), cell: (a) => loc(approvalLabel(a.type)), csv: (a) => loc(approvalLabel(a.type)) },
     { id: 'amt', header: L('İstenen', 'Requested'), align: 'right', cell: (a) => (a.requested ? <span className="tnum whitespace-nowrap">{fmt(a.requested.minor, a.requested.cur)}</span> : a.proposedPct ? <span className="tnum">%{a.proposedPct}</span> : '—'), hideBelow: 'md' },
     { id: 'by', header: L('Talep eden', 'Requested by'), cell: (a) => userName(d, a.requesterId), hideBelow: 'lg' },
     { id: 'when', header: L('Tarih', 'Date'), cell: (a) => <span className="tnum text-[13px]">{f.dt(a.createdAt)}</span>, sort: (a) => a.createdAt, hideBelow: 'lg', csv: (a) => a.createdAt },
@@ -56,7 +56,7 @@ export function ApprovalsPage() {
       <Kpis items={[{ label: L('Karar bekleyen', 'Awaiting decision'), value: count('bekleyen'), tone: count('bekleyen') ? 'hold' : undefined }, { label: L('Benim kararımı bekleyen', 'Awaiting my decision'), value: mineToDecide, hint: L('Kendi talepleriniz hariç', 'Excluding your own requests') }, { label: L('Onaylı, uygulanmadı', 'Approved, not applied'), value: count('uygulanacak'), tone: count('uygulanacak') ? 'hold' : undefined }, { label: L('Uygulanan', 'Applied'), value: d.approvals.filter((a) => a.status === 'applied').length }]} />
       <Tabs<TabId> label={L('Onay görünümleri', 'Approval views')} value={(tab as TabId) || 'bekleyen'} onChange={setTab} tabs={[{ id: 'bekleyen', label: L('Karar bekleyen', 'Awaiting decision'), count: count('bekleyen') || undefined }, { id: 'uygulanacak', label: L('Onaylı, uygulanacak', 'Approved, to apply'), count: count('uygulanacak') || undefined }, { id: 'tamam', label: L('Tamamlanan', 'Completed') }, { id: 'hepsi', label: L('Tümü', 'All') }]} />
       <FilterBar onReset={() => setType('all')} active={type !== 'all'}>
-        <FilterSelect label={L('Tür', 'Type')} value={type} onChange={setType} options={[{ id: 'all', label: L('Tümü', 'All') }, ...APPROVAL_TYPES.map((t) => ({ id: t.type, label: t.label }))]} />
+        <FilterSelect label={L('Tür', 'Type')} value={type} onChange={setType} options={[{ id: 'all', label: L('Tümü', 'All') }, ...APPROVAL_TYPES.map((t) => ({ id: t.type, label: loc(t.label) }))]} />
       </FilterBar>
       <DataTable rows={rows} cols={cols} rowKey={(a) => a.id} label={L('Onay listesi', 'Approval list')} urlKey="on" defaultSort={{ id: 'when', dir: 'desc' }} onRowClick={(a) => setSel(a.id)} empty={<Empty title={L('Bu görünümde talep yok', 'No requests in this view')} />} />
       {adding && <NewRequestDialog onClose={() => setAdding(false)} />}
@@ -73,9 +73,9 @@ function Drawer({ a, onClose }: { a: Approval; onClose: () => void }) {
   const { act, error } = useAct()
   const [dlg, setDlg] = useState<null | 'reject' | 'approve'>(null)
   const own = a.requesterId === me.id
-  const hint = APPROVAL_TYPES.find((x) => x.type === a.type)!.applyHint
+  const hint = loc(APPROVAL_TYPES.find((x) => x.type === a.type)!.applyHint)
   return (
-    <RecordDrawer title={a.no} subtitle={approvalLabel(a.type)} onClose={onClose} error={error}>
+    <RecordDrawer title={a.no} subtitle={loc(approvalLabel(a.type))} onClose={onClose} error={error}>
       <Facts single rows={[
         [L('Durum', 'Status'), <Status key="s" kind="approval" value={a.status} />],
         [L('Hedef', 'Target'), <Link key="t" to={entityHref(a.target.type, a.target.id) as never} className="text-blue hover:underline">{targetLabel(d, a.target)}</Link>],
@@ -133,7 +133,7 @@ function NewRequestDialog({ onClose }: { onClose: () => void }) {
   return (
     <FinanceDialog title={L('Yeni onay talebi', 'New approval request')} description={L('Önce türü ve hedef kaydı seçin; ardından tutar ve gerekçe istenir.', 'Choose the type and target record first; then the amount and reason are requested.')} confirm={L('Devam', 'Continue')} onClose={onClose}
       onSubmit={() => { if (!target) return L('Hedef kaydı seçin.', 'Choose the target record.'); const c = it.list.find((x) => x.id === target); setNext({ type, target: { type: it.type, id: target }, cur: type === 'refund' || type === 'partner_commission_adjustment' ? c?.cur : undefined }) }}>
-      <SelectF id="nr-t" label={L('Onay türü', 'Approval type')} value={type} onChange={(v) => { setType(v as ApprovalType); setTarget('') }} options={APPROVAL_TYPES.map((t) => ({ id: t.type, label: t.label }))} />
+      <SelectF id="nr-t" label={L('Onay türü', 'Approval type')} value={type} onChange={(v) => { setType(v as ApprovalType); setTarget('') }} options={APPROVAL_TYPES.map((t) => ({ id: t.type, label: loc(t.label) }))} />
       <ComboF id="nr-g" label={L('Hedef kayıt', 'Target record')} items={it.list} value={target} onChange={setTarget} />
     </FinanceDialog>
   )

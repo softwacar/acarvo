@@ -1,3 +1,4 @@
+import { L } from '../i18n'
 import { BUCKET_ORDER, type Bucket, bucketNow } from './calc/availability'
 import { rentalFinance } from './calc/finance'
 import { DAY, dayOf, HOUR, startOfDay, addDaysYmd } from './time'
@@ -43,14 +44,14 @@ export interface DayItem {
 
 export function todayPickups(d: Db, branches: Id[]): DayItem[] {
   const out: DayItem[] = []
-  for (const r of d.reservations) if (r.status === 'confirmed' && branches.includes(r.pickupBranchId) && isToday(d, r.pickupAt, r.pickupBranchId)) out.push({ kind: 'reservation', id: r.id, no: r.no, at: r.pickupAt, branchId: r.pickupBranchId, vehicleId: r.vehicleId, customerId: r.customerId, classId: r.classId, note: r.vehicleId ? 'Onaylı rezervasyon' : 'Sınıf rezervasyonu: araç atanmadı' })
-  for (const r of d.rentals) if (r.status === 'prepared' && branches.includes(r.pickupBranchId) && isToday(d, r.plannedPickupAt, r.pickupBranchId)) out.push({ kind: 'rental', id: r.id, no: r.no, at: r.plannedPickupAt, branchId: r.pickupBranchId, vehicleId: r.vehicleId, customerId: r.customerId, classId: r.classId, note: 'Hazır kiralama: teslim masası' })
+  for (const r of d.reservations) if (r.status === 'confirmed' && branches.includes(r.pickupBranchId) && isToday(d, r.pickupAt, r.pickupBranchId)) out.push({ kind: 'reservation', id: r.id, no: r.no, at: r.pickupAt, branchId: r.pickupBranchId, vehicleId: r.vehicleId, customerId: r.customerId, classId: r.classId, note: r.vehicleId ? L('Onaylı rezervasyon', 'Confirmed reservation') : L('Sınıf rezervasyonu: araç atanmadı', 'Class reservation: no vehicle assigned') })
+  for (const r of d.rentals) if (r.status === 'prepared' && branches.includes(r.pickupBranchId) && isToday(d, r.plannedPickupAt, r.pickupBranchId)) out.push({ kind: 'rental', id: r.id, no: r.no, at: r.plannedPickupAt, branchId: r.pickupBranchId, vehicleId: r.vehicleId, customerId: r.customerId, classId: r.classId, note: L('Hazır kiralama: teslim masası', 'Prepared rental: delivery desk') })
   return out.sort((a, b) => a.at.localeCompare(b.at))
 }
 export function todayReturns(d: Db, branches: Id[]): DayItem[] {
   return d.rentals
     .filter((r) => r.status === 'delivered' && branches.includes(r.returnBranchId) && isToday(d, r.plannedReturnAt, r.returnBranchId) && Date.parse(r.plannedReturnAt) >= Date.parse(d.clock.now) - 0)
-    .map((r): DayItem => ({ kind: 'rental', id: r.id, no: r.no, at: r.plannedReturnAt, branchId: r.returnBranchId, vehicleId: r.vehicleId, customerId: r.customerId, classId: r.classId, note: 'İade bekleniyor' }))
+    .map((r): DayItem => ({ kind: 'rental', id: r.id, no: r.no, at: r.plannedReturnAt, branchId: r.returnBranchId, vehicleId: r.vehicleId, customerId: r.customerId, classId: r.classId, note: L('İade bekleniyor', 'Return expected') }))
     .sort((a, b) => a.at.localeCompare(b.at))
 }
 export const overdueReturns = (d: Db, branches: Id[]): Rental[] => d.rentals.filter((r) => r.status === 'delivered' && Date.parse(r.plannedReturnAt) < Date.parse(d.clock.now) && (branches.includes(r.returnBranchId) || branches.includes(r.pickupBranchId)))

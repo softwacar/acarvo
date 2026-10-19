@@ -7,7 +7,7 @@ import { HOLD_LABEL, type Hold, type ReadinessItem, vehicleHolds } from '../core
 import { fmt } from '../core/money'
 import { DAY, dayOf, fmtDayShort, startOfDay, addDaysYmd } from '../core/time'
 import type { Customer, Iso, PriceSnapshot, Vehicle } from '../core/types'
-import { L } from '../i18n'
+import { L, loc } from '../i18n'
 import { entityHref, useDb, useFmt } from './hooks'
 import { Notice } from './kit'
 
@@ -44,7 +44,7 @@ export function PriceBreakdown({ price, compact }: { price: PriceSnapshot | null
           <p className="font-medium">{L('Fiyat hesaplanamadı', 'Price cannot be calculated')}</p>
           <ul className="mt-1 list-disc pl-5">
             {price.blockers.map((b) => (
-              <li key={b}>{b}</li>
+              <li key={b}>{loc(b)}</li>
             ))}
           </ul>
         </Notice>
@@ -63,7 +63,7 @@ export function PriceBreakdown({ price, compact }: { price: PriceSnapshot | null
             <tbody className="divide-y divide-line-soft">
               {price.lines.map((l, i) => (
                 <tr key={i}>
-                  <td className="py-2 pr-3">{l.label}</td>
+                  <td className="py-2 pr-3">{loc(l.label)}</td>
                   {!compact && <td className="tnum whitespace-nowrap px-2 py-2 text-right">{l.qty}</td>}
                   {!compact && <td className="tnum whitespace-nowrap px-2 py-2 text-right">{fmt(l.unitMinor, price.cur)}</td>}
                   <td className={cn('tnum whitespace-nowrap py-2 pl-2 text-right font-medium', l.totalMinor < 0 && 'text-ok')}>{fmt(l.totalMinor, price.cur)}</td>
@@ -78,7 +78,7 @@ export function PriceBreakdown({ price, compact }: { price: PriceSnapshot | null
               {price.taxLines.map((t) => (
                 <tr key={t.ruleId}>
                   <td colSpan={compact ? 1 : 3} className="py-1 pr-3 text-ink-2">
-                    {t.name} ({t.mode === 'inclusive' ? L('dahil', 'incl.') : L('hariç', 'excl.')})
+                    {loc(t.name)} ({t.mode === 'inclusive' ? L('dahil', 'incl.') : L('hariç', 'excl.')})
                   </td>
                   <td className="tnum whitespace-nowrap py-1 pl-2 text-right">{fmt(t.taxMinor, price.cur)}</td>
                 </tr>
@@ -106,10 +106,10 @@ export function ReadinessList({ items }: { items: ReadinessItem[] }) {
           {i.ok ? <CheckCircle size={18} weight="fill" className="mt-0.5 shrink-0 text-ok" /> : i.severity === 'blocker' ? <XCircle size={18} weight="fill" className="mt-0.5 shrink-0 text-alert" /> : <WarningCircle size={18} weight="fill" className="mt-0.5 shrink-0 text-hold" />}
           <div className="min-w-0 flex-1">
             <p className="text-[13.5px] font-medium">
-              {i.label}
+              {loc(i.label)}
               {!i.ok && <span className={cn('ml-2 text-[12px] font-medium', i.severity === 'blocker' ? 'text-alert' : 'text-hold')}>{i.severity === 'blocker' ? L('Engel', 'Blocker') : L('Uyarı', 'Warning')}</span>}
             </p>
-            <p className="text-[12.5px] text-ink-2">{i.detail}</p>
+            <p className="text-[12.5px] text-ink-2">{loc(i.detail)}</p>
           </div>
           {i.link && (
             <Link to={entityHref(i.link.type, i.link.id) as never} className="shrink-0 text-[12.5px] font-medium text-blue hover:underline">

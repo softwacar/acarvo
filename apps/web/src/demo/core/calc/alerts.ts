@@ -1,3 +1,4 @@
+import { L } from '../../i18n'
 import { readinessOf, vehicleHolds } from './availability'
 import { rentalFinance, computeCashExpected, openSessionOf } from './finance'
 import { customerDocChecks, DOC_LABEL } from './policy'
@@ -40,7 +41,7 @@ export function deriveAlerts(d: Db): Alert[] {
     const h = hoursLate(now, r.plannedReturnAt)
     if (h < 0) continue
     if (h === 0 && nowMs < Date.parse(r.plannedReturnAt)) continue
-    push({ id: `overdue:${r.id}`, kind: 'overdue_return', severity: h >= 12 ? 'critical' : 'warning', title: `${r.no} · iade gecikti (${veh(r.vehicleId)?.plate})`, detail: `${cust(r.customerId)} · planlanan iade geçti (${h} saat). Araç hâlâ müşteride.`, at: r.plannedReturnAt, link: { type: 'rental', id: r.id }, branchId: r.returnBranchId, module: 'rentals' })
+    push({ id: `overdue:${r.id}`, kind: 'overdue_return', severity: h >= 12 ? 'critical' : 'warning', title: L(`${r.no} · iade gecikti (${veh(r.vehicleId)?.plate})`, `${r.no} · return overdue (${veh(r.vehicleId)?.plate})`), detail: L(`${cust(r.customerId)} · planlanan iade geçti (${h} saat). Araç hâlâ müşteride.`, `${cust(r.customerId)} · planned return passed (${h} h). The vehicle is still with the customer.`), at: r.plannedReturnAt, link: { type: 'rental', id: r.id }, branchId: r.returnBranchId, module: 'rentals' })
   }
 
   // 2. pickups in the next 24 h (and late pickups): readiness, documents, contract, deposit
@@ -52,29 +53,29 @@ export function deriveAlerts(d: Db): Alert[] {
     if (!v) continue
     const issues: string[] = []
     const ready = readinessOf(d, v, now)
-    if (!ready.ready) issues.push(`araç hazır değil (${ready.items.filter((i) => !i.ok && i.severity === 'blocker').map((i) => i.label).join(', ')})`)
+    if (!ready.ready) issues.push(L(`araç hazır değil (${ready.items.filter((i) => !i.ok && i.severity === 'blocker').map((i) => i.label).join(', ')})`, `vehicle not ready (${ready.items.filter((i) => !i.ok && i.severity === 'blocker').map((i) => i.label).join(', ')})`))
     const c = cust(r.customerId)
     for (const drv of r.drivers) {
       const cu = d.customers.find((x) => x.id === drv.customerId)
       if (!cu) continue
-      for (const chk of customerDocChecks(d, cu, now, r.plannedReturnAt)) if (chk.state === 'missing' || chk.state === 'expired') issues.push(`${cu.name}: ${DOC_LABEL[chk.kind] ?? chk.kind} ${chk.state === 'missing' ? 'eksik' : 'geçersiz'}`)
+      for (const chk of customerDocChecks(d, cu, now, r.plannedReturnAt)) if (chk.state === 'missing' || chk.state === 'expired') issues.push(`${cu.name}: ${DOC_LABEL[chk.kind] ?? chk.kind} ${chk.state === 'missing' ? 'eksik' : L('geçersiz', 'invalid')}`)
     }
     const ctr = d.contracts.find((x) => x.id === r.contract.id)
-    if (!ctr || ctr.status !== 'signed') issues.push('sözleşme imzasız')
-    if (r.deposit.required.minor > 0 && r.deposit.state !== 'held' && r.deposit.state !== 'waived') issues.push('depozito alınmadı')
-    if (issues.length) push({ id: `pickup:${r.id}`, kind: 'pickup_blocked', severity: dueMs <= nowMs + 4 * HOUR ? 'critical' : 'warning', title: `${r.no} · teslim hazırlığı eksik (${v.plate})`, detail: `${c} · ${issues.join(' · ')}`, at: r.plannedPickupAt, link: { type: 'rental', id: r.id }, branchId: r.pickupBranchId, module: 'rentals' })
+    if (!ctr || ctr.status !== 'signed') issues.push(L('sözleşme imzasız', 'contract unsigned'))
+    if (r.deposit.required.minor > 0 && r.deposit.state !== 'held' && r.deposit.state !== 'waived') issues.push(L('depozito alınmadı', 'deposit not taken'))
+    if (issues.length) push({ id: `pickup:${r.id}`, kind: 'pickup_blocked', severity: dueMs <= nowMs + 4 * HOUR ? 'critical' : 'warning', title: L(`${r.no} · teslim hazırlığı eksik (${v.plate})`, `${r.no} · handover preparation incomplete (${v.plate})`), detail: `${c} · ${issues.join(' · ')}`, at: r.plannedPickupAt, link: { type: 'rental', id: r.id }, branchId: r.pickupBranchId, module: 'rentals' })
   }
 
   // 3. confirmed class-only reservations close to pickup without a vehicle
   for (const r of d.reservations) {
     if (r.status !== 'confirmed') continue
-    if (!r.vehicleId && Date.parse(r.pickupAt) <= nowMs + 24 * HOUR) push({ id: `novehicle:${r.id}`, kind: 'no_vehicle', severity: Date.parse(r.pickupAt) <= nowMs + 6 * HOUR ? 'critical' : 'warning', title: `${r.no} · araç atanmadı`, detail: `${cust(r.customerId)} · yalnız sınıf rezervasyonu (${d.classes.find((c) => c.id === r.classId)?.name}); teslimden önce belirli araç atanmalı.`, at: r.pickupAt, link: { type: 'reservation', id: r.id }, branchId: r.pickupBranchId, module: 'reservations' })
+    if (!r.vehicleId && Date.parse(r.pickupAt) <= nowMs + 24 * HOUR) push({ id: `novehicle:${r.id}`, kind: 'no_vehicle', severity: Date.parse(r.pickupAt) <= nowMs + 6 * HOUR ? 'critical' : 'warning', title: L(`${r.no} · araç atanmadı`, `${r.no} · no vehicle assigned`), detail: L(`${cust(r.customerId)} · yalnız sınıf rezervasyonu (${d.classes.find((c) => c.id === r.classId)?.name}); teslimden önce belirli araç atanmalı.`, `${cust(r.customerId)} · class-only reservation (${d.classes.find((c) => c.id === r.classId)?.name}); a specific vehicle must be assigned before handover.`), at: r.pickupAt, link: { type: 'reservation', id: r.id }, branchId: r.pickupBranchId, module: 'reservations' })
     // 4. conflicts: a confirmed reservation whose vehicle is blocked, in service or out of service
     if (r.vehicleId) {
       const v = veh(r.vehicleId)
       if (!v) continue
       const holds = vehicleHolds(d, v, r.pickupAt, r.returnAt, now, { reservationId: r.id }).filter((h) => h.kind === 'damage_block' || h.kind === 'maintenance' || h.kind === 'out_of_service' || h.kind === 'rental' || h.kind === 'engagement_gap')
-      if (holds.length) push({ id: `conflict:${r.id}`, kind: 'conflict', severity: 'critical', title: `${r.no} · araç çakışması (${v.plate})`, detail: `${cust(r.customerId)} · ${holds.map((h) => h.label).join(', ')} ile çakışıyor. Alternatif araç atayın.`, at: r.pickupAt, link: { type: 'reservation', id: r.id }, branchId: r.pickupBranchId, module: 'reservations' })
+      if (holds.length) push({ id: `conflict:${r.id}`, kind: 'conflict', severity: 'critical', title: L(`${r.no} · araç çakışması (${v.plate})`, `${r.no} · vehicle conflict (${v.plate})`), detail: L(`${cust(r.customerId)} · ${holds.map((h) => h.label).join(', ')} ile çakışıyor. Alternatif araç atayın.`, `${cust(r.customerId)} · conflicts with ${holds.map((h) => h.label).join(', ')}. Assign an alternative vehicle.`), at: r.pickupAt, link: { type: 'reservation', id: r.id }, branchId: r.pickupBranchId, module: 'reservations' })
     }
   }
 
@@ -85,44 +86,44 @@ export function deriveAlerts(d: Db): Alert[] {
     const left = Math.floor((Date.parse(`${doc.validUntil}T23:59:59Z`) - nowMs) / DAY)
     const v = veh(doc.ownerId)
     if (!v || v.status === 'sold') continue
-    if (left < 0) push({ id: `vdoc:${doc.id}`, kind: 'doc_expired', severity: 'critical', title: `${v.plate} · ${DOC_LABEL[doc.kind] ?? doc.kind} süresi doldu`, detail: `${-left} gün önce doldu (${doc.validUntil}). Araç teslim hazırlığında engel sayılır.`, at: `${doc.validUntil}T00:00:00.000Z`, link: { type: 'vehicle', id: v.id }, branchId: v.homeBranchId, module: 'vehicles' })
-    else if (left <= warn) push({ id: `vdoc:${doc.id}`, kind: 'doc_expiring', severity: 'warning', title: `${v.plate} · ${DOC_LABEL[doc.kind] ?? doc.kind} ${left} gün içinde bitiyor`, detail: `Geçerlilik: ${doc.validUntil}`, at: `${doc.validUntil}T00:00:00.000Z`, link: { type: 'vehicle', id: v.id }, branchId: v.homeBranchId, module: 'vehicles' })
+    if (left < 0) push({ id: `vdoc:${doc.id}`, kind: 'doc_expired', severity: 'critical', title: L(`${v.plate} · ${DOC_LABEL[doc.kind] ?? doc.kind} süresi doldu`, `${v.plate} · ${DOC_LABEL[doc.kind] ?? doc.kind} expired`), detail: L(`${-left} gün önce doldu (${doc.validUntil}). Araç teslim hazırlığında engel sayılır.`, `Expired ${-left} day(s) ago (${doc.validUntil}). It counts as a blocker for handover readiness.`), at: `${doc.validUntil}T00:00:00.000Z`, link: { type: 'vehicle', id: v.id }, branchId: v.homeBranchId, module: 'vehicles' })
+    else if (left <= warn) push({ id: `vdoc:${doc.id}`, kind: 'doc_expiring', severity: 'warning', title: L(`${v.plate} · ${DOC_LABEL[doc.kind] ?? doc.kind} ${left} gün içinde bitiyor`, `${v.plate} · ${DOC_LABEL[doc.kind] ?? doc.kind} expires in ${left} day(s)`), detail: L(`Geçerlilik: ${doc.validUntil}`, `Valid until: ${doc.validUntil}`), at: `${doc.validUntil}T00:00:00.000Z`, link: { type: 'vehicle', id: v.id }, branchId: v.homeBranchId, module: 'vehicles' })
   }
   for (const v of d.vehicles) {
     if (v.status === 'sold' || v.source === 'external') continue
     const over = v.odometerKm - v.service.lastKm - v.service.intervalKm
-    if (over > 0) push({ id: `svc:${v.id}`, kind: 'service_overdue', severity: 'warning', title: `${v.plate} · periyodik bakım gecikti`, detail: `${over.toLocaleString('tr')} km gecikmiş. Bakım planlayın.`, at: v.service.lastAt, link: { type: 'vehicle', id: v.id }, branchId: v.homeBranchId, module: 'maintenance' })
-    else if (over > -1000) push({ id: `svc:${v.id}`, kind: 'service_soon', severity: 'info', title: `${v.plate} · periyodik bakım yaklaşıyor`, detail: `${(-over).toLocaleString('tr')} km kaldı.`, at: v.service.lastAt, link: { type: 'vehicle', id: v.id }, branchId: v.homeBranchId, module: 'maintenance' })
+    if (over > 0) push({ id: `svc:${v.id}`, kind: 'service_overdue', severity: 'warning', title: L(`${v.plate} · periyodik bakım gecikti`, `${v.plate} · periodic service overdue`), detail: L(`${over.toLocaleString('tr')} km gecikmiş. Bakım planlayın.`, `${over.toLocaleString('tr')} km overdue. Plan a service.`), at: v.service.lastAt, link: { type: 'vehicle', id: v.id }, branchId: v.homeBranchId, module: 'maintenance' })
+    else if (over > -1000) push({ id: `svc:${v.id}`, kind: 'service_soon', severity: 'info', title: L(`${v.plate} · periyodik bakım yaklaşıyor`, `${v.plate} · periodic service approaching`), detail: L(`${(-over).toLocaleString('tr')} km kaldı.`, `${(-over).toLocaleString('tr')} km left.`), at: v.service.lastAt, link: { type: 'vehicle', id: v.id }, branchId: v.homeBranchId, module: 'maintenance' })
   }
 
   // 6. maintenance: planned not started, in progress past its planned end
   for (const m of d.maintenance) {
     const v = veh(m.vehicleId)
     if (!v) continue
-    if (m.status === 'in_progress' && Date.parse(m.plannedEnd) < nowMs) push({ id: `mnt:${m.id}`, kind: 'maintenance_overdue', severity: 'warning', title: `${m.no} · bakım planlanan bitişi geçti (${v.plate})`, detail: 'Araç serviste uygunluk dışı kalmaya devam ediyor.', at: m.plannedEnd, link: { type: 'maintenance', id: m.id }, branchId: v.homeBranchId, module: 'maintenance' })
-    if (m.status === 'planned' && Date.parse(m.plannedStart) < nowMs) push({ id: `mntst:${m.id}`, kind: 'maintenance_not_started', severity: 'warning', title: `${m.no} · planlı bakım başlamadı (${v.plate})`, detail: 'Planlanan başlangıç geçti; servise alın veya iptal edin.', at: m.plannedStart, link: { type: 'maintenance', id: m.id }, branchId: v.homeBranchId, module: 'maintenance' })
+    if (m.status === 'in_progress' && Date.parse(m.plannedEnd) < nowMs) push({ id: `mnt:${m.id}`, kind: 'maintenance_overdue', severity: 'warning', title: L(`${m.no} · bakım planlanan bitişi geçti (${v.plate})`, `${m.no} · maintenance passed its planned end (${v.plate})`), detail: L('Araç serviste uygunluk dışı kalmaya devam ediyor.', 'The vehicle stays out of availability while in service.'), at: m.plannedEnd, link: { type: 'maintenance', id: m.id }, branchId: v.homeBranchId, module: 'maintenance' })
+    if (m.status === 'planned' && Date.parse(m.plannedStart) < nowMs) push({ id: `mntst:${m.id}`, kind: 'maintenance_not_started', severity: 'warning', title: L(`${m.no} · planlı bakım başlamadı (${v.plate})`, `${m.no} · planned maintenance has not started (${v.plate})`), detail: L('Planlanan başlangıç geçti; servise alın veya iptal edin.', 'The planned start has passed; start the service or cancel it.'), at: m.plannedStart, link: { type: 'maintenance', id: m.id }, branchId: v.homeBranchId, module: 'maintenance' })
   }
 
   // 7. damage blocks and critical incidents
   for (const dm of d.damages) {
     if (!dm.blocksVehicle || dm.status === 'closed') continue
     const v = veh(dm.vehicleId)
-    push({ id: `blk:${dm.id}`, kind: 'damage_block', severity: 'warning', title: `${dm.no} · araç hasar engelinde (${v?.plate})`, detail: `${dm.description.slice(0, 90)} Engeli kaldırmak ikinci bir yetkili ister.`, at: dm.createdAt, link: { type: 'damage', id: dm.id }, branchId: v?.homeBranchId, module: 'damages' })
+    push({ id: `blk:${dm.id}`, kind: 'damage_block', severity: 'warning', title: L(`${dm.no} · araç hasar engelinde (${v?.plate})`, `${dm.no} · vehicle under a damage block (${v?.plate})`), detail: L(`${dm.description.slice(0, 90)} Engeli kaldırmak ikinci bir yetkili ister.`, `${dm.description.slice(0, 90)} Lifting the block needs a second authorised person.`), at: dm.createdAt, link: { type: 'damage', id: dm.id }, branchId: v?.homeBranchId, module: 'damages' })
   }
   for (const inc of d.incidents) {
-    if ((inc.status === 'open' || inc.status === 'investigating') && (inc.severity === 'high' || inc.severity === 'critical')) push({ id: `inc:${inc.id}`, kind: 'incident_open', severity: inc.severity === 'critical' ? 'critical' : 'warning', title: `${inc.no} · ${inc.title}`, detail: 'Açık yüksek önemli olay. Olayı çözmek hasar/ceza kaydını otomatik kapatmaz.', at: inc.createdAt, link: { type: 'incident', id: inc.id }, module: 'incidents' })
+    if ((inc.status === 'open' || inc.status === 'investigating') && (inc.severity === 'high' || inc.severity === 'critical')) push({ id: `inc:${inc.id}`, kind: 'incident_open', severity: inc.severity === 'critical' ? 'critical' : 'warning', title: `${inc.no} · ${inc.title}`, detail: L('Açık yüksek önemli olay. Olayı çözmek hasar/ceza kaydını otomatik kapatmaz.', 'Open high-severity incident. Resolving the incident does not automatically close the damage/fine record.'), at: inc.createdAt, link: { type: 'incident', id: inc.id }, module: 'incidents' })
   }
 
   // 8. approvals, tasks, plans, fines, cash
-  for (const a of d.approvals) if (a.status === 'requested' || a.status === 'approved') push({ id: `apr:${a.id}`, kind: 'approval_waiting', severity: 'info', title: `${a.no} · ${a.status === 'requested' ? 'karar bekliyor' : 'onaylandı, uygulanmadı'}`, detail: a.reason.slice(0, 110), at: a.createdAt, link: { type: 'approval', id: a.id }, module: 'approvals' })
+  for (const a of d.approvals) if (a.status === 'requested' || a.status === 'approved') push({ id: `apr:${a.id}`, kind: 'approval_waiting', severity: 'info', title: `${a.no} · ${a.status === 'requested' ? 'karar bekliyor' : L('onaylandı, uygulanmadı', 'approved, not applied')}`, detail: a.reason.slice(0, 110), at: a.createdAt, link: { type: 'approval', id: a.id }, module: 'approvals' })
   for (const t of d.tasks) {
-    if (t.status !== 'done' && Date.parse(t.dueAt) < nowMs) push({ id: `task:${t.id}`, kind: 'task_overdue', severity: t.priority === 'urgent' ? 'critical' : 'warning', title: `${t.no} · görev gecikti: ${t.title}`, detail: `Son tarih geçti. Görevi tamamlamak bağlı kaydı değiştirmez.`, at: t.dueAt, link: { type: 'task', id: t.id }, branchId: t.branchId, module: 'tasks' })
+    if (t.status !== 'done' && Date.parse(t.dueAt) < nowMs) push({ id: `task:${t.id}`, kind: 'task_overdue', severity: t.priority === 'urgent' ? 'critical' : 'warning', title: L(`${t.no} · görev gecikti: ${t.title}`, `${t.no} · task overdue: ${t.title}`), detail: L(`Son tarih geçti. Görevi tamamlamak bağlı kaydı değiştirmez.`, `The due date has passed. Completing the task does not change the linked record.`), at: t.dueAt, link: { type: 'task', id: t.id }, branchId: t.branchId, module: 'tasks' })
   }
-  for (const p of d.paymentPlans) if (p.status !== 'completed' && Date.parse(p.dueAt) < nowMs) push({ id: `plan:${p.id}`, kind: 'plan_overdue', severity: 'warning', title: `Ödeme planı vadesi geçti · ${p.payerName}`, detail: `${(p.amount.minor / 100).toFixed(2)} ${p.amount.cur} beklenen; plan satırı tahsilat sayılmaz.`, at: p.dueAt, link: { type: 'rental', id: p.rentalId }, module: 'finance' })
-  for (const f of d.fines) if (!f.authorityPaidAt && f.status !== 'closed' && Date.parse(`${f.dueDate}T23:59:59Z`) - nowMs < 5 * DAY) push({ id: `fine:${f.id}`, kind: 'fine_due', severity: Date.parse(`${f.dueDate}T23:59:59Z`) < nowMs ? 'critical' : 'warning', title: `${f.no} · ceza vadesi yaklaşıyor (${f.authorityRef})`, detail: `Yasal vade: ${f.dueDate}. Otoriteye ödeme ve müşteri tahsilatı ayrı işlemlerdir.`, at: `${f.dueDate}T00:00:00.000Z`, link: { type: 'fine', id: f.id }, module: 'fines' })
+  for (const p of d.paymentPlans) if (p.status !== 'completed' && Date.parse(p.dueAt) < nowMs) push({ id: `plan:${p.id}`, kind: 'plan_overdue', severity: 'warning', title: L(`Ödeme planı vadesi geçti · ${p.payerName}`, `Payment plan due date passed · ${p.payerName}`), detail: L(`${(p.amount.minor / 100).toFixed(2)} ${p.amount.cur} beklenen; plan satırı tahsilat sayılmaz.`, `${(p.amount.minor / 100).toFixed(2)} ${p.amount.cur} expected; a plan line is not a collection.`), at: p.dueAt, link: { type: 'rental', id: p.rentalId }, module: 'finance' })
+  for (const f of d.fines) if (!f.authorityPaidAt && f.status !== 'closed' && Date.parse(`${f.dueDate}T23:59:59Z`) - nowMs < 5 * DAY) push({ id: `fine:${f.id}`, kind: 'fine_due', severity: Date.parse(`${f.dueDate}T23:59:59Z`) < nowMs ? 'critical' : 'warning', title: L(`${f.no} · ceza vadesi yaklaşıyor (${f.authorityRef})`, `${f.no} · fine due date approaching (${f.authorityRef})`), detail: L(`Yasal vade: ${f.dueDate}. Otoriteye ödeme ve müşteri tahsilatı ayrı işlemlerdir.`, `Legal due date: ${f.dueDate}. Paying the authority and collecting from the customer are separate actions.`), at: `${f.dueDate}T00:00:00.000Z`, link: { type: 'fine', id: f.id }, module: 'fines' })
   for (const dr of d.drawers) {
     const last = d.cashSessions.filter((s) => s.drawerId === dr.id && s.closedAt).sort((a, b) => (b.closedAt ?? '').localeCompare(a.closedAt ?? ''))[0]
-    if (last && last.varianceMinor && Math.abs(last.varianceMinor) > 0 && Date.parse(last.closedAt!) > nowMs - 3 * DAY) push({ id: `cash:${last.id}`, kind: 'cash_variance', severity: 'info', title: `${dr.name} · son vardiyada kasa farkı`, detail: `Fark ${(last.varianceMinor / 100).toFixed(2)} ${dr.currency}`, at: last.closedAt!, link: { type: 'payment', id: last.id }, branchId: dr.branchId, module: 'cash' })
+    if (last && last.varianceMinor && Math.abs(last.varianceMinor) > 0 && Date.parse(last.closedAt!) > nowMs - 3 * DAY) push({ id: `cash:${last.id}`, kind: 'cash_variance', severity: 'info', title: L(`${dr.name} · son vardiyada kasa farkı`, `${dr.name} · cash variance at the last shift`), detail: `Fark ${(last.varianceMinor / 100).toFixed(2)} ${dr.currency}`, at: last.closedAt!, link: { type: 'payment', id: last.id }, branchId: dr.branchId, module: 'cash' })
   }
   void computeCashExpected
   void openSessionOf
@@ -132,12 +133,12 @@ export function deriveAlerts(d: Db): Alert[] {
     if (r.status !== 'returned' && r.status !== 'closed') continue
     if (r.financeStatus === 'closed') continue
     const f = rentalFinance(d, r.id)
-    if (f.outstandingMinor > 0) push({ id: `out:${r.id}`, kind: 'outstanding', severity: 'info', title: `${r.no} · açık bakiye (${(f.outstandingMinor / 100).toFixed(2)} ${f.cur})`, detail: `${cust(r.customerId)} · iade alındı, finans kapanışı bekliyor.`, at: r.actualReturnAt ?? r.plannedReturnAt, link: { type: 'rental', id: r.id }, branchId: r.returnBranchId, module: 'finance' })
+    if (f.outstandingMinor > 0) push({ id: `out:${r.id}`, kind: 'outstanding', severity: 'info', title: L(`${r.no} · açık bakiye (${(f.outstandingMinor / 100).toFixed(2)} ${f.cur})`, `${r.no} · open balance (${(f.outstandingMinor / 100).toFixed(2)} ${f.cur})`), detail: L(`${cust(r.customerId)} · iade alındı, finans kapanışı bekliyor.`, `${cust(r.customerId)} · returned, awaiting financial closure.`), at: r.actualReturnAt ?? r.plannedReturnAt, link: { type: 'rental', id: r.id }, branchId: r.returnBranchId, module: 'finance' })
   }
 
   // 10. external vehicles: confirmed engagement close to its start but not received
   for (const e of d.engagements) {
-    if (e.status === 'confirmed' && Date.parse(e.from) - nowMs < 48 * HOUR && Date.parse(e.from) - nowMs > -DAY) push({ id: `ext:${e.id}`, kind: 'external_not_received', severity: 'warning', title: `${e.no} · dış araç teslim alınmadı`, detail: 'Anlaşma penceresi başlıyor; araç Received + Ready olmadan teslim edilemez.', at: e.from, link: { type: 'engagement', id: e.id }, module: 'suppliers' })
+    if (e.status === 'confirmed' && Date.parse(e.from) - nowMs < 48 * HOUR && Date.parse(e.from) - nowMs > -DAY) push({ id: `ext:${e.id}`, kind: 'external_not_received', severity: 'warning', title: L(`${e.no} · dış araç teslim alınmadı`, `${e.no} · external vehicle not received`), detail: L('Anlaşma penceresi başlıyor; araç Received + Ready olmadan teslim edilemez.', 'The engagement window is starting; the vehicle cannot be handed over without being Received + Ready.'), at: e.from, link: { type: 'engagement', id: e.id }, module: 'suppliers' })
   }
 
   // 11. active rules (safe catalogue): the same alert list, tagged with the rule

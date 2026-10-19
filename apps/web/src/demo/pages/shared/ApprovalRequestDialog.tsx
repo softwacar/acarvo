@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { approvalLabel, APPROVAL_TYPES, requestApproval } from '../../core/ops/control'
 import { parseAmount } from '../../core/money'
 import type { ApprovalType, Cur, Id, LinkType } from '../../core/types'
-import { L } from '../../i18n'
+import { L, loc } from '../../i18n'
 import { AreaF, MoneyF, TextF } from '../../ui/forms'
 import { runAction, useDb } from '../../ui/hooks'
 import { FinanceDialog } from '../../ui/kit'
@@ -18,11 +18,11 @@ export function ApprovalRequestDialog({ type, target, cur, onClose, hint }: { ty
   const [fields, setFields] = useState<Record<string, string>>({})
   return (
     <FinanceDialog
-      title={`${L('Onay talebi', 'Approval request')}: ${approvalLabel(type)}`}
+      title={`${L('Onay talebi', 'Approval request')}: ${loc(approvalLabel(type))}`}
       description={`${hint ?? ''} ${L('Talep tek başına bir işlem yapmaz: ikinci bir yetkili karar verir, sonra uygulanır (Onaylandı ≠ Uygulandı).', 'The request does nothing by itself: a second authorised person decides, then it is applied (Approved ≠ Applied).')}`.trim()}
       confirm={L('Talep et', 'Request')}
       onClose={onClose}
-      summary={[[L('Uygulanınca', 'When applied'), def.applyHint]]}
+      summary={[[L('Uygulanınca', 'When applied'), loc(def.applyHint)]]}
       onSubmit={() => {
         const minor = def.needsAmount ? parseAmount(amount, currency) : null
         const r = runAction((s) => requestApproval(s, { type, target, reason, requested: minor === null ? null : { minor, cur: currency }, proposedPct: type === 'high_discount' ? Number(pct) : undefined }), L('Onay talebi oluşturuldu; ikinci yetkili bekleniyor.', 'Approval requested; waiting for a second authorised person.'))
