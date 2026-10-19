@@ -7,7 +7,10 @@
     "dev": "vite --port 5173 --strictPort",
     "build": "tsc --noEmit && vite build",
     "typecheck": "tsc --noEmit",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "dev:demo": "vite --mode demo --port 5174 --strictPort",
+    "build:demo": "tsc --noEmit && vite build --mode demo --outDir dist-demo",
+    "test:demo": "vitest run --config vitest.demo.config.ts"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.3.3",
@@ -16,7 +19,8 @@
     "@types/react-dom": "^19.3.0",
     "@vitejs/plugin-react": "^6.1.2",
     "tailwindcss": "^4.3.3",
-    "vite": "^8.3.4"
+    "vite": "^8.3.4",
+    "vitest": "^5.0.3"
   },
   "dependencies": {
     "@acarvo/shared": "*",
