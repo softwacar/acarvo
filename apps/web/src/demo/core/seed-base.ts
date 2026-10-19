@@ -67,8 +67,8 @@ export const INSURANCE: InsurancePackage[] = [
 ]
 
 export const TAX_RULES: TaxRule[] = [
-  { id: 'tx-ba', name: 'Örnek KDV %17 (dahil)', ratePct: 17, mode: 'inclusive', country: 'BA', active: true, note: 'Demo oranı: gerçek vergi uyumu için profesyonel doğrulama gerekir.' },
-  { id: 'tx-hr', name: 'Örnek KDV %25 (hariç)', ratePct: 25, mode: 'exclusive', country: 'HR', active: true, note: 'Demo oranı: gerçek vergi uyumu için profesyonel doğrulama gerekir.' },
+  { id: 'tx-ba', name: 'Örnek KDV %17', ratePct: 17, mode: 'inclusive', country: 'BA', active: true, note: 'Demo oranı: gerçek vergi uyumu için profesyonel doğrulama gerekir.' },
+  { id: 'tx-hr', name: 'Örnek KDV %25', ratePct: 25, mode: 'exclusive', country: 'HR', active: true, note: 'Demo oranı: gerçek vergi uyumu için profesyonel doğrulama gerekir.' },
 ]
 
 const clauses = (tr: boolean) =>

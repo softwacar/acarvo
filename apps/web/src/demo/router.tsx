@@ -78,6 +78,7 @@ const ROUTES: [string, string, Loader][] = [
   ['/talep-merkezi', 'leads:view', () => import('./pages/customers/LeadsPage').then((m) => ({ default: m.LeadsPage }))],
   ['/partnerler', 'partners:view', () => import('./pages/customers/PartnersPage').then((m) => ({ default: m.PartnersPage }))],
   ['/arac-tedarikcileri', 'suppliers:view', () => import('./pages/customers/SuppliersPage').then((m) => ({ default: m.SuppliersPage }))],
+  ['/fiyatlandirma', 'pricing:view', () => import('./pages/customers/PricingPage').then((m) => ({ default: m.PricingPage }))],
   ['/takvim', 'calendar:view', () => import('./pages/work/CalendarPage').then((m) => ({ default: m.CalendarPage }))],
   ['/gorevler', 'tasks:view', () => import('./pages/work/TasksPage').then((m) => ({ default: m.TasksPage }))],
   ['/komuta-merkezi', 'command:view', () => import('./pages/work/CommandPage').then((m) => ({ default: m.CommandPage }))],
