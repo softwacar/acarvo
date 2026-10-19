@@ -55,4 +55,9 @@ function CONTEXT_ROUTES(root: AnyRoute): AnyRoute[] {
 }
 
 // [path, permission, lazy page]. Detail routes share the permission of their list.
-const ROUTES: [string, string, Loader][] = [['/', 'dashboard:view', () => import('./pages/home/DashboardPage').then((m) => ({ default: m.DashboardPage }))]]
+const ROUTES: [string, string, Loader][] = [
+  ['/', 'dashboard:view', () => import('./pages/home/DashboardPage').then((m) => ({ default: m.DashboardPage }))],
+  ['/araclar', 'vehicles:view', () => import('./pages/vehicles/VehiclesPage').then((m) => ({ default: m.VehiclesPage }))],
+  ['/araclar/yeni', 'vehicles:manage', () => import('./pages/vehicles/VehicleFormPage').then((m) => ({ default: m.VehicleFormPage }))],
+  ['/araclar/$id', 'vehicles:view', () => import('./pages/vehicles/Vehicle360Page').then((m) => ({ default: m.Vehicle360Page }))],
+]

@@ -104,9 +104,9 @@ export function Empty({ title, children, action }: { title: string; children?: R
   )
 }
 
-export function Facts({ rows }: { rows: [string, ReactNode][] }) {
+export function Facts({ rows, single }: { rows: [string, ReactNode][]; single?: boolean }) {
   return (
-    <dl className="grid gap-x-8 sm:grid-cols-2">
+    <dl className={cn('grid gap-x-8', !single && 'sm:grid-cols-2')}>
       {rows.map(([k, v]) => (
         <div key={k} className="flex min-w-0 items-baseline justify-between gap-4 border-b border-line-soft py-2.5">
           <dt className="shrink-0 text-[13px] text-ink-2">{k}</dt>
