@@ -10,7 +10,7 @@ import { L } from '../../i18n'
 import { ComboF } from '../../ui/forms'
 import { CustomerLink } from '../../ui/domain'
 import { runAction, useBranchScope, useCan, useDb, useFmt, useUrlState } from '../../ui/hooks'
-import { btnPrimary, btnSecondary, btnSmall, Empty, FilterBar, FilterSelect, FinanceDialog, Kpis, Link2, Notice, Page, Panel, SearchBox, Status, Tabs } from '../../ui/kit'
+import { AdvanceStatus, btnPrimary, btnSecondary, btnSmall, Empty, FilterBar, FilterSelect, FinanceDialog, Kpis, Link2, Notice, Page, Panel, SearchBox, Status, Tabs } from '../../ui/kit'
 import { METHOD_LABEL } from '../../ui/status'
 import { type Col, DataTable, downloadCsv } from '../../ui/table'
 import { byCurText, PromptDialog } from '../fleet/common'
@@ -52,7 +52,7 @@ export function FinancePage() {
     { id: 'rate', header: L('Kur', 'Rate'), cell: (p) => (p.rate && p.rate.base !== p.rate.quote ? <span className="tnum text-[12.5px]">1 {p.rate.base} = {p.rate.rate} {p.rate.quote}</span> : <span className="text-ink-3">—</span>), hideBelow: 'lg' },
     { id: 'method', header: L('Yöntem', 'Method'), cell: (p) => methods[p.method], hideBelow: 'md', csv: (p) => p.method },
     { id: 'when', header: L('Zaman', 'Time'), cell: (p) => <span className="tnum text-[13px]">{f.dt(p.recordedAt, p.branchId)}</span>, sort: (p) => p.recordedAt, hideBelow: 'lg', csv: (p) => p.recordedAt },
-    { id: 'st', header: L('Durum', 'Status'), cell: (p) => <span className="flex gap-1.5"><Status kind="payment" value={p.status} />{p.kind === 'advance' && <Status kind="advance" value={p.advanceState ?? 'unapplied'} />}</span>, csv: (p) => p.status },
+    { id: 'st', header: L('Durum', 'Status'), cell: (p) => p.kind === 'advance' ? <AdvanceStatus p={p} /> : <Status kind="payment" value={p.status} />, csv: (p) => p.status },
     { id: 'act', header: '', align: 'right', cell: (p) => (p.status !== 'voided' && can('finance:apply') ? <button type="button" className={btnSmall} onClick={(e) => { e.stopPropagation(); setVoidTarget({ kind: 'payment', id: p.id }) }}>{L('Ters kayıt', 'Reverse')}</button> : null) },
   ]
   const openCols: Col<{ r: Rental; fin: ReturnType<typeof rentalFinance> }>[] = [
@@ -123,7 +123,7 @@ export function FinancePage() {
       {tab === 'kaparo' && (
         <Panel title={L('Kaparo (avans)', 'Advances')} description={L('Kaparo gelir değildir: tutuluyor → kiralamaya aktarıldı → teslimde hesap kalemine uygulandı.', 'An advance is not revenue: held → transferred to the rental → applied to the charge at delivery.')} flush>
           {advances.length === 0 ? <p className="px-5 py-5 text-[13.5px] text-ink-2">{L('Kaparo kaydı yok. Rezervasyon sayfasından kaparo alınır.', 'No advances. Take an advance from a reservation page.')}</p> : (
-            <ul className="divide-y divide-line-soft">{advances.map((p) => <li key={p.id} className="flex flex-wrap items-center justify-between gap-2 px-5 py-2.5 text-[13.5px]"><span><span className="tnum font-medium">{p.no}</span> · {fmt(p.tender.minor, p.tender.cur)} · {methods[p.method]}<span className="block text-[12.5px] text-ink-2">{p.reservationId ? <Link2 type="reservation" id={p.reservationId}>{d.reservations.find((r) => r.id === p.reservationId)?.no}</Link2> : <Link2 type="rental" id={p.rentalId!}>{rentalOf(p.rentalId)?.no}</Link2>} · {f.dt(p.recordedAt, p.branchId)}</span></span><span className="flex gap-1.5"><Status kind="payment" value={p.status} /><Status kind="advance" value={p.advanceState ?? 'unapplied'} /></span></li>)}</ul>
+            <ul className="divide-y divide-line-soft">{advances.map((p) => <li key={p.id} className="flex flex-wrap items-center justify-between gap-2 px-5 py-2.5 text-[13.5px]"><span><span className="tnum font-medium">{p.no}</span> · {fmt(p.tender.minor, p.tender.cur)} · {methods[p.method]}<span className="block text-[12.5px] text-ink-2">{p.reservationId ? <Link2 type="reservation" id={p.reservationId}>{d.reservations.find((r) => r.id === p.reservationId)?.no}</Link2> : <Link2 type="rental" id={p.rentalId!}>{rentalOf(p.rentalId)?.no}</Link2>} · {f.dt(p.recordedAt, p.branchId)}</span></span><AdvanceStatus p={p} /></li>)}</ul>
           )}
         </Panel>
       )}

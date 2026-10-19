@@ -221,6 +221,11 @@ export function Status({ kind, value }: { kind: keyof typeof STATUS; value: stri
   return <Pill tone={s.tone}>{s.label}</Pill>
 }
 
+/** One pill for an advance: its own lifecycle (held → moved → applied, or refunded / policy fee). A reversed line shows the payment status. */
+export function AdvanceStatus({ p }: { p: { status: string; advanceState?: string } }) {
+  return p.status === 'voided' ? <Status kind="payment" value="voided" /> : <Status kind="advance" value={p.advanceState ?? 'unapplied'} />
+}
+
 export function MoneyText({ m, minor, cur, className }: { m?: Money; minor?: number; cur?: string; className?: string }) {
   const mm = m ?? { minor: minor ?? 0, cur: cur ?? 'EUR' }
   return <span className={cn('tnum whitespace-nowrap', className)}>{fmt(mm.minor, mm.cur)}</span>

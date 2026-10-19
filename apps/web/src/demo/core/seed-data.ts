@@ -48,6 +48,7 @@ const FAMILY = ['Demirović', 'Babić', 'Horvat-Demo', 'Zukić', 'Marić', 'Soft
 export function customersData({ d, T }: DbSeedCtx): Customer[] {
   const rows: Row[] = [...MAIN]
   for (let i = 0; i < GIVEN.length; i++) rows.push([`${GIVEN[i]} ${FAMILY[i]}`, i % 4 === 0 ? 'HR' : 'BA', `${1975 + ((i * 3) % 25)}-0${(i % 9) + 1}-1${i % 9}`, 2000 + ((i * 2) % 20), 'bs', 700 + i * 55])
+  rows.push(['Selma Hodžić-Demo', 'BA', '1990-05-18', 2010, 'bs', 1300]) // advance (kaparo) story: appended last so earlier customer numbers stay the same
   const out: Customer[] = []
   const ymd = (off: number) => T(off, '12:00').slice(0, 10)
   rows.forEach(([name, country, dob, licYear, lang, licOff], i) => {

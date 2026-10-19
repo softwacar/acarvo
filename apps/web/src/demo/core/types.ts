@@ -474,7 +474,7 @@ export interface Payment {
   id: Id
   no: string
   kind: 'payment' | 'advance'
-  status: 'recorded' | 'applied' | 'voided'
+  status: 'recorded' | 'applied' | 'voided' | 'refunded' | 'forfeited'
   rentalId?: Id
   reservationId?: Id
   payer: { type: 'customer' | 'corporate' | 'other'; id?: Id; name: string }
@@ -485,8 +485,10 @@ export interface Payment {
   appliedMinor: number
   obligationCur: Cur
   allocations: { chargeId: Id; minor: number }[]
-  /** Advances: held (unapplied) → transferred to a rental → applied. */
-  advanceState?: 'unapplied' | 'transferred' | 'applied'
+  /** Advances: held (unapplied) → transferred to a rental → applied; or paid back (refunded) / kept as a policy fee (forfeited). */
+  advanceState?: 'unapplied' | 'transferred' | 'applied' | 'refunded' | 'forfeited'
+  forfeitReason?: string
+  forfeitedAt?: Iso
   branchId: Id
   drawerId?: Id
   reference: string
@@ -519,6 +521,8 @@ export interface RefundRecord {
   method: PaymentMethod
   status: 'requested' | 'approved' | 'completed' | 'rejected'
   reason: string
+  /** An advance that is being paid back (the refund closes this advance). */
+  paymentId?: Id
   approvalId?: Id
   drawerId?: Id
   requestedBy: Id
@@ -879,6 +883,8 @@ export interface Approval {
   reviewerId?: Id
   appliedBy?: Id
   target: { type: LinkType; id: Id }
+  /** Refund of a specific advance payment. */
+  paymentId?: Id
   reason: string
   requested: Money | null
   /** Percentage for high discount; minor amount otherwise. */

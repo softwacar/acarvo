@@ -14,7 +14,7 @@ import { AreaF, DateTimeF, SelectF } from '../../ui/forms'
 import { METHOD_LABEL } from '../../ui/status'
 import { CustomerLink, PriceBreakdown, ReadinessList, VehicleCell } from '../../ui/domain'
 import { runAction, useCan, useDb, useFmt, useUrlState } from '../../ui/hooks'
-import { BackLink, btnPrimary, btnSecondary, btnSmall, Empty, Facts, FinanceDialog, Kpis, Link2, Notice, Page, Panel, Status, Tabs, Timeline } from '../../ui/kit'
+import { AdvanceStatus, BackLink, btnPrimary, btnSecondary, btnSmall, Empty, Facts, FinanceDialog, Kpis, Link2, Notice, Page, Panel, Status, Tabs, Timeline } from '../../ui/kit'
 import { DamageDialog, IncidentDialog } from '../shared/FleetDialogs'
 import { PaymentDialog } from '../shared/PaymentDialog'
 import { ContractTab, DeskTab, ReturnTab } from './RentalDesk'
@@ -281,7 +281,7 @@ function FinanceTab({ r, onPay, onReopen, act }: { r: Rental; onPay: () => void;
             {fin.payments.map((p) => (
               <li key={p.id} className="flex flex-wrap items-center justify-between gap-2 py-2.5 text-[13.5px]">
                 <span><span className="tnum font-medium">{p.no}</span> · {fmt(p.tender.minor, p.tender.cur)} · {METHOD_LABEL()[p.method]}{p.tender.cur !== p.obligationCur ? ` · ${L('eşdeğer', 'equiv.')} ${fmt(p.appliedMinor, p.obligationCur)}` : ''}<span className="block text-[12.5px] text-ink-2">{f.dt(p.recordedAt, p.branchId)}{p.rate ? ` · ${L('kur', 'rate')} 1 ${p.rate.base} = ${p.rate.rate} ${p.rate.quote}` : ''}</span></span>
-                <span className="flex gap-1.5"><Status kind="payment" value={p.status} />{p.kind === 'advance' && <Status kind="advance" value={p.advanceState ?? 'unapplied'} />}</span>
+                {p.kind === 'advance' ? <AdvanceStatus p={p} /> : <Status kind="payment" value={p.status} />}
               </li>
             ))}
           </ul>

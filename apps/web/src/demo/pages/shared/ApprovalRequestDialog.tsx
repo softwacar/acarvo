@@ -1,19 +1,19 @@
 import { useState } from 'react'
 import { approvalLabel, APPROVAL_TYPES, requestApproval } from '../../core/ops/control'
-import { parseAmount } from '../../core/money'
-import type { ApprovalType, Cur, Id, LinkType } from '../../core/types'
+import { parseAmount, toInput } from '../../core/money'
+import type { ApprovalType, Cur, Id, LinkType, Money } from '../../core/types'
 import { L, loc } from '../../i18n'
 import { AreaF, MoneyF, TextF } from '../../ui/forms'
 import { runAction, useDb } from '../../ui/hooks'
 import { FinanceDialog } from '../../ui/kit'
 
 /** One request form for the six formal approval types; the request does nothing until a second person decides and it is applied. */
-export function ApprovalRequestDialog({ type, target, cur, onClose, hint }: { type: ApprovalType; target: { type: LinkType; id: Id }; cur?: Cur; onClose: () => void; hint?: string }) {
+export function ApprovalRequestDialog({ type, target, cur, onClose, hint, paymentId, amount: fixed }: { type: ApprovalType; target: { type: LinkType; id: Id }; cur?: Cur; onClose: () => void; hint?: string; paymentId?: Id; amount?: Money }) {
   const d = useDb()
   const def = APPROVAL_TYPES.find((x) => x.type === type)!
   const [reason, setReason] = useState('')
-  const [amount, setAmount] = useState('')
-  const [currency, setCurrency] = useState<Cur>(cur ?? d.settings.company.baseCurrency)
+  const [amount, setAmount] = useState(fixed ? toInput(fixed.minor, fixed.cur) : '')
+  const [currency, setCurrency] = useState<Cur>(fixed?.cur ?? cur ?? d.settings.company.baseCurrency)
   const [pct, setPct] = useState('')
   const [fields, setFields] = useState<Record<string, string>>({})
   return (
@@ -25,7 +25,7 @@ export function ApprovalRequestDialog({ type, target, cur, onClose, hint }: { ty
       summary={[[L('Uygulanınca', 'When applied'), loc(def.applyHint)]]}
       onSubmit={() => {
         const minor = def.needsAmount ? parseAmount(amount, currency) : null
-        const r = runAction((s) => requestApproval(s, { type, target, reason, requested: minor === null ? null : { minor, cur: currency }, proposedPct: type === 'high_discount' ? Number(pct) : undefined }), L('Onay talebi oluşturuldu; ikinci yetkili bekleniyor.', 'Approval requested; waiting for a second authorised person.'))
+        const r = runAction((s) => requestApproval(s, { type, target, reason, requested: minor === null ? null : { minor, cur: currency }, proposedPct: type === 'high_discount' ? Number(pct) : undefined, paymentId }), L('Onay talebi oluşturuldu; ikinci yetkili bekleniyor.', 'Approval requested; waiting for a second authorised person.'))
         if (!r.ok) {
           setFields(r.fields)
           return r.error
@@ -33,7 +33,7 @@ export function ApprovalRequestDialog({ type, target, cur, onClose, hint }: { ty
         onClose()
       }}
     >
-      {def.needsAmount && <MoneyF id="ap-a" label={L('Tutar', 'Amount')} amount={amount} onAmount={setAmount} cur={currency} onCur={setCurrency} currencies={d.settings.acceptedCurrencies} lockCurrency={!!cur} error={fields.amount} required />}
+      {def.needsAmount && <MoneyF id="ap-a" label={L('Tutar', 'Amount')} amount={amount} onAmount={setAmount} cur={currency} onCur={setCurrency} currencies={d.settings.acceptedCurrencies} lockCurrency={!!cur || !!fixed} error={fields.amount} required />}
       {type === 'high_discount' && <TextF id="ap-p" label={L('İndirim yüzdesi (1–50)', 'Discount percent (1–50)')} required value={pct} onChange={(v) => setPct(v.replace(/[^\d.]/g, ''))} error={fields.pct} />}
       <AreaF id="ap-r" label={L('Gerekçe (en az 10 karakter)', 'Reason (at least 10 characters)')} required value={reason} onChange={setReason} error={fields.reason} rows={3} />
     </FinanceDialog>

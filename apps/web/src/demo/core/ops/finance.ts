@@ -133,7 +133,7 @@ export function recordPayment(d: Db, input: PaymentInput): Payment {
     branchId: input.branchId,
     after: 'recorded',
   })
-  if (drawerId) cashMove(d, drawerId, 'in', input.tenderMinor, input.kind === 'advance' ? 'Kaparo (nakit)' : B('Müşteri tahsilatı (nakit)', 'Customer payment (cash)'), 'payment', p.id)
+  if (drawerId) cashMove(d, drawerId, 'in', input.tenderMinor, input.kind === 'advance' ? B('Kaparo (nakit)', 'Advance (cash)') : B('Müşteri tahsilatı (nakit)', 'Customer payment (cash)'), 'payment', p.id)
   if (rental && input.kind === 'payment') applyPayment(d, p)
   return p
 }
@@ -179,6 +179,7 @@ export function voidPayment(d: Db, paymentId: Id, reason: string): void {
   const p = d.payments.find((x) => x.id === paymentId)
   if (!p) fail(B('Ödeme bulunamadı.', 'Payment not found.'))
   if (p!.status === 'voided') fail(B('Bu ödeme zaten iptal edilmiş.', 'This payment was already reversed.'))
+  if (p!.status === 'refunded' || p!.status === 'forfeited') fail(B('İade edilmiş veya politika bedeli olarak tutulmuş kaparo iptal edilemez.', 'An advance that was refunded or kept as a policy fee cannot be reversed.'))
   if (reason.trim().length < 3) fail(B('İptal gerekçesi yazın.', 'Enter a reason for the cancellation.'), { reason: B('Gerekçe zorunlu', 'A reason is required') })
   const before = p!.status
   p!.status = 'voided'
@@ -260,11 +261,11 @@ export function releaseDeposit(d: Db, depositId: Id, kind: 'released' | 'applied
   logEvent(d, { module: 'finance', type: kind === 'released' ? 'DepositReleased' : 'DepositApplied', sourceType: 'rental', sourceId: rental.id, summary: B(`Depozito ${kind === 'released' ? B('iade edildi', 'released') : 'mahsup edildi'}`, `Deposit ${kind === 'released' ? B('iade edildi', 'released') : 'mahsup edildi'}`), cur: dep!.amount.cur, minor: dep!.amount.minor })
 }
 
-export function requestRefund(d: Db, input: { rentalId?: Id; reservationId?: Id; amount: Money; method: PaymentMethod; reason: string }): RefundRecord {
+export function requestRefund(d: Db, input: { rentalId?: Id; reservationId?: Id; paymentId?: Id; amount: Money; method: PaymentMethod; reason: string }): RefundRecord {
   need(d, 'finance:record', B('İade talebi', 'Refund request'))
   if (input.amount.minor <= 0) fail(B('İade tutarı sıfırdan büyük olmalı.', 'The refund amount must be greater than zero.'))
   if (input.reason.trim().length < 3) fail(B('Gerekçe yazın.', 'Enter a reason.'), { reason: B('Gerekçe zorunlu', 'A reason is required') })
-  const r: RefundRecord = { id: nextId(d, 'rf'), no: nextNo(d, 'I'), rentalId: input.rentalId, reservationId: input.reservationId, amount: input.amount, method: input.method, status: 'requested', reason: input.reason, requestedBy: meOf(d).id, requestedAt: nowOf(d) }
+  const r: RefundRecord = { id: nextId(d, 'rf'), no: nextNo(d, 'I'), rentalId: input.rentalId, reservationId: input.reservationId, paymentId: input.paymentId, amount: input.amount, method: input.method, status: 'requested', reason: input.reason, requestedBy: meOf(d).id, requestedAt: nowOf(d) }
   d.refunds.push(r)
   logEvent(d, { module: 'finance', type: 'RefundRequested', sourceType: input.rentalId ? 'rental' : 'reservation', sourceId: (input.rentalId ?? input.reservationId)!, summary: `${r.no} · ${fmt(input.amount.minor, input.amount.cur)}`, cur: input.amount.cur, minor: input.amount.minor, reason: input.reason })
   return r
@@ -276,7 +277,9 @@ export function completeRefund(d: Db, refundId: Id): void {
   if (!r) fail(B('İade bulunamadı.', 'Refund not found.'))
   if (r!.status === 'completed') return
   if (r!.status !== 'approved') fail(B('İade önce Onay Merkezi\'nde onaylanıp uygulanmalı.', 'The refund must first be approved and applied in the Approval Center.'))
-  const branchId = r!.rentalId ? d.rentals.find((x) => x.id === r!.rentalId)!.pickupBranchId : d.reservations.find((x) => x.id === r!.reservationId)!.pickupBranchId
+  const advance = r!.paymentId ? d.payments.find((x) => x.id === r!.paymentId) : undefined
+  if (r!.paymentId && (!advance || advance.kind !== 'advance' || advance.status !== 'recorded')) fail(B('Bu kaparo artık iade edilemez (uygulanmış, iade edilmiş veya iptal).', 'This advance can no longer be refunded (applied, refunded or reversed).'))
+  const branchId = advance ? advance.branchId : r!.rentalId ? d.rentals.find((x) => x.id === r!.rentalId)!.pickupBranchId : d.reservations.find((x) => x.id === r!.reservationId)!.pickupBranchId
   if (r!.method === 'cash') {
     const drawer = findDrawer(d, branchId, r!.amount.cur)
     const session = drawer && openSessionOf(d, drawer)
@@ -287,6 +290,12 @@ export function completeRefund(d: Db, refundId: Id): void {
   }
   r!.status = 'completed'
   r!.completedAt = nowOf(d)
+  if (advance) {
+    // The advance is paid back once: it is no longer held and can never be applied to a charge.
+    advance.status = 'refunded'
+    advance.advanceState = 'refunded'
+    advance.allocations = []
+  }
   logEvent(d, { module: 'finance', type: 'RefundCompleted', sourceType: r!.rentalId ? 'rental' : 'reservation', sourceId: (r!.rentalId ?? r!.reservationId)!, summary: B(`${r!.no} iade edildi (kayıt)`, `${r!.no} refunded (record)`), cur: r!.amount.cur, minor: r!.amount.minor })
 }
 
@@ -346,4 +355,26 @@ export function closeSession(d: Db, drawerId: Id, countedMinor: number, variance
   dr!.status = 'closed'
   dr!.sessionId = undefined
   logEvent(d, { module: 'cash', type: 'CashSessionClosed', sourceType: 'drawer', sourceId: drawerId, summary: B(`${dr!.name} kapandı · beklenen ${fmt(expected, dr!.currency)} · sayılan ${fmt(countedMinor, dr!.currency)} · fark ${fmt(variance, dr!.currency)}`, `${dr!.name} closed · expected ${fmt(expected, dr!.currency)} · counted ${fmt(countedMinor, dr!.currency)} · variance ${fmt(variance, dr!.currency)}`), cur: dr!.currency, minor: variance, reason: varianceReason, branchId: dr!.branchId })
+}
+
+/**
+ * Keeps a held advance as a policy fee after a cancellation or no-show (spec §65: Held → Forfeited). It is a recorded
+ * decision with a visible reason; the money stays with the company and is never applied to a charge afterwards.
+ */
+export function forfeitAdvance(d: Db, paymentId: Id, reason: string): Payment {
+  need(d, 'finance:apply', B('Kaparo politika bedeli', 'Advance policy fee'))
+  const p = d.payments.find((x) => x.id === paymentId)
+  if (!p || p.kind !== 'advance') fail(B('Kaparo kaydı bulunamadı.', 'Advance record not found.'))
+  const r = d.reservations.find((x) => x.id === p!.reservationId)
+  if (!r || (r.status !== 'cancelled' && r.status !== 'no_show')) fail(B('Kaparo yalnız iptal edilen veya gelmeyen rezervasyonda politika bedeli olarak tutulabilir.', 'An advance can be kept as a policy fee only on a cancelled or no-show reservation.'))
+  if (p!.status !== 'recorded' || p!.advanceState !== 'unapplied') fail(B('Bu kaparo artık tutulan durumda değil.', 'This advance is no longer held.'))
+  if (reason.trim().length < 10) fail(B('Politika bedeli gerekçesini en az 10 karakterle yazın.', 'Write the policy fee reason in at least 10 characters.'), { reason: B('Gerekçeyi en az 10 karakterle yazın', 'Write the reason in at least 10 characters') })
+  if (d.refunds.some((x) => x.paymentId === p!.id && (x.status === 'requested' || x.status === 'approved'))) fail(B('Bu kaparo için açık bir iade talebi var.', 'There is an open refund request for this advance.'))
+  p!.status = 'forfeited'
+  p!.advanceState = 'forfeited'
+  p!.forfeitReason = reason
+  p!.forfeitedAt = nowOf(d)
+  logEvent(d, { module: 'finance', type: 'AdvanceForfeited', sourceType: 'reservation', sourceId: r!.id, summary: B(`Kaparo ${p!.no} politika bedeli olarak tutuldu`, `Advance ${p!.no} was kept as a policy fee`), reason, cur: p!.tender.cur, minor: p!.tender.minor, branchId: p!.branchId, before: 'unapplied', after: 'forfeited' })
+  addHistory(d, r!.history, B('Kaparo politika bedeli', 'Advance policy fee'), B(`${p!.no} · ${fmt(p!.tender.minor, p!.tender.cur)} politika bedeli olarak tutuldu: ${reason}`, `${p!.no} · ${fmt(p!.tender.minor, p!.tender.cur)} kept as a policy fee: ${reason}`))
+  return p!
 }

@@ -27,6 +27,8 @@ export interface ApprovalInput {
   reason: string
   requested: Money | null
   proposedPct?: number
+  /** Refund of one specific advance payment. */
+  paymentId?: Id
 }
 
 export function requestApproval(d: Db, input: ApprovalInput): Approval {
@@ -49,13 +51,19 @@ export function requestApproval(d: Db, input: ApprovalInput): Approval {
   if (input.type === 'refund' && input.requested) {
     const src = input.target.type === 'rental' ? d.rentals.find((r) => r.id === input.target.id) : d.reservations.find((r) => r.id === input.target.id)
     if (!src) fail(B('Hedef kayıt bulunamadı.', 'Target record not found.'), { target: B('Hedef bulunamadı', 'Target not found') })
-    if (src!.currency !== input.requested.cur) fail(B(`İade, kaydın para biriminde (${src!.currency}) olmalı; kur dönüşümü yapılmaz.`, `The refund must be in the record's currency (${src!.currency}); no conversion is made.`), { amount: 'Para birimi uyumsuz' })
+    const adv = input.paymentId ? d.payments.find((x) => x.id === input.paymentId) : undefined
+    if (input.paymentId) {
+      if (!adv || adv.kind !== 'advance' || adv.reservationId !== input.target.id && adv.rentalId !== input.target.id) fail(B('Kaparo kaydı bu hedefe ait değil.', 'The advance does not belong to this target.'), { amount: B('Kaparo bulunamadı', 'Advance not found') })
+      if (adv!.status !== 'recorded') fail(B('Yalnız tutulan (uygulanmamış) kaparo iade edilebilir.', 'Only a held (unapplied) advance can be refunded.'), { amount: B('Kaparo artık tutulmuyor', 'The advance is no longer held') })
+      if (input.requested.cur !== adv!.tender.cur || input.requested.minor !== adv!.tender.minor) fail(B(`Kaparo iadesi tahsil edilen tutarın tamamı olmalı: ${fmt(adv!.tender.minor, adv!.tender.cur)}.`, `An advance refund must be the full amount that was taken: ${fmt(adv!.tender.minor, adv!.tender.cur)}.`), { amount: B('Tahsil edilen tutarın tamamı', 'The full amount taken') })
+      if (d.refunds.some((x) => x.paymentId === adv!.id && (x.status === 'requested' || x.status === 'approved'))) fail(B('Bu kaparo için açık bir iade talebi var.', 'There is already an open refund request for this advance.'))
+    } else if (src!.currency !== input.requested.cur) fail(B(`İade, kaydın para biriminde (${src!.currency}) olmalı; kur dönüşümü yapılmaz.`, `The refund must be in the record's currency (${src!.currency}); no conversion is made.`), { amount: 'Para birimi uyumsuz' })
   }
-  const a: Approval = { id: nextId(d, 'ap'), no: nextNo(d, 'ON'), type: input.type, status: 'requested', requesterId: meOf(d).id, target: input.target, reason: input.reason, requested: input.requested, proposedPct: input.proposedPct, createdAt: nowOf(d), history: [] }
+  const a: Approval = { id: nextId(d, 'ap'), no: nextNo(d, 'ON'), type: input.type, status: 'requested', requesterId: meOf(d).id, target: input.target, reason: input.reason, requested: input.requested, proposedPct: input.proposedPct, paymentId: input.paymentId, createdAt: nowOf(d), history: [] }
   d.approvals.push(a)
   addHistory(d, a.history, B('Talep edildi', 'Requested'), input.reason)
   if (input.type === 'refund' && input.requested) {
-    const refund = requestRefund(d, { rentalId: input.target.type === 'rental' ? input.target.id : undefined, reservationId: input.target.type === 'reservation' ? input.target.id : undefined, amount: input.requested, method: 'cash', reason: input.reason })
+    const refund = requestRefund(d, { rentalId: input.target.type === 'rental' ? input.target.id : undefined, reservationId: input.target.type === 'reservation' ? input.target.id : undefined, paymentId: input.paymentId, amount: input.requested, method: input.paymentId && d.payments.find((x) => x.id === input.paymentId)?.method !== 'cash' ? 'transfer' : 'cash', reason: input.reason })
     refund.approvalId = a.id
   }
   logEvent(d, { module: 'approvals', type: 'ApprovalRequested', sourceType: 'approval', sourceId: a.id, summary: `${a.no} · ${approvalLabel(a.type)}`, reason: input.reason, cur: input.requested?.cur, minor: input.requested?.minor })

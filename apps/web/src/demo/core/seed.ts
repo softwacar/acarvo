@@ -5,11 +5,11 @@ import { addDaysYmd, dayOf, zonedIso } from './time'
 import { acceptOffer, addSupplierOffer, addWaitlist, createLead, createPartner, createQuote, createSettlement, createSourcingRequest, createSupplier, paySettlement, payPartnerCommission, receiveEngagement, returnEngagement, setLeadStatus } from './ops/commercial'
 import { applyApproval, createException, createExpense, decideApproval, requestApproval, saveRule } from './ops/control'
 import { addIncidentEvidence, chargeDamageToCustomer, chargeFineToCustomer, assignFine, createDamage, createFine, createIncident, createTask, claimTask, completeMaintenance, linkRepair, payFineToAuthority, planMaintenance, recordInsurerRecovery, setDamageLiability, setIncidentStatus, setTaskStatus, startMaintenance } from './ops/fleet'
-import { closeSession, holdDeposit, manualCashMove, openSession, recordPayment, releaseDeposit } from './ops/finance'
+import { closeSession, forfeitAdvance, holdDeposit, manualCashMove, openSession, recordPayment, releaseDeposit } from './ops/finance'
 import { closeFinancial, closeOperational, confirmReservation, convertReservation, createReservation, deliverRental, exceptionClose, find, returnRental, signContract, updateGate, cancelReservation, markNoShow, createRental } from './ops/rentals'
 import { type DbSeedCtx, customersData } from './seed-data'
 import { emptyDb, seasonsFor } from './seed-base'
-import type { Cur, Customer, Db, DemoDocument, FuelLevel, Id, Vehicle } from './types'
+import type { Cur, Customer, Db, DemoDocument, FuelLevel, Id, Reservation, Vehicle } from './types'
 
 // Builds the demo world through the same operations the screens use, so every number is consistent. The clock is
 // moved through the past while history is created and ends at "today 10:00" (demo time).
@@ -508,18 +508,48 @@ function seedReservations(d: Db, T: (o: number, hm?: string, z?: string) => stri
   mk(13, null, 'cl-cmp', 'b-dbv', [7, '10:00'], [12, '10:00'], 'EUR', { status: 'pending', created: 0 })
   mk(3, null, 'cl-suv', 'b-mst', [9, '10:00'], [14, '10:00'], 'BAM', { status: 'pending', created: -3 })
   mk(15, 19, 'cl-eco', 'b-dbv', [10, '10:00'], [13, '10:00'], 'EUR', { status: 'pending', created: -4 })
+  // Advance (kaparo) lifecycle: 20% by card when the reservation is confirmed. Held → (cancelled: refunded or kept as policy fee) → or moved to a rental.
+  const takeAdvance = (res: Reservation, at: [number, string], branchId: string, ref: string, by = 'u-mgr') => {
+    as(by)
+    setNow(T(at[0], at[1]))
+    const pct = d.settings.payment.advanceRequiredPct
+    const minor = Math.round(((res.price?.grossMinor ?? 0) * pct) / 100)
+    const cu = d.customers.find((x) => x.id === res.customerId)!
+    return recordPayment(d, { reservationId: res.id, kind: 'advance', payer: { type: 'customer', id: cu.id, name: cu.name }, method: 'card', tenderMinor: minor, tenderCur: res.currency, branchId, reference: ref, note: B('Kaparo (rezervasyon güvencesi)', 'Advance (reservation guarantee)') })
+  }
+  // The demo story customer: confirmed reservation with a vehicle, advance held, ready to be converted to a rental
+  const kv = veh(4)
+  const kapRes = mk(41, 4, kv.classId, 'b-sjj', [4, '10:00'], [8, '10:00'], 'EUR', { ins: 'in-cdw', channel: 'phone', created: -1 })
+  takeAdvance(kapRes, [-1, '12:30'], 'b-sjj', 'POS-DEMO-KAP-0001')
   // Cancelled and no-show
   const cx = mk(1, null, 'cl-eco', 'b-sjj', [-4, '10:00'], [-1, '10:00'], 'BAM', { created: -10 })
+  const cxAdvance = takeAdvance(cx, [-9, '12:30'], 'b-sjj', 'POS-DEMO-KAP-0002')
   as('u-ops1')
   setNow(T(-6, '12:00'))
   cancelReservation(d, cx.id, B('Müşteri uçuşunu iptal etti', 'The customer cancelled their flight'))
+  // The cancelled reservation's advance is paid back through the four-eyes refund approval (requester ≠ decider ≠ applier)
+  setNow(T(-5, '10:00'))
+  const cxRefund = requestApproval(d, { type: 'refund', target: { type: 'reservation', id: cx.id }, paymentId: cxAdvance.id, requested: cxAdvance.tender, reason: B('Müşteri uçuşu iptal edildi; kaparo tam iade edilecek.', 'The flight was cancelled; the advance is refunded in full.') })
+  as('u-mgr')
+  setNow(T(-5, '14:00'))
+  decideApproval(d, cxRefund.id, 'approve', B('İptal gerekçesi geçerli.', 'The cancellation reason is valid.'))
+  as('u-owner')
+  setNow(T(-4, '09:00'))
+  applyApproval(d, cxRefund.id)
+  as('u-ops1')
   const cx2 = mk(2, null, 'cl-cmp', 'b-mst', [3, '10:00'], [6, '10:00'], 'EUR', { created: -2, status: 'pending' })
   setNow(T(-1, '10:00'))
   cancelReservation(d, cx2.id, B('Fiyat uygun bulunmadı', 'The price was not acceptable'))
   const ns = mk(16, null, 'cl-eco', 'b-dbv', [-2, '10:00'], [1, '10:00'], 'EUR', { created: -8 })
+  const nsAdvance = takeAdvance(ns, [-8, '13:00'], 'b-dbv', 'POS-DEMO-KAP-0003')
   setNow(T(-1, '18:00'))
   as('u-ops3')
   markNoShow(d, ns.id)
+  // The no-show customer's advance is kept as a policy fee, with a visible reason
+  as('u-mgr')
+  setNow(T(-1, '19:00'))
+  forfeitAdvance(d, nsAdvance.id, B('Gelmedi; ücretsiz iptal süresi geçmişti (politika bedeli).', 'No-show; the free cancellation period had passed (policy fee).'))
+  as('u-ops3')
   // waitlist
   as('u-ops1')
   setNow(T(-1, '16:00'))

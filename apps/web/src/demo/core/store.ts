@@ -6,7 +6,7 @@ import type { Db } from './types'
 // The demo state lives in the browser only (IndexedDB, with a localStorage fallback). Nothing here is sent to a server.
 // Every mutation goes through commit(): it runs on a copy, so a failed action leaves the state untouched.
 
-export const DB_SCHEMA = 3
+export const DB_SCHEMA = 4
 const IDB_NAME = 'acarvo-demo'
 const IDB_STORE = 'kv'
 const KEY = 'db'
