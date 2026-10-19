@@ -50,8 +50,24 @@ export function createDemoRouter() {
 }
 
 function CONTEXT_ROUTES(root: AnyRoute): AnyRoute[] {
-  void root
-  return []
+  // Platform Console and Partner Portal are separate contexts: their own layout, no company sidebar.
+  const ctx = (path: string, load: Loader) => {
+    const Lazy = lazy(load)
+    return createRoute({
+      getParentRoute: () => root,
+      path,
+      validateSearch: passthrough,
+      component: () => (
+        <Suspense fallback={<PageSkeleton />}>
+          <Lazy />
+        </Suspense>
+      ),
+    })
+  }
+  return [
+    ctx('/platform', () => import('./pages/contexts/PlatformConsole').then((m) => ({ default: m.PlatformConsole }))),
+    ctx('/partner', () => import('./pages/contexts/PartnerPortal').then((m) => ({ default: m.PartnerPortal }))),
+  ]
 }
 
 // [path, permission, lazy page]. Detail routes share the permission of their list.

@@ -496,3 +496,16 @@ export function paySettlement(d: Db, settlementId: Id, reference: string): void 
 }
 
 export { addHistory }
+
+/** A lead sent from the partner portal. The partner is an external party: it needs portal access, not a company permission. */
+export function submitPartnerLead(d: Db, partnerId: Id, input: { name: string; phone: string; email: string; classId: Id; from: Iso; to: Iso; branchId: Id; notes: string }): Lead {
+  const p = d.partners.find((x) => x.id === partnerId)
+  if (!p || !p.portalAccess || p.status !== 'active') fail('Bu partner için portal erişimi kapalı.')
+  if (input.name.trim().length < 3) fail('Ad soyad girin.', { name: 'Ad zorunlu' })
+  if (Date.parse(input.to) <= Date.parse(input.from)) fail('Bitiş başlangıçtan sonra olmalı.', { to: 'Tarih aralığı geçersiz' })
+  const owner = d.users.find((u) => u.status === 'active' && u.roleId === 'role-manager') ?? d.users[0]!
+  const l: Lead = { id: nextId(d, 'ld'), no: nextNo(d, 'TL'), source: 'partner', partnerId, ...input, ownerId: owner.id, status: 'new', reminders: [], quoteIds: [], createdAt: nowOf(d) }
+  d.leads.push(l)
+  logEvent(d, { module: 'leads', type: 'PartnerLeadSubmitted', sourceType: 'lead', sourceId: l.id, summary: `${l.no} · ${p!.name} portalından gönderildi` })
+  return l
+}

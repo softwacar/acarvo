@@ -385,3 +385,18 @@ export function markNotificationsRead(d: Db): void {
   for (const n of d.notifications) if (!n.userId || n.userId === meOf(d).id) n.read = true
 }
 export { findDrawer, userName }
+
+// --------------------------------------------------------------------------- platform console (tenant metadata only)
+
+/** The platform console changes tenant status and plan. It never reads or writes a tenant's business records. */
+export function setTenantStatus(d: Db, id: Id, status: 'active' | 'trial' | 'suspended'): void {
+  const t = d.tenants.find((x) => x.id === id)
+  if (!t) fail('Şirket bulunamadı.')
+  if (t!.id === d.tenants[0]!.id && status === 'suspended') fail('Demo şirketi askıya alınamaz: bu demo onun üzerinde çalışır.')
+  t!.status = status
+}
+export function setTenantPlan(d: Db, id: Id, plan: 'starter' | 'professional' | 'enterprise'): void {
+  const t = d.tenants.find((x) => x.id === id)
+  if (!t) fail('Şirket bulunamadı.')
+  t!.plan = plan
+}
