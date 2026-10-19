@@ -70,6 +70,7 @@ const ROUTES: [string, string, Loader][] = [
   ['/hasar-kayitlari', 'damages:view', () => import('./pages/fleet/DamagesPage').then((m) => ({ default: m.DamagesPage }))],
   ['/olay-merkezi', 'incidents:view', () => import('./pages/fleet/IncidentsPage').then((m) => ({ default: m.IncidentsPage }))],
   ['/ceza-modulu', 'fines:view', () => import('./pages/fleet/FinesPage').then((m) => ({ default: m.FinesPage }))],
+  ['/takvim', 'calendar:view', () => import('./pages/work/CalendarPage').then((m) => ({ default: m.CalendarPage }))],
   ['/gorevler', 'tasks:view', () => import('./pages/work/TasksPage').then((m) => ({ default: m.TasksPage }))],
   ['/komuta-merkezi', 'command:view', () => import('./pages/work/CommandPage').then((m) => ({ default: m.CommandPage }))],
   ['/rezervasyonlar/$id/duzenle', 'reservations:manage', () => import('./pages/reservations/ReservationFormPage').then((m) => ({ default: m.ReservationFormPage }))],
