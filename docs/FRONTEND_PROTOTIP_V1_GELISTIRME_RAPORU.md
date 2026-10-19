@@ -96,7 +96,7 @@ Demo menüsündeki "Demo senaryoları" listesinde 8 yönlendirmeli senaryo vard�
 | Gerçek uygulama build | temiz | gerçek build'de demo kodu/verisi yok (arama boş) |
 | Demo build (`build:demo`) | temiz | |
 | Gerçek API testleri (`acarvo_test`) | **534 / 534** | ilk koşuda 533; `finance-performance` süre testi (3 sn sınırı) makine yükünden 31 sn sürdü, tek başına yeniden koşunca geçti. Backend'e dokunulmadı |
-| Gerçek tarayıcı testleri (`acarvo_test`) | GERCEK_E2E_SONUCU | bkz. aşağı |
+| Gerçek tarayıcı testleri (`acarvo_test`) | **134 / 134** | tam koşuda 133 geçti, 36 isteğe bağlı ekran görüntüsü testi atlandı (beklenen); `reservations.spec` içindeki bir düzen testi yük altında düştü, dosya tek başına yeniden koşunca 15/15 geçti. Gerçek uygulama ekranlarına dokunulmadı |
 
 Testlerin yakaladığı ve düzeltilen gerçek hatalar: (1) son 250 ms'deki değişiklik yenilemede kayboluyordu; (2) 390 px'te üst çubuk yatay taşıyordu; (3) uyarı bandı renk kontrastı yetersizdi; (4) kasa hareket listesi klavye ile odaklanamıyordu. Ek olarak ekran incelemesinde çıkan küçük kusurlar (çift numaralı sözleşme maddeleri, ham durum metinleri, siyah araç şeması) giderildi.
 
