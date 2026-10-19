@@ -38,7 +38,7 @@ export function CapacityPage() {
           <button type="button" className="h-9 rounded-md border border-line bg-surface px-3 text-[13px] hover:bg-line-soft" onClick={() => setFrom(addDaysYmd(from, -days))}>←</button>
           <span className="tnum text-[13.5px] font-medium">{from} → {addDaysYmd(from, days - 1)}</span>
           <button type="button" className="h-9 rounded-md border border-line bg-surface px-3 text-[13px] hover:bg-line-soft" onClick={() => setFrom(addDaysYmd(from, days))}>→</button>
-          <button type="button" className="h-9 rounded-md border border-line bg-surface px-3 text-[13px] hover:bg-line-soft" onClick={() => setFrom(today)}>{L('Bugün', 'Today')}</button>
+          <button type="button" className="h-9 rounded-md border border-line bg-surface px-3 text-[13px] hover:bg-line-soft disabled:opacity-50" disabled={from === today} title={from === today ? L('Zaten bugünden başlıyor', 'Already starting today') : undefined} onClick={() => setFrom(today)}>{L('Bugün', 'Today')}</button>
         </div>
       </div>
       <FilterBar onReset={() => { setBranch('all'); setCls('all') }} active={branch !== 'all' || cls !== 'all'}>

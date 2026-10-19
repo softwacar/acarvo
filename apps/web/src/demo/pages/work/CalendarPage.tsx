@@ -90,7 +90,7 @@ export function CalendarPage() {
           <button type="button" className={cn(btnSecondary, 'px-2.5')} aria-label={L('Önceki', 'Previous')} onClick={() => shift(-1)}><CaretLeft size={15} /></button>
           <span className="min-w-[150px] text-center text-[14px] font-medium capitalize">{title}</span>
           <button type="button" className={cn(btnSecondary, 'px-2.5')} aria-label={L('Sonraki', 'Next')} onClick={() => shift(1)}><CaretRight size={15} /></button>
-          <button type="button" className={btnSecondary} onClick={() => setDate(today)}>{L('Bugün', 'Today')}</button>
+          <button type="button" className={btnSecondary} disabled={date === today} title={date === today ? L('Zaten bugünü görüyorsunuz', 'You are already viewing today') : undefined} onClick={() => setDate(today)}>{L('Bugün', 'Today')}</button>
         </div>
       </div>
       <FilterBar onReset={() => { setBranch('all'); setCls('all') }} active={branch !== 'all' || cls !== 'all'}>

@@ -124,7 +124,7 @@ export function DeskTab({ r, go }: { r: Rental; go: Go }) {
           <ReadinessList items={items} />
           <div className="mt-4 space-y-2">
             <ActionError error={error} />
-            <button type="button" className={`${btnPrimary} w-full`} disabled={!desk.canDeliver || !canHandover} onClick={deliver}>{L('Teslimi tamamla', 'Complete handover')}</button>
+            <button type="button" className={`${btnPrimary} w-full`} disabled={!desk.canDeliver || !canHandover} title={!canHandover ? L('Bu rolün teslim yetkisi yok', 'This role has no handover permission') : !desk.canDeliver ? L('Eksik kontroller var: nedenleri soldaki listede', 'Checks are missing: reasons are listed on this page') : undefined} onClick={deliver}>{L('Teslimi tamamla', 'Complete handover')}</button>
             {!desk.canDeliver && <p className="text-[12.5px] text-ink-2">{L('Düğme pasif: eksik kontroller yukarıda nedenleriyle yazılı.', 'The button is disabled: missing checks are listed above with reasons.')}</p>}
             {!canHandover && <p className="text-[12.5px] text-alert">{L('Bu rol teslim yapamaz (Teslim ve iade yetkisi yok).', 'This role cannot hand over (no handover permission).')}</p>}
           </div>
@@ -275,6 +275,7 @@ export function ReturnTab({ r, go }: { r: Rental; go: Go }) {
                 type="button"
                 className={`${btnPrimary} w-full`}
                 disabled={!can('rentals:handover') || km < startKm || photoCount(draft) < 4}
+                title={!can('rentals:handover') ? L('Bu rolün iade yetkisi yok', 'This role has no return permission') : km < startKm ? L('Kilometre teslim kilometresinden küçük olamaz', 'Odometer cannot be below the handover reading') : photoCount(draft) < 4 ? L('En az 4 fotoğraf gerekir', 'At least 4 photos are required') : undefined}
                 onClick={() => {
                   const x = runAction((s) => returnRental(s, r.id, { km, fuel: draft.fuel, photos: photoCount(draft), pins: draft.pins, note: draft.note, openDamage: damage, damageDescription: desc, damageSeverity: sev, blocksVehicle: blocks }), L('Araç iade alındı. Hazır sayılmaz: temizlik ve hazırlık kontrolü gerekir.', 'Vehicle returned. It is not Ready: cleaning and a readiness check are needed.'))
                   setError(x.ok ? null : x.error)

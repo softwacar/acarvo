@@ -1,12 +1,13 @@
 import { useSyncExternalStore } from 'react'
 import { getLang, type Lang, localize, setLangGlobal } from '../i18n'
 import { buildSeed } from './seed'
+import { DB_SCHEMA } from './seed-base'
 import type { Db } from './types'
 
 // The demo state lives in the browser only (IndexedDB, with a localStorage fallback). Nothing here is sent to a server.
 // Every mutation goes through commit(): it runs on a copy, so a failed action leaves the state untouched.
 
-export const DB_SCHEMA = 4
+export { DB_SCHEMA }
 const IDB_NAME = 'acarvo-demo'
 const IDB_STORE = 'kv'
 const KEY = 'db'

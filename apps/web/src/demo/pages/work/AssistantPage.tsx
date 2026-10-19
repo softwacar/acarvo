@@ -136,11 +136,13 @@ export function AssistantPage() {
   const [qid, setQid] = useUrlState('soru')
   const [text, setText] = useState('')
   const [unknown, setUnknown] = useState(false)
+  const [empty, setEmpty] = useState(false)
   const query = QUERIES.find((x) => x.id === qid)
   const answer = query ? query.run(d, active) : null
   const ask = () => {
     const t = text.trim().toLowerCase()
     const hit = QUERIES.find((x) => x.words.some((w) => t.includes(w)))
+    setEmpty(t === '')
     setUnknown(!hit && t !== '')
     if (hit) setQid(hit.id)
   }
@@ -157,6 +159,7 @@ export function AssistantPage() {
         </label>
         <button type="submit" className={btnPrimary}>{L('Sor', 'Ask')}</button>
       </form>
+      {empty && <p role="status" className="text-[13px] text-ink-2">{L('Önce bir soru yazın ya da aşağıdaki hazır sorulardan birini seçin.', 'Type a question first, or pick one of the ready-made questions below.')}</p>}
       {unknown && <p role="status" className="text-[13px] text-alert">{L('Bu soruyu eşleştiremedim. Aşağıdaki hazır sorulardan birini seçin; serbest metin yalnız anahtar kelime eşleştirir.', 'I could not match this question. Choose one of the ready-made questions below; free text only matches keywords.')}</p>}
       <div className="grid items-start gap-5 lg:grid-cols-[320px_minmax(0,1fr)]">
         <Panel title={L('Hazır sorular', 'Ready-made questions')}>

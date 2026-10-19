@@ -12,7 +12,7 @@ import { postCharge } from './finance'
 
 const vehicleOf = (d: Db, id: Id) => {
   const v = d.vehicles.find((x) => x.id === id)
-  if (!v) fail(B('Araç bulunamadı.', 'Vehicle not found.'))
+  if (!v) fail(id ? B('Araç bulunamadı.', 'Vehicle not found.') : B('Araç seçin.', 'Choose a vehicle.'), { vehicle: id ? B('Araç bulunamadı', 'Vehicle not found') : B('Araç seçin', 'Choose a vehicle') })
   return v!
 }
 

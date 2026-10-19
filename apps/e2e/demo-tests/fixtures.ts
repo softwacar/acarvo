@@ -43,3 +43,25 @@ export async function switchUser(page: Page, name: RegExp) {
   await page.getByRole('button', { name: /Demo kullanıcısı|Switch demo user/ }).click()
   await page.getByRole('menuitem', { name }).click()
 }
+
+/** Opens the demo scenario sheet and starts scenario n (1-8). Returns once the target page is loaded. */
+export async function runScenario(page: Page, n: number) {
+  await page.getByRole('button', { name: 'Demo', exact: true }).click()
+  await page.getByRole('menuitem', { name: /Demo senaryoları|Demo scenarios/ }).click()
+  await page.getByRole('button', { name: /Hazırla ve aç|Prepare and open/ }).nth(n - 1).click()
+  await page.waitForLoadState('networkidle')
+}
+
+/** Reads the value that follows a label in the main area (KPI strips): 'Kalan' → '300,00 EUR'. */
+export async function kpiValue(page: Page, label: string): Promise<string> {
+  const re = new RegExp(label + ' ([0-9.,]+ [A-Z]{3})')
+  let found = ''
+  await expect
+    .poll(async () => {
+      const text = (await page.locator('main').innerText()).replace(/\s+/g, ' ')
+      found = re.exec(text)?.[1] ?? ''
+      return found
+    }, { message: `KPI "${label}" not found` })
+    .not.toBe('')
+  return found
+}

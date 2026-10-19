@@ -25,8 +25,16 @@ export function prepareSplitPaymentRental(d: Db): Rental {
   // Start from the written precondition: there is no USD business rate yet.
   for (const r of d.fxRates) if ((r.base === 'USD' || r.quote === 'USD') && r.purpose === 'tender' && isRateActive(r, nowOf(d))) endFxRate(d, r.id)
   const now = nowOf(d)
-  const to = new Date(Date.parse(now) + 3 * 86_400_000).toISOString()
-  const veh = d.vehicles.find((v) => v.homeBranchId === 'b-sjj' && v.source === 'internal' && v.status === 'active' && v.classId === 'cl-cmp' && checkVehicleAvailable(d, v, now, to, now).ok) ?? d.vehicles.find((v) => v.homeBranchId === 'b-sjj' && v.source === 'internal' && v.status === 'active' && checkVehicleAvailable(d, v, now, to, now).ok)
+  // A demo fleet is busy: look for a free SJJ vehicle for 3, then 2, then 1 day starting now (a rental may be shorter, the money is the point).
+  let days = 3
+  let to = ''
+  let veh: (typeof d.vehicles)[number] | undefined
+  for (days = 3; days >= 1 && !veh; days--) {
+    to = new Date(Date.parse(now) + days * 86_400_000).toISOString()
+    const free = (v: (typeof d.vehicles)[number]) => v.homeBranchId === 'b-sjj' && v.source === 'internal' && v.status === 'active' && checkVehicleAvailable(d, v, now, to, now).ok
+    veh = d.vehicles.find((v) => free(v) && v.classId === 'cl-cmp') ?? d.vehicles.find(free)
+  }
+  days += 1
   if (!veh) fail(B('Senaryo için SJJ şubesinde uygun araç bulunamadı.', 'No suitable vehicle was found at branch SJJ for the scenario.'))
   const v = veh!
   v.readiness = { clean: true, fuelOk: true, checkedAt: now, checkedBy: 'u-ops1', note: '' }
@@ -38,7 +46,7 @@ export function prepareSplitPaymentRental(d: Db): Rental {
   const price: PriceSnapshot = {
     id: `ps-scn-${Date.now()}`,
     cur: 'EUR',
-    days: 3,
+    days,
     lines: [{ kind: 'other', label: B('Kiralama bedeli (demo senaryosu: 500 EUR)', 'Rental charge (demo scenario: 500 EUR)'), qty: 1, unitMinor: rule.mode === 'inclusive' ? gross : gross - tax, totalMinor: rule.mode === 'inclusive' ? gross : gross - tax }],
     netMinor: gross - tax,
     taxLines: [{ ruleId: rule.id, name: rule.name, ratePct: rule.ratePct, mode: rule.mode, baseMinor: gross - tax, taxMinor: tax }],
@@ -100,7 +108,7 @@ export const SCENARIOS: Scenario[] = [
     steps: () => [
       L('Kişi A: 100 EUR nakit, ardından 200 BAM kart (= 100 EUR). Kalan 300 EUR.', 'Person A: 100 EUR cash, then 200 BAM by card (= 100 EUR). 300 EUR left.'),
       L('Kişi B: 100 USD nakit: USD kuru yok, "Kur Bekleniyor". Kalan 300 EUR.', 'Person B: 100 USD cash: no USD rate, "Awaiting Rate". 300 EUR left.'),
-      L('Ayarlar → Döviz Kurları: 1 EUR = 1,25 USD tanımlayın. 100 USD = 80 EUR; kalan 220 EUR.', 'Settings → Exchange Rates: set 1 EUR = 1.25 USD. 100 USD = 80 EUR; 220 EUR left.'),
+      L('Ayarlar → Döviz Kurları: 1 EUR = 1,25 USD tanımlayın ve "ters yönde otomatik kullanılabilir" kutusunu işaretleyin (USD tahsilatı EUR borca ters yönden uygulanır). 100 USD = 80 EUR; kalan 220 EUR.', 'Settings → Exchange Rates: set 1 EUR = 1.25 USD and tick "may be used automatically in reverse" (a USD payment is applied to a EUR debt in the reverse direction). 100 USD = 80 EUR; 220 EUR left.'),
       L('Kişi C: 220 EUR banka havalesi. Kalan 0. Nakit yalnız EUR ve USD kasalarına girer.', 'Person C: 220 EUR bank transfer. 0 left. Cash enters only the EUR and USD drawers.'),
     ],
     prepare: (d) => {

@@ -1,5 +1,8 @@
 import { B } from '../i18n'
 import { DEMO_ROLES } from './permissions'
+/** Version of the saved demo state. Bump it whenever the seed or the data model changes: an older saved state is then replaced by a fresh seed. */
+export const DB_SCHEMA = 4
+
 import type { BaseRate, Branch, ContractTemplate, CorporateAgreement, Db, DemoUser, Extra, FxRate, InsurancePackage, Season, Settings, TaxRule, Tenant, VehicleClass } from './types'
 
 // Static catalogues of the fictional company "Adriatic Demo Rent". Everything here is synthetic: names, tax numbers,
@@ -157,7 +160,7 @@ export const ROLES = DEMO_ROLES
 
 export function emptyDb(anchor: string, nowIso: string): Db {
   return {
-    meta: { schema: 3, anchor, createdAt: nowIso, modified: false },
+    meta: { schema: DB_SCHEMA, anchor, createdAt: nowIso, modified: false },
     clock: { now: nowIso },
     session: { userId: 'u-owner', branchId: 'all', lang: 'tr', context: 'company', partnerId: 'pt1' },
     counters: {},

@@ -274,7 +274,7 @@ export function BookingWorkspace({ mode, edit, preset = {} }: { mode: Mode; edit
               )}
               <div className="flex gap-2">
                 <button type="button" className={btnSecondary} onClick={() => void navigate({ to: back.to as never })}>{L('Vazgeç', 'Cancel')}</button>
-                <button type="submit" className={btnPrimary} disabled={!customerId || !windowOk || (price?.blockers.length ?? 0) > 0}>
+                <button type="submit" className={btnPrimary} disabled={!customerId || !windowOk || (price?.blockers.length ?? 0) > 0} title={!customerId ? L('Önce müşteri seçin', 'Choose a customer first') : !windowOk ? L('Teslim ve iade zamanını düzeltin', 'Fix the pickup and return times') : (price?.blockers.length ?? 0) > 0 ? L('Fiyat engeli var: nedeni sayfada yazılı', 'A price blocker exists: the reason is shown on the page') : undefined}>
                   {mode === 'rental' ? L('Kiralamayı hazırla', 'Prepare rental') : edit ? L('Değişiklikleri kaydet', 'Save changes') : L('Rezervasyonu kaydet', 'Save reservation')}
                 </button>
               </div>

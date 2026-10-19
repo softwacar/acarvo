@@ -4,7 +4,7 @@ import { type ReactNode, useEffect, useRef, useState, useSyncExternalStore } fro
 import { useReturnFocus } from '@/components/useReturnFocus'
 import { cn } from '@/lib/utils'
 import { btnGhost, btnPrimary } from '@/pages/finance/FinanceParts'
-import { L } from '../i18n'
+import { L, loc } from '../i18n'
 
 // Demo-local overlays (dialog, side sheet, toast). They match the application's components but their fixed texts
 // (Cancel, Close, unsaved-changes prompt) follow the demo language; the real components stay untouched.
@@ -149,7 +149,7 @@ const listeners = new Set<() => void>()
 const emit = () => listeners.forEach((l) => l())
 
 export function toast(message: string) {
-  toasts = [...toasts, { id: ++seq, message }]
+  toasts = [...toasts, { id: ++seq, message: loc(message) }]
   emit()
 }
 const dismiss = (id: number) => {
