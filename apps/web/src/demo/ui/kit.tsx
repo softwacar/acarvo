@@ -63,7 +63,7 @@ export function Kpis({ items }: { items: { label: string; value: ReactNode; hint
         const inner = (
           <>
             <span className="block text-[12.5px] text-ink-2">{k.label}</span>
-            <span className={cn('tnum mt-1 block text-[24px] leading-none font-semibold tracking-[-0.02em]', k.tone === 'alert' ? 'text-alert' : k.tone === 'hold' ? 'text-hold' : k.tone === 'ok' ? 'text-ok' : 'text-ink')}>{k.value}</span>
+            <span className={cn('tnum mt-1 block whitespace-pre-line text-[24px] leading-[1.15] font-semibold tracking-[-0.02em]', k.tone === 'alert' ? 'text-alert' : k.tone === 'hold' ? 'text-hold' : k.tone === 'ok' ? 'text-ok' : 'text-ink')}>{k.value}</span>
             {k.hint && <span className="mt-1.5 block truncate text-[12px] text-ink-3">{k.hint}</span>}
           </>
         )

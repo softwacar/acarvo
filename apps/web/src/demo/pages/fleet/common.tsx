@@ -81,5 +81,5 @@ export function PromptDialog({ title, description, label, confirm, min = 3, dang
 /** "12,00 EUR · 5,00 BAM": one total per currency, never mixed. */
 export const byCurText = (rec: Record<string, number>, fmtFn: (minor: number, cur: string) => string): string => {
   const parts = Object.entries(rec).filter(([, v]) => v !== 0).map(([cur, v]) => fmtFn(v, cur))
-  return parts.length ? parts.join(' · ') : '—'
+  return parts.length ? parts.join('\n') : '—'
 }
