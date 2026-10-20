@@ -109,7 +109,7 @@ export function Vehicle360Page() {
             <div className="flex min-w-0 items-center gap-4">
               <Plate plate={v.plate} country={v.homeBranchId === 'b-dbv' ? undefined : 'BA'} size="md" />
               <div className="min-w-0">
-                <h1 className="truncate text-[22px] font-semibold tracking-[-0.02em]">
+                <h1 className="text-[22px] sm:truncate font-semibold tracking-[-0.02em]">
                   {v.make} {v.model} <span className="font-normal text-ink-3">{v.year}</span>
                 </h1>
                 <p className="text-[13px] text-ink-2">

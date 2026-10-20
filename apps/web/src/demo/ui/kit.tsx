@@ -64,8 +64,8 @@ export function Kpis({ items }: { items: { label: string; value: ReactNode; hint
         const inner = (
           <>
             <span className="block text-[12.5px] text-ink-2">{k.label}</span>
-            <span className={cn('tnum mt-1 block whitespace-pre-line text-[24px] leading-[1.15] font-semibold tracking-[-0.02em]', k.tone === 'alert' ? 'text-alert' : k.tone === 'hold' ? 'text-hold' : k.tone === 'ok' ? 'text-ok' : 'text-ink')}>{k.value}</span>
-            {k.hint && <span className="mt-1.5 block truncate text-[12px] text-ink-3">{k.hint}</span>}
+            <span className={cn('tnum mt-1 block text-[20px] leading-[1.15] sm:text-[24px] font-semibold tracking-[-0.02em]', k.tone === 'alert' ? 'text-alert' : k.tone === 'hold' ? 'text-hold' : k.tone === 'ok' ? 'text-ok' : 'text-ink')}>{typeof k.value === 'string' && k.value.includes('\n') ? k.value.split('\n').map((line) => <span key={line} className="block whitespace-nowrap">{line}</span>) : k.value}</span>
+            {k.hint && <span className="mt-1.5 line-clamp-2 block text-[12px] text-ink-3">{k.hint}</span>}
           </>
         )
         return k.to ? (
@@ -233,7 +233,7 @@ export function MoneyText({ m, minor, cur, className }: { m?: Money; minor?: num
 
 export function Link2({ type, id, children, className }: { type: LinkType; id: Id; children: ReactNode; className?: string }) {
   return (
-    <Link to={entityHref(type, id) as never} className={cn('font-medium text-blue hover:underline', className)}>
+    <Link to={entityHref(type, id) as never} className={cn('font-medium text-blue hover:underline', typeof children === 'string' && /^[A-Z]{1,3}-[0-9]+$/.test(children) && 'whitespace-nowrap', className)}>
       {children}
     </Link>
   )

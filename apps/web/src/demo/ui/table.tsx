@@ -89,7 +89,7 @@ export function DataTable<T>({
                 return (
                   <th key={c.id} scope="col" aria-sort={active ? (sort!.dir === 'asc' ? 'ascending' : 'descending') : undefined} className={cn('px-3 py-2.5 font-medium whitespace-nowrap first:pl-4 last:pr-4 sm:first:pl-5 sm:last:pr-5', c.align === 'right' && 'text-right', c.align === 'center' && 'text-center', c.hideBelow && HIDE[c.hideBelow])}>
                     {c.sort ? (
-                      <button type="button" onClick={() => { setSort(active && sort!.dir === 'asc' ? { id: c.id, dir: 'desc' } : { id: c.id, dir: 'asc' }); setPage(0) }} className="inline-flex items-center gap-1 hover:text-ink">
+                      <button type="button" onClick={() => { setSort(active && sort!.dir === 'asc' ? { id: c.id, dir: 'desc' } : { id: c.id, dir: 'asc' }); setPage(0) }} className="inline-flex min-h-6 min-w-6 items-center gap-1 hover:text-ink">
                         {c.header}
                         {active && (sort!.dir === 'asc' ? <ArrowUp size={11} /> : <ArrowDown size={11} />)}
                       </button>

@@ -158,7 +158,7 @@ function BranchFilter() {
           aria-label={L('Şube filtresi', 'Branch filter')}
           value={d.session.branchId}
           onChange={(e) => runAction((x) => setBranchFilter(x, e.target.value))}
-          className="h-10 max-w-[104px] appearance-none sm:max-w-[170px] rounded-lg border border-line bg-surface pr-7 pl-3 text-[13.5px] text-ink outline-none hover:border-ink-3/50 focus:border-blue focus:ring-3 focus:ring-blue/15"
+          className="h-10 max-w-[124px] appearance-none sm:max-w-[170px] rounded-lg border border-line bg-surface pr-6 pl-2.5 sm:pr-7 sm:pl-3 text-[13px] sm:text-[13.5px] text-ink outline-none hover:border-ink-3/50 focus:border-blue focus:ring-3 focus:ring-blue/15"
         >
           <option value="all">{L('Tüm şubeler', 'All branches')}</option>
           {scope.map((b) => (
@@ -490,7 +490,7 @@ function DemoBanner({ onClock }: { onClock: () => void }) {
           {L('Bu tarayıcıda kayıt yapılamıyor: değişiklikler yalnız bu sekmede kalır, sayfayı yenileyince kaybolur.', 'This browser cannot save: changes stay in this tab only and are lost when the page is reloaded.')}
         </span>
       )}
-      <button type="button" onClick={onClock} className="tnum ml-auto inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 font-medium hover:bg-hold/10" title={L('Demo tarihini değiştir', 'Change the demo date')} data-testid="demo-clock">
+      <button type="button" onClick={onClock} className="tnum ml-auto inline-flex min-h-6 items-center gap-1 rounded-md px-1.5 py-0.5 font-medium hover:bg-hold/10" title={L('Demo tarihini değiştir', 'Change the demo date')} data-testid="demo-clock">
         <ClockCounterClockwise size={13} /> {L('Demo zamanı', 'Demo time')}: {f.dt(d.clock.now)}
       </button>
     </div>
@@ -507,12 +507,12 @@ function TopBar({ onMenu, open }: { onMenu: () => void; open: (d: DemoDialog) =>
       <button type="button" aria-label={L('Menüyü aç', 'Open menu')} onClick={onMenu} className="grid size-9 shrink-0 place-items-center rounded-lg text-ink-2 hover:bg-line-soft lg:hidden">
         <List size={20} />
       </button>
-      <nav aria-label={L('Konum', 'Location')} className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden text-ink-3">
+      <nav aria-label={L('Konum', 'Location')} className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden text-ink-3 max-sm:*:hidden">
         {item && <span className="hidden sm:inline">{L(item.group, demoNav().find((g) => g.key === item.group)?.label ?? item.group)}</span>}
         {item && <span className="hidden text-line sm:inline">/</span>}
         {item ? (
           detail ? (
-            <Link to={(item.slug ? `/${item.slug}` : '/') as never} className="truncate hover:text-ink">
+            <Link to={(item.slug ? `/${item.slug}` : '/') as never} className="hidden truncate py-1 hover:text-ink sm:inline">
               {item.label}
             </Link>
           ) : (
@@ -521,7 +521,7 @@ function TopBar({ onMenu, open }: { onMenu: () => void; open: (d: DemoDialog) =>
         ) : (
           <span className="truncate font-medium text-ink">ACARVO</span>
         )}
-        {item && detail && <span className="text-line">/</span>}
+        {item && detail && <span className="hidden text-line sm:inline">/</span>}
         {item && detail && <span className="truncate font-medium text-ink">{L('Ayrıntı', 'Detail')}</span>}
       </nav>
       <div className="ml-auto flex shrink-0 items-center gap-1.5 sm:gap-2">
