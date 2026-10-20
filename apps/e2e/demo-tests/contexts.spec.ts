@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test'
-import { openDemo, runScenario } from './fixtures'
+import { openDemo, runScenario, switchUser } from './fixtures'
 
 // Platform Console and Partner Portal are separate contexts: no company-internal sensitive data in the first, only the
 // signed-in partner's own records in the second. (Demo simulation of access, not server security.)
@@ -85,5 +85,18 @@ test.describe('consistency across screens', () => {
     await expect(page.getByText('Kirada').first()).toBeVisible()
     await openDemo(page, '/kiralamalar?q=S11-K-101')
     await expect(page.getByRole('row', { name: /S11-K-101/ }).getByText('Teslim edildi')).toBeVisible()
+  })
+})
+
+test.describe('role views', () => {
+  test('Operations sees customer contact details masked, the owner sees them in full, and Operations cannot open finance reports', async ({ page }) => {
+    await openDemo(page, '/musteriler/c3')
+    await expect(page.getByText(/\+387 61 000 1\d\d/).first()).toBeVisible()
+    await switchUser(page, /Haris Mehić/)
+    await openDemo(page, '/musteriler/c3')
+    await expect(page.getByText(/\+387•••\d\d|\+387 •••|•••/).first()).toBeVisible()
+    await expect(page.getByText(/\+387 61 000 1\d\d/)).toHaveCount(0)
+    await openDemo(page, '/raporlar')
+    await expect(page.getByRole('button', { name: /Gelir \(hesaplanan\)/ })).toHaveCount(0)
   })
 })

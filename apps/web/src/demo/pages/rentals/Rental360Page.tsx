@@ -74,8 +74,8 @@ function Detail({ r }: { r: Rental }) {
         }
         actions={
           <>
-            {r.status === 'prepared' && <button type="button" className={btnPrimary} onClick={() => go('teslim')}>{L('Teslim Masası', 'Delivery Desk')}</button>}
-            {r.status === 'delivered' && can('rentals:handover') && <button type="button" className={btnPrimary} onClick={() => go('iade')}>{L('İade al', 'Receive return')}</button>}
+            {r.status === 'prepared' && <button type="button" className={btnPrimary} disabled={tab === 'teslim'} title={tab === 'teslim' ? L('Zaten Teslim Masası ekranındasınız', 'You are already at the Delivery Desk') : undefined} onClick={() => go('teslim')}>{L('Teslim Masası', 'Delivery Desk')}</button>}
+            {r.status === 'delivered' && can('rentals:handover') && <button type="button" className={btnPrimary} disabled={tab === 'iade'} title={tab === 'iade' ? L('Zaten iade ekranındasınız', 'You are already on the return screen') : undefined} onClick={() => go('iade')}>{L('İade al', 'Receive return')}</button>}
             {r.status === 'returned' && can('rentals:handover') && <button type="button" className={btnPrimary} onClick={() => go('iade')}>{L('Operasyonel kapat', 'Close operationally')}</button>}
             {opDone && r.financeStatus === 'open' && can('finance:apply') && <button type="button" className={btnPrimary} onClick={() => go('finans')}>{L('Finansal kapanış', 'Financial closure')}</button>}
             {(r.status === 'delivered' || r.status === 'returned' || opDone) && can('finance:record') && <button type="button" className={btnSecondary} onClick={() => setDlg('pay')}>{L('Ödeme al', 'Take payment')}</button>}
