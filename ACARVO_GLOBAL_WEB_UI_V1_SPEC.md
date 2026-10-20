@@ -168,75 +168,99 @@ Partner Portal hesabı/oturumu ile:
 
 ---
 
-# 4. Final navigasyon — TEK SIDEBAR OTORİTESİ
+# 4. Final navigasyon — TEK SIDEBAR OTORİTESİ (V1 ürün yapısı: 21 bağlantı / 6 kategori)
 
-Bu bölüm ACARVO şirket içi WEB sidebar'ının **tek canonical navigasyon listesidir**. Aşağıdaki 7 kategori / 36 bağlantı tam kapsamdır; diğer bölüm veya ekran listeleri burada olmayan yeni sidebar menüsü üretemez. Yetkisi olmayan kullanıcıda bazı bağlantılar gizlenebilir; **36**, yetkili tam-kapsam şirket profili için toplam sayıdır.
+> **Güncelleme notu (yalnız `frontend-v1-urun-uygulama` dalı).** Bu bölüm, `docs/ACARVO_V1_URUN_MIMARISI_VE_KARARLAR.md` (K-1…K-18, bölüm H, I, J, K) kararlarına göre yeniden yazıldı. Önceki 36 bağlantılı liste kaldırılmadı; her eski bağlantının yeni yeri aşağıdaki **36 → yeni yer** tablosundadır. Bu bölümün dışındaki ekran bölümleri (ör. Komuta Merkezi, Filo Asistanı, Talep Merkezi ayrıntıları) **V1.5 / V2 kapsam bilgisi** olarak korunur; V1 menüsüne yeni bağlantı üretmez.
+>
+> Belgenin ilerleyen bölümlerindeki (ör. §82, §83, Stage 0 ve kabul listeleri) "7 kategori / 36 bağlantı" ifadeleri **tarihsel tam-kapsam listeyi** anlatır; V1 ürün menüsünün geçerli sayısı bu bölümdeki **6 kategori / 21 bağlantıdır** ve bu ifadelerin her biri yukarıdaki "36 → yeni yer" tablosuyla okunmalıdır. Görev tanımı ve sekme standartları değişmedi; yalnız menüde nerede göründükleri değişti.
+
+Bu bölüm ACARVO şirket içi WEB sidebar'ının **tek canonical navigasyon listesidir**. Aşağıdaki 6 kategori / 21 bağlantı tam kapsamdır. Yetkisi olmayan kullanıcıda bazı bağlantılar gizlenebilir; **21**, Gelişmiş profilde yetkili tam-kapsam şirket için toplam sayıdır.
 
 ## Genel
 - Ana Ekran
-- Komuta Merkezi
-- Filo Asistanı
+- İşlerim
 
 ## Operasyon
 - Rezervasyonlar
-- Kiralamalar
+- Kiralamalar (Sözleşmeler burada bir görünümdür)
 - Takvim
 - Görevler
 - Araçlar
 - Bakım & Servis
-- Olay Merkezi
-- Hasar Kayıtları
-- Ceza Modülü
+- Hasar ve Olaylar (Hasar Kayıtları, Olay Merkezi, Cezalar sekmeleri)
 
 ## Müşteri & Ticari
 - Müşteriler
 - Kurumsal Hesaplar
-- Talep Merkezi
-- Partnerler
-- Araç Tedarikçileri
 - Fiyatlandırma
 
-## Kontrol & Analiz
-- Onay Merkezi
-- Kurallar
-- Gelir Kontrolü
-- Riskler ve İstisnalar
-- Kapasite Planlama
-- Filo Analizi
-- Fırsatlar
-- Raporlar
-
 ## Finans
-- Finans
+- Finans (Kaydedildi → Doğrulandı → Uygulandı; Mutabakat ve Dikkat ayrı izler)
 - Masraflar
-- Şube Kasaları
+- Şube Kasaları (gün sonu dahil)
 
-## Kayıtlar
-- Sözleşmeler
-- Belge Merkezi
-- İşlem Geçmişi
+## Kontrol ve Raporlar
+- Raporlar (Kiralama, Filo, Finans, Gün sonu)
+- Onay Merkezi
 
 ## Yönetim
 - Şubeler
-- Kullanıcılar
-- Roller ve Yetkiler
-- Ayarlar
+- Kullanıcılar ve Roller
+- İşlem Geçmişi
+- Ayarlar (Operasyonel Hazırlık, Sözleşme şablonları, Kurulum sihirbazı)
 
 ## Kullanıcı menüsü (sidebar sayımına dahil değil)
 - Profil/Oturum
+- Menüde gizli ekranlar (Sade profilde gizlenen ama erişilebilir ekranlar)
 - Çıkış
 
-## Navigasyon sözleşmesi ve ekran yerleşimleri
+## Navigasyon sözleşmesi
 
-- **Sayısal invariant:** Genel 3 + Operasyon 9 + Müşteri & Ticari 6 + Kontrol & Analiz 8 + Finans 3 + Kayıtlar 3 + Yönetim 4 = **36 sidebar bağlantısı**. Kullanıcı menüsünde ayrıca **2 seçenek** vardır.
-- **Riskler ve İstisnalar** tek sidebar rotasıdır; içinde **Operasyon Riskleri** (deterministic risk analizi) ve **İstisna İnceleme** (review workflow; eski Risk ve İstisnalar kabiliyeti) adlı iki sekme bulunur. Eski iki yetenek korunur; aynı source event ayrı domain truth/incident yaratmaz.
-- **Hasar Kayıtları** ve **Ceza Modülü**, aktif operasyon olduklarından **Operasyon** altındadır; Kayıtlar'da ikinci sidebar girişi açılmaz. Geçmiş kayıtlar bu modüllerin filtrelerinde ve ilgili Vehicle/Rental detaylarında erişilebilir.
-- **Şube Kasaları**, **Finans** altında tek doğrudan sidebar rotasıdır: cash drawers, currency-based physical balances, cash sessions, shift close ve mutabakat. Finans overview aynı bilgiye yalnız contextual sekme/özet/deep-link verebilir; ikinci editable cash ledger yaratılmaz.
-- **Ayarlar**, yalnız **Yönetim → Ayarlar** sidebar bağlantısından açılır; kullanıcı menüsünde ayrı Ayarlar bağlantısı yoktur. Profil/Oturum altındaki **kişisel tercihler** company/business Settings'teki finansal politika editörleri değildir.
-- Döviz kuru düzenlemenin **tek canonical ekranı**: **Yönetim → Ayarlar → Döviz Kurları (Exchange Rate Desk)**. Finans içindeki mevcut kur, geçmişi ve işleme uygulanmış rate snapshot bilgisi **read-only** görülür; ``Kur Ayarlarına Git`` aksiyonu yetki varsa aynı canonical editör ekranına deep-link açar. Finance için ikinci editable FX Rates ekranı ve ikinci kur truth'u oluşturulmaz.
-- **Platform Console**, yalnız **Platform Super Admin** demo context'inde, şirket uygulamasından ayrı üst seviye **bağlam değiştirici** üzerinden erişilir. Normal company sidebar'ına veya kullanıcı menüsüne eklenmez; Company Admin yetkisi Platform Console açmaz. Partner Portal da company sidebar dışında ayrı web context'tir.
-- Global Search ve Notification Center header/toolbar'dan; Alert Center Komuta Merkezi içindeki Uyarılar sekmesinden açılır. Quote, Waitlist, kaparo, sigorta, ödeme satırları, taksit, supplier settlement ve tüm diğer detaylar **ilgili canonical menü altında contextual tab, alt sayfa, drawer veya wizard** ile açılır. Bir bölümde adı geçen her özellik için yeni menü açılmaz.
-- **§II.4 ekran bilgi mimarisi** ve **§59CT yerleşim haritası** bu §4'e bağımlıdır; farklı etiket veya rota göründüğünde **§4 menü otoritesidir**. Her yerde tek ekran kimliği, tek ilgili state ve gerçek çalışan deep-link bulunur.
+- **Sayısal invariant:** Genel 2 + Operasyon 7 + Müşteri & Ticari 3 + Finans 3 + Kontrol ve Raporlar 2 + Yönetim 4 = **21 sidebar bağlantısı**.
+- **Temel / Gelişmiş görünüm (profil):** Şirket Ayarlar'dan bir menü profili seçer. **Sade = 16 bağlantı** (Kurumsal Hesaplar, Şube Kasaları, Onay Merkezi, Şubeler ve İşlem Geçmişi menüden gizlenir), **Standart = 20** (yalnız İşlem Geçmişi menüden gizlenir), **Gelişmiş = 21**. Tek şubeli şirkette Şubeler bağlantısı profilden bağımsız olarak gizlenir. Profil yalnız **görünürlüğü** değiştirir; **hiçbir iş kilitlenmez**: kasa işlemi Finans'tan, onay kararı İşlerim'den, işlem geçmişi kaynak kaydın zaman çizelgesinden ve kullanıcı menüsündeki "Menüde gizli ekranlar" listesinden yapılabilir. Yetki (RBAC) profilden bağımsızdır; profil yetki vermez.
+- **Görevler bağımsızdır.** Ayrı rota, havuz (şube + rol filtreli), sahiplenme (sürüm/conflict modeli; gerçek API'de 409), bağlı kayıttan oluşturma (araç, kiralama, rezervasyon, müşteri, bakım, hasar), yeniden açma geçmişi, uygulama içi bildirim, toplu atama/tamamlama. Görev tamamlamak bağlı kaydı (kiralama, bakım, hasar) **tamamlamaz**.
+- **İşlerim ≠ Görevler.** İşlerim, kişiye ait "benden bekleneni" gösteren bir **projeksiyon**dur (onay kararlarım, atandığım/sahiplendiğim görevler, uyarılar, yeni olay); yeni veri üretmez ve Ana Ekran sayaçlarıyla aynı kaynaktan hesaplanır. Görev listesi ayrı sayfadır.
+- **Resmî onay tipleri 6'dır** (indirim, iade, iptal/ters kayıt, finansal düzeltme, kurumsal kredi aşımı, hasar bloğu kaldırma); İşlerim yedinci bir onay tipi eklemez. Onay riski 0–3 düzeyinde sınıflandırılır; **sahte dört göz yoktur**: kaydeden kendi kaydını doğrulayamaz (M.3(c) V1.5 adayı olarak açıkça işaretlidir).
+- **Olgunluk etiketleri (sayfa düzeyinde, her butonda değil):** *Gerçek sistemde mevcut*, *Kısmen gerçek*, *Demo konsepti · V1 hedefi*. Kapsam etiketleri: **V1**, **V1.5**, **V2**. Demo'da çalışan işlemler yalnız demo kaydını değiştirir; ClamAV, anahtar yönetimi, hukuki onay gibi canlı ortam ön koşulları hiçbir zaman "tamam" gösterilmez.
+- **Ertelenen modüller** (Filo Asistanı, Talep Merkezi, Partnerler, Araç Tedarikçileri, Kurallar, Fırsatlar) menüde görünmez; kod korunur. Doğrudan adrese gidilirse "Bu modül etkin değil" ve hedef sürüm (V1.5/V2) gösterilir. Kapsam dışı kavramlar yalnız izole bir "Gelişmiş Konsept Ön İzlemesi" (demo menüsü, yetki `preview:use`) ile açılır; yeni menü bağlantısı değildir.
+- **Riskler ve İstisnalar**, **Gelir Kontrolü**: ayrı bağlantı değildir. Uyarılar İşlerim → Uyarılar; gelir tutarsızlıkları Finans → Dikkat sekmesidir. Teknik değişmezler (invariant) denetimi Ayarlar → Operasyonel Hazırlık altındadır.
+- **Hasar Kayıtları**, **Olay Merkezi**, **Ceza Modülü** tek bağlantıda toplanır: **Hasar ve Olaylar** (sekmeler). Hasar bloğu kaldırma resmî onay gerektirir (iki farklı `damages:unblock` yetkilisi).
+- **Sözleşmeler** Kiralamalar altında bir görünümdür; şablonlar Ayarlar'dadır. Sistem dijital/elektronik imzanın hukuki geçerliliğini iddia etmez (yalnız dahili imza yakalama).
+- **Şube Kasaları** Finans grubunda tek doğrudan sidebar rotasıdır; **gün sonu** buradadır (para birimi açık, fark nedeni zorunlu, kritik kasa işlemleri onay gerektirir). İkinci editable cash ledger yaratılmaz.
+- **Ayarlar**, yalnız **Yönetim → Ayarlar** bağlantısından açılır. Döviz kuru düzenlemenin tek canonical ekranı **Yönetim → Ayarlar → Döviz Kurları**'dır; Finans'ta kur yalnız okunur görünür.
+- **Kurulum sihirbazı (9 adım):** şirket, şubeler, profil, ilk araç, kullanıcılar/roller, temel fiyat, sözleşme ayarları, finans/ödeme politikası, hazırlık kontrolü. Demo'da gerçek tenant, davet veya veritabanı değişikliği yaratmaz; durumlar: Gerekli / Eksik / Sistem yöneticisi işlemi / Demo ön izlemesi.
+- **Platform Console**, yalnız **Platform Super Admin** demo context'inde, şirket uygulamasından ayrı üst seviye **bağlam değiştirici** üzerinden erişilir. Partner Portal da company sidebar dışında ayrı web context'tir.
+- Global Search ve Bildirimler header/toolbar'dan açılır. Quote, Waitlist, kaparo, sigorta, ödeme satırları, taksit ve tüm diğer detaylar **ilgili canonical menü altında contextual tab, alt sayfa, drawer veya wizard** ile açılır. Bir bölümde adı geçen her özellik için yeni menü açılmaz.
+- **§II.4 ekran bilgi mimarisi** ve **§59CT yerleşim haritası** bu §4'e bağımlıdır; farklı etiket veya rota göründüğünde **§4 menü otoritesidir**.
+
+## 36 → yeni yer
+
+| Eski bağlantı | Yeni yer | Tür |
+|---|---|---|
+| Ana Ekran | Ana Ekran | aynı |
+| Komuta Merkezi | İşlerim | yönlendirme |
+| Filo Asistanı | — (V2, menüde yok; doğrudan adres "modül etkin değil") | ertelendi |
+| Rezervasyonlar, Kiralamalar, Takvim, Görevler, Araçlar, Bakım & Servis | aynı | aynı |
+| Olay Merkezi | Hasar ve Olaylar → Olaylar | yönlendirme |
+| Hasar Kayıtları | Hasar ve Olaylar | yönlendirme |
+| Ceza Modülü | Hasar ve Olaylar → Cezalar | yönlendirme |
+| Müşteriler, Kurumsal Hesaplar, Fiyatlandırma | aynı | aynı |
+| Talep Merkezi, Partnerler, Araç Tedarikçileri | — (V1.5 / V2, menüde yok) | ertelendi |
+| Onay Merkezi | aynı (Kontrol ve Raporlar) | aynı |
+| Kurallar, Fırsatlar | — (V1.5 / V2, menüde yok) | ertelendi |
+| Gelir Kontrolü | Finans → Dikkat | yönlendirme |
+| Riskler ve İstisnalar | İşlerim → Uyarılar | yönlendirme |
+| Kapasite Planlama | Takvim → Kapasite görünümü | yönlendirme |
+| Filo Analizi | Raporlar → Filo | yönlendirme |
+| Raporlar | aynı | aynı |
+| Finans, Masraflar, Şube Kasaları | aynı | aynı |
+| Sözleşmeler | Kiralamalar → Sözleşmeler görünümü | yönlendirme |
+| Belge Merkezi | kayıt ekranı (`/belge-merkezi`), menüde yok; kaynak kayıtların belge sekmeleri | kayıt ekranı |
+| İşlem Geçmişi | aynı (Yönetim) | aynı |
+| Şubeler, Kullanıcılar, Ayarlar | aynı (Kullanıcılar → **Kullanıcılar ve Roller**) | aynı |
+| Roller ve Yetkiler | Kullanıcılar ve Roller → Roller | yönlendirme |
+
+Eski 36 adresin tamamı çalışmaya devam eder (yönlendirme, URL filtreleri ve kayıt bağlantıları korunur; veri sızıntısı yoktur).
 
 > Partner Portalı internal sidebar'a girmez. ACARVO_V1 içinde müşteriye açılan portal, public booking, müşteri uygulaması veya dış sözleşme imza sayfası yoktur.
 
