@@ -2,6 +2,8 @@
 // calendar, reports and the detail pages all derive from these collections. Money is always integer minor units + ISO code.
 // This model is a browser-side concept model; it is not a copy of the real backend schema.
 
+import type { WorkspaceSettings } from './modules'
+
 export type Id = string
 export type Iso = string // ISO instant (UTC)
 export type Cur = string // ISO 4217 code
@@ -40,6 +42,10 @@ export interface DemoUser {
   /** Scoped permission overrides on top of the role (patron's per-person exceptions). */
   grant: string[]
   deny: string[]
+  /** Invitation record (demo only: nothing is sent). */
+  invite?: { createdAt: Iso; expiresAt: Iso; state: 'pending' | 'expired' | 'cancelled' | 'accepted'; note: string }
+  /** Password-reset request record (demo only: no token exists, no mail is sent). */
+  resetRequest?: { at: Iso; by: Id }
 }
 
 export interface Role {
@@ -48,6 +54,9 @@ export interface Role {
   description: string
   system: boolean
   perms: string[]
+  /** Preset version this role was last aligned with. A customized role is never overwritten by a preset upgrade. */
+  presetVersion?: number
+  customized?: boolean
 }
 
 export interface VehicleClass {
@@ -287,6 +296,42 @@ export interface Settings {
   notify: { id: string; label: string; on: boolean }[]
   thresholds: { highDiscountPct: number; refundAbove: Record<Cur, number>; depositExceptionAbove: Record<Cur, number>; corporateOverride: boolean }
   privacy: { retentionMonths: number; maskIdentityRoles: string[]; auditRetentionMonths: number }
+  /** Thresholds of the derived alerts (Settings → Notifications). Rules are V2; these values are the V1 way to tune them. */
+  alertThresholds: AlertThresholds
+  /** Company-defined cancellation / advance policy. The fee is computed by the system; staff cannot type another amount. */
+  cancellation: CancellationPolicy
+  workspace: WorkspaceSettings
+  setup: SetupState
+}
+
+export interface AlertThresholds {
+  /** An overdue return becomes critical after this many hours. */
+  overdueCriticalHours: number
+  /** Pickups within this many hours are checked for blockers. */
+  pickupLookaheadHours: number
+  /** A blocked pickup within this many hours is critical. */
+  pickupCriticalHours: number
+  /** Periodic service is "approaching" within this many km. */
+  serviceSoonKm: number
+}
+export interface CancellationPolicy {
+  /** Cancelled at least this many hours before pickup: no fee. */
+  freeHoursBefore: number
+  lateFee: FeeRule
+  noShowFee: FeeRule
+}
+export interface FeeRule {
+  kind: 'percent_of_total' | 'first_day' | 'fixed'
+  value: number
+  /** Fixed fee per currency (minor units). */
+  fixed: Record<Cur, number>
+}
+export interface SetupState {
+  done: boolean
+  step: number
+  completedAt?: Iso
+  /** Wizard inputs, kept so nothing is lost between steps or a reload. */
+  draft: Record<string, unknown> | null
 }
 
 // ---------------------------------------------------------------- pricing snapshots
@@ -497,6 +542,16 @@ export interface Payment {
   recordedAt: Iso
   voidReason?: string
   voidedAt?: Iso
+  /** Independent verification: somebody other than the person who recorded it. */
+  verifiedBy?: Id
+  verifiedAt?: Iso
+  /** Reconciliation is its own track, separate from the record → verify → apply line. */
+  reconciledBy?: Id
+  reconciledAt?: Iso
+  reconcileRef?: string
+  /** Advances only: the policy fee kept and the amount already paid back (minor, tender currency). */
+  retainedMinor?: number
+  refundedMinor?: number
 }
 
 export interface DepositRecord {
@@ -510,6 +565,8 @@ export interface DepositRecord {
   drawerId?: Id
   by: Id
   note: string
+  verifiedBy?: Id
+  verifiedAt?: Iso
 }
 
 export interface RefundRecord {
@@ -589,10 +646,14 @@ export interface Expense {
   status: 'draft' | 'posted' | 'voided'
   sourceType?: 'maintenance' | 'fine' | 'roadside' | 'cleaning'
   sourceId?: Id
+  /** What the cost belongs to: a vehicle, a branch, the business in general, or a source record (maintenance, fine…). */
+  link: ExpenseLink
+  vehicleId?: Id
   note: string
   createdBy: Id
   voidReason?: string
 }
+export type ExpenseLink = 'vehicle' | 'branch' | 'general' | 'source'
 
 // ---------------------------------------------------------------- operations
 
@@ -603,7 +664,7 @@ export interface Task {
   title: string
   description: string
   priority: TaskPriority
-  status: 'open' | 'in_progress' | 'done'
+  status: 'open' | 'in_progress' | 'done' | 'cancelled'
   dueAt: Iso
   createdBy: Id
   createdAt: Iso
@@ -611,7 +672,11 @@ export interface Task {
   recipientIds: Id[]
   /** Open pool: any eligible employee may claim it. */
   pool: boolean
+  /** Pool only: restrict who may claim by role (empty = every eligible role). */
+  poolRoleIds?: Id[]
   branchId?: Id
+  /** Grows with every change; a claim carries the version it saw so a stale claim is refused (the browser model of HTTP 409). */
+  version: number
   link?: { type: LinkType; id: Id }
   doneAt?: Iso
   history: HistoryEntry[]
@@ -682,6 +747,8 @@ export interface Damage {
   repairMaintenanceId?: Id
   chargeId?: Id
   recovery?: { insurerRef: string; amount: Money; receivedAt?: Iso }
+  /** Lifting a block is a level-2 action: one person requests, an independent authorizer approves. */
+  unblock?: { requestedBy: Id; requestedAt: Iso; reason: string; approvedBy?: Id; approvedAt?: Iso; rejectedBy?: Id }
   createdAt: Iso
   createdBy: Id
   history: HistoryEntry[]
@@ -890,6 +957,8 @@ export interface Approval {
   /** Percentage for high discount; minor amount otherwise. */
   proposedPct?: number
   decisionNote?: string
+  /** Financial correction of an advance policy fee: the retained amount the correction asks for. */
+  adjust?: { paymentId: Id; retainedMinor: number }
   createdAt: Iso
   decidedAt?: Iso
   appliedAt?: Iso
@@ -1021,9 +1090,9 @@ export interface Tenant {
 // ---------------------------------------------------------------- the database
 
 export interface Db {
-  meta: { schema: number; anchor: string; createdAt: Iso; modified: boolean }
+  meta: { schema: number; anchor: string; createdAt: Iso; modified: boolean; /** Grows with every saved change; another tab adopts a newer one. */ rev: number }
   clock: { now: Iso }
-  session: { userId: Id; branchId: Id | 'all'; lang: 'tr' | 'en'; context: 'company' | 'platform' | 'partner'; partnerId: Id }
+  session: { userId: Id; branchId: Id | 'all'; lang: 'tr' | 'en'; context: 'company' | 'platform' | 'partner'; partnerId: Id; /** Advanced concept preview for V1.5 / V2 screens (never a sidebar link). */ preview: boolean }
   counters: Record<string, number>
   settings: Settings
   branches: Branch[]

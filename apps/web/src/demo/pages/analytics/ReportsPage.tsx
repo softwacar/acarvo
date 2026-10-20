@@ -8,9 +8,11 @@ import type { Db, Id } from '../../core/types'
 import { L } from '../../i18n'
 import { branchOptions } from '../../ui/forms'
 import { useBranchScope, useCan, useDb, useUrlState } from '../../ui/hooks'
-import { btnSecondary, DemoNote, Empty, FilterBar, FilterSelect, Page, Panel, SearchBox } from '../../ui/kit'
+import { btnSecondary, DemoNote, Embedded, Empty, FilterBar, FilterSelect, Page, Panel, SearchBox } from '../../ui/kit'
 import { MAINT_TYPE_LABEL, METHOD_LABEL, statusOf } from '../../ui/status'
 import { PrintButton } from '../shared/ContractSheet'
+import { GatedView } from '../../ui/gate'
+import { FleetAnalysisPage } from './FleetAnalysisPage'
 
 // Reports: eight families built from the same records as every screen. CSV is a real file generated in the browser; the
 // print view uses the browser's print dialog. Money is always grouped per currency.
@@ -29,6 +31,10 @@ interface Params {
 }
 interface Family {
   id: string
+  /** V1 families are the core reports; V1.5 / V2 families stay in the code and open under the concept preview. */
+  scope: 'v1' | 'v15' | 'v2'
+  /** A whole screen shown as this report family (Fleet analysis). */
+  embed?: 'fleet'
   label: () => string
   desc: () => string
   finance?: boolean
@@ -39,7 +45,16 @@ const inRange = (iso: string | undefined, p: Params) => !!iso && iso >= p.from &
 
 const FAMILIES: Family[] = [
   {
+    id: 'filo',
+    scope: 'v1',
+    embed: 'fleet',
+    label: () => L('Filo', 'Fleet'),
+    desc: () => L('Kiralanma oranı, bakım ve boşta saat, araç başına gelir.', 'Utilisation, maintenance and idle hours, revenue per vehicle.'),
+    run: () => ({ head: [], rows: [] }),
+  },
+  {
     id: 'kiralama',
+    scope: 'v1',
     label: () => L('Kiralama özeti', 'Rental summary'),
     desc: () => L('Dönemde teslim planlanan kiralamalar.', 'Rentals planned for pickup in the period.'),
     run: (p) => ({
@@ -49,6 +64,7 @@ const FAMILIES: Family[] = [
   },
   {
     id: 'gelir',
+    scope: 'v1',
     label: () => L('Gelir (hesaplanan)', 'Revenue (charged)'),
     desc: () => L('Kesilmiş hesap kalemleri, tür ve para birimi başına.', 'Posted charges by kind and currency.'),
     finance: true,
@@ -66,6 +82,7 @@ const FAMILIES: Family[] = [
   },
   {
     id: 'tahsilat',
+    scope: 'v1',
     label: () => L('Tahsilat ve bakiye', 'Collections and balances'),
     desc: () => L('Yönteme göre uygulanan ödemeler ve açık bakiyeler.', 'Applied payments by method, and open balances.'),
     finance: true,
@@ -81,6 +98,7 @@ const FAMILIES: Family[] = [
   },
   {
     id: 'kullanim',
+    scope: 'v15',
     label: () => L('Araç kullanımı', 'Vehicle utilisation'),
     desc: () => L('Araç başına kiralanma oranı, km ve süreler.', 'Per-vehicle rented share, km and durations.'),
     run: (p) => ({
@@ -90,6 +108,7 @@ const FAMILIES: Family[] = [
   },
   {
     id: 'musteri',
+    scope: 'v15',
     label: () => L('Müşteriler', 'Customers'),
     desc: () => L('Kiralama sayısı ve belge durumu.', 'Rental counts and document state.'),
     run: (p) => ({
@@ -99,6 +118,7 @@ const FAMILIES: Family[] = [
   },
   {
     id: 'bakim',
+    scope: 'v15',
     label: () => L('Bakım ve hasar maliyeti', 'Maintenance and damage cost'),
     desc: () => L('Tamamlanan bakım maliyeti ve hasar dosyaları.', 'Completed maintenance cost and damage files.'),
     finance: true,
@@ -114,6 +134,7 @@ const FAMILIES: Family[] = [
   },
   {
     id: 'kasa',
+    scope: 'v1',
     label: () => L('Kasa oturumları', 'Cash sessions'),
     desc: () => L('Oturum bazında beklenen, sayılan ve fark.', 'Expected, counted and variance per session.'),
     finance: true,
@@ -124,6 +145,7 @@ const FAMILIES: Family[] = [
   },
   {
     id: 'partner',
+    scope: 'v2',
     label: () => L('Partner ve tedarikçi', 'Partners and suppliers'),
     desc: () => L('Komisyon doğan/ödenen ve tedarikçi borçları.', 'Commission earned/paid and supplier payables.'),
     finance: true,
@@ -154,12 +176,14 @@ export function ReportsPage() {
   const { active } = useBranchScope()
   const tz = d.settings.company.tz
   const today = dayOf(d.clock.now, tz)
-  const families = FAMILIES.filter((f) => !f.finance || can('reports:finance'))
+  const allowed = FAMILIES.filter((f) => !f.finance || can('reports:finance'))
+  const families = allowed.filter((f) => f.scope === 'v1' || d.session.preview)
   const [fam, setFam] = useUrlState('rapor', families[0]!.id)
+  const gated = allowed.find((f) => f.id === fam && !families.includes(f))
   const [period, setPeriod] = useUrlState('donem', '30')
   const [branch, setBranch] = useUrlState('sube', 'all')
   const [q, setQ] = useUrlState('q')
-  const family = families.find((f) => f.id === fam) ?? families[0]!
+  const family = gated ?? families.find((f) => f.id === fam) ?? families[0]!
   const days = Number(period)
   const params: Params = { d, from: startOfDay(addDaysYmd(today, -days + 1), tz), to: startOfDay(addDaysYmd(today, 1), tz), branches: branch === 'all' ? active : [branch] }
   const report = useMemo(() => family.run(params), [d, family.id, period, branch, active.join()]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -172,6 +196,30 @@ export function ReportsPage() {
     a.click()
     URL.revokeObjectURL(a.href)
   }
+  const body = family.embed === 'fleet' ? (
+    <div className="min-w-0">
+      <Embedded>
+        <FleetAnalysisPage />
+      </Embedded>
+    </div>
+  ) : (
+    <div className="contract-print min-w-0 space-y-4">
+    <FilterBar onReset={() => { setPeriod('30'); setBranch('all'); setQ('') }} active={period !== '30' || branch !== 'all' || q !== ''}>
+      <FilterSelect label={L('Dönem', 'Period')} value={period} onChange={setPeriod} options={[{ id: '7', label: L('Son 7 gün', 'Last 7 days') }, { id: '30', label: L('Son 30 gün', 'Last 30 days') }, { id: '90', label: L('Son 90 gün', 'Last 90 days') }, { id: '365', label: L('Son 365 gün', 'Last 365 days') }]} />
+      <FilterSelect label={L('Şube', 'Branch')} value={branch} onChange={setBranch} options={[{ id: 'all', label: L('Tüm şubeler', 'All branches') }, ...branchOptions(d, active)]} />
+      <SearchBox label={L('Rapor içinde ara', 'Search in report')} placeholder={L('Ara…', 'Search…')} value={q} onChange={setQ} />
+    </FilterBar>
+    <Panel title={family.label()} description={`${L('Dönem', 'Period')}: ${addDaysYmd(today, -days + 1)} → ${today} · ${rows.length} ${L('satır', 'row(s)')}`} flush>
+      {rows.length === 0 ? <Empty title={L('Bu dönemde veri yok', 'No data in this period')} /> : (
+        <div className="overflow-x-auto"><table className="w-full min-w-[560px] text-[13.5px]">
+          <thead><tr className="border-b border-line text-left text-[12px] text-ink-2">{report.head.map((h) => <th key={h} scope="col" className="px-4 py-2 font-medium">{h}</th>)}</tr></thead>
+          <tbody className="divide-y divide-line-soft">{rows.map((r, i) => <tr key={i}>{r.map((c, j) => <td key={j} className={`px-4 py-2 ${typeof c === 'number' ? 'tnum text-right' : ''}`}>{c}</td>)}</tr>)}</tbody>
+        </table></div>
+      )}
+    </Panel>
+    {report.note && <DemoNote>{report.note}</DemoNote>}
+  </div>
+  )
   return (
     <Page
       title={L('Raporlar', 'Reports')}
@@ -189,30 +237,22 @@ export function ReportsPage() {
             {families.map((f) => (
               <li key={f.id}>
                 <button type="button" aria-current={f.id === family.id} onClick={() => setFam(f.id)} className={`w-full rounded-lg border px-3 py-2.5 text-left ${f.id === family.id ? 'border-blue bg-blue-soft' : 'border-line bg-surface hover:bg-line-soft'}`}>
-                  <span className="block text-[13.5px] font-medium">{f.label()}</span>
+                  <span className="block text-[13.5px] font-medium">{f.label()}{f.scope !== 'v1' && <span className="ml-1.5 text-[11.5px] font-semibold text-hold">{f.scope === 'v15' ? 'V1.5' : 'V2'}</span>}</span>
                   <span className="block text-[12px] text-ink-2">{f.desc()}</span>
                 </button>
               </li>
             ))}
           </ul>
-          {families.length < FAMILIES.length && <p className="mt-3 text-[12px] text-ink-3">{L('Bu rolde finans raporları görünmez (rapor-finans yetkisi yok).', 'Finance reports are hidden for this role (no finance-report permission).')}</p>}
+          {allowed.length < FAMILIES.length && <p className="mt-3 text-[12px] text-ink-3">{L('Bu rolde finans raporları görünmez (rapor-finans yetkisi yok).', 'Finance reports are hidden for this role (no finance-report permission).')}</p>}
+          {!d.session.preview && <p className="mt-3 text-[12px] text-ink-3">{L('Gelişmiş raporlar (V1.5 / V2) Demo → Gelişmiş konsept ön izlemesiyle açılır.', 'Advanced reports (V1.5 / V2) open with Demo → Advanced concept preview.')}</p>}
         </nav>
-        <div className="contract-print min-w-0 space-y-4">
-          <FilterBar onReset={() => { setPeriod('30'); setBranch('all'); setQ('') }} active={period !== '30' || branch !== 'all' || q !== ''}>
-            <FilterSelect label={L('Dönem', 'Period')} value={period} onChange={setPeriod} options={[{ id: '7', label: L('Son 7 gün', 'Last 7 days') }, { id: '30', label: L('Son 30 gün', 'Last 30 days') }, { id: '90', label: L('Son 90 gün', 'Last 90 days') }, { id: '365', label: L('Son 365 gün', 'Last 365 days') }]} />
-            <FilterSelect label={L('Şube', 'Branch')} value={branch} onChange={setBranch} options={[{ id: 'all', label: L('Tüm şubeler', 'All branches') }, ...branchOptions(d, active)]} />
-            <SearchBox label={L('Rapor içinde ara', 'Search in report')} placeholder={L('Ara…', 'Search…')} value={q} onChange={setQ} />
-          </FilterBar>
-          <Panel title={family.label()} description={`${L('Dönem', 'Period')}: ${addDaysYmd(today, -days + 1)} → ${today} · ${rows.length} ${L('satır', 'row(s)')}`} flush>
-            {rows.length === 0 ? <Empty title={L('Bu dönemde veri yok', 'No data in this period')} /> : (
-              <div className="overflow-x-auto"><table className="w-full min-w-[560px] text-[13.5px]">
-                <thead><tr className="border-b border-line text-left text-[12px] text-ink-2">{report.head.map((h) => <th key={h} scope="col" className="px-4 py-2 font-medium">{h}</th>)}</tr></thead>
-                <tbody className="divide-y divide-line-soft">{rows.map((r, i) => <tr key={i}>{r.map((c, j) => <td key={j} className={`px-4 py-2 ${typeof c === 'number' ? 'tnum text-right' : ''}`}>{c}</td>)}</tr>)}</tbody>
-              </table></div>
-            )}
-          </Panel>
-          {report.note && <DemoNote>{report.note}</DemoNote>}
-        </div>
+        {gated ? (
+          <GatedView scope={gated.scope} title={gated.label()} note={L('Gelişmiş rapor ailesi V1.5 / V2 kapsamındadır; V1’in çekirdek raporları Kiralama, Filo, Finans ve Kasa/Gün sonudur.', 'This advanced report family is in V1.5 / V2; the V1 core reports are Rentals, Fleet, Finance and Cash/End of day.')}>
+            {body}
+          </GatedView>
+        ) : (
+          body
+        )}
       </div>
     </Page>
   )

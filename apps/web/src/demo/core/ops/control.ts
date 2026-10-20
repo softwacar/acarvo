@@ -2,6 +2,7 @@ import { B } from '../../i18n'
 import { isRateActive } from '../calc/fx'
 import { addHistory, fail, hasPerm, logEvent, meOf, need, nextId, nextNo, nowOf, notify, userName } from '../helpers'
 import { CURRENCIES, fmt } from '../money'
+import { ALWAYS_VISIBLE, NAV_V1, PROFILES, type WorkspaceSettings } from '../modules'
 import type { Approval, ApprovalType, Cur, Db, Expense, FxRate, Id, Iso, LinkType, Money, Role, Rule } from '../types'
 import { completeRefund, cashMove, findDrawer, requestRefund, voidCharge, voidPayment } from './finance'
 import { repriceOf } from './rentals'
@@ -233,7 +234,7 @@ export function reviewException(d: Db, id: Id, status: 'reviewed' | 'accepted' |
 
 export const EXPENSE_CATEGORIES = ['Bakım ve servis', 'Yakıt', 'Temizlik', 'Sigorta primi', 'Kira ve işletme', 'Personel dışı genel gider', 'Ceza (otorite ödemesi)', 'Yol yardım / çekici', 'Diğer']
 
-export function createExpense(d: Db, input: { category: string; vendor: string; branchId: Id; date: string; amount: Money; note: string; post: boolean; cashDrawerId?: Id }): Expense {
+export function createExpense(d: Db, input: { category: string; vendor: string; branchId: Id; date: string; amount: Money; note: string; post: boolean; cashDrawerId?: Id; link?: Expense['link']; vehicleId?: Id }): Expense {
   need(d, 'expenses:manage', B('Masraf kaydı', 'Expense record'))
   const fields: Record<string, string> = {}
   if (!input.vendor.trim()) fields.vendor = B('Tedarikçi / alıcı yazın', 'Enter the vendor / payee')
@@ -241,7 +242,7 @@ export function createExpense(d: Db, input: { category: string; vendor: string; 
   if (input.amount.minor <= 0) fields.amount = B('Tutar sıfırdan büyük olmalı', 'The amount must be greater than zero')
   if (/iade|depozito|komisyon/i.test(input.category)) fields.category = B('İade, depozito ve komisyon masraf türü değildir', 'Refunds, deposits and commissions are not expense types')
   if (Object.keys(fields).length) fail(B('Formda eksik veya geçersiz alanlar var.', 'The form has missing or invalid fields.'), fields)
-  const e: Expense = { id: nextId(d, 'ex'), no: nextNo(d, 'G'), category: input.category, vendor: input.vendor, branchId: input.branchId, date: input.date, amount: input.amount, status: input.post ? 'posted' : 'draft', note: input.note, createdBy: meOf(d).id }
+  const e: Expense = { id: nextId(d, 'ex'), no: nextNo(d, 'G'), category: input.category, vendor: input.vendor, branchId: input.branchId, date: input.date, amount: input.amount, status: input.post ? 'posted' : 'draft', link: input.vehicleId ? 'vehicle' : (input.link ?? 'branch'), vehicleId: input.vehicleId, note: input.note, createdBy: meOf(d).id }
   d.expenses.push(e)
   if (input.post && input.cashDrawerId) {
     const dr = d.drawers.find((x) => x.id === input.cashDrawerId)
@@ -389,6 +390,22 @@ export function setClock(d: Db, now: Iso): void {
 }
 export function setLanguage(d: Db, lang: 'tr' | 'en'): void {
   d.session.lang = lang
+}
+/** Working profile and optional per-link switches: visibility only, never a permission or data change. */
+export function setWorkspace(d: Db, patch: { profile: WorkspaceSettings['profile']; hidden: string[]; shown: string[] }): void {
+  need(d, 'settings:manage', B('Çalışma profili', 'Working profile'))
+  if (!PROFILES.includes(patch.profile)) fail(B('Geçersiz çalışma profili.', 'Invalid working profile.'))
+  const known = new Set(NAV_V1.map((n) => n.slug))
+  if ([...patch.hidden, ...patch.shown].some((s) => !known.has(s))) fail(B('Bilinmeyen menü bağlantısı.', 'Unknown menu link.'))
+  const locked = patch.hidden.filter((s) => ALWAYS_VISIBLE.has(s))
+  if (locked.length) fail(B('Bu bağlantılar günlük işi kilitleyeceği için gizlenemez: Ana Ekran, İşlerim, Rezervasyonlar, Kiralamalar, Takvim, Görevler, Araçlar, Müşteriler, Finans, Ayarlar.', 'These links cannot be hidden because they would lock the daily work: Home, My Work, Reservations, Rentals, Calendar, Tasks, Vehicles, Customers, Finance, Settings.'))
+  const before = d.settings.workspace
+  d.settings.workspace = { profile: patch.profile, hidden: [...patch.hidden], shown: [...patch.shown] }
+  logEvent(d, { module: 'settings', type: 'WorkspaceChanged', sourceType: 'settings', sourceId: 'workspace', summary: B(`Çalışma profili: ${before.profile} → ${patch.profile}. Yalnız menü görünürlüğü değişti; yetki ve veri değişmedi.`, `Working profile: ${before.profile} → ${patch.profile}. Only menu visibility changed; permissions and data did not.`), before: before.profile, after: patch.profile })
+}
+export function setConceptPreview(d: Db, on: boolean): void {
+  need(d, 'preview:use', B('Gelişmiş konsept ön izlemesi', 'Advanced concept preview'))
+  d.session.preview = on
 }
 export function markNotificationsRead(d: Db): void {
   for (const n of d.notifications) if (!n.userId || n.userId === meOf(d).id) n.read = true

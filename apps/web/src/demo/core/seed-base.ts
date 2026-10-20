@@ -1,7 +1,7 @@
 import { B } from '../i18n'
 import { DEMO_ROLES } from './permissions'
 /** Version of the saved demo state. Bump it whenever the seed or the data model changes: an older saved state is then replaced by a fresh seed. */
-export const DB_SCHEMA = 4
+export const DB_SCHEMA = 5
 
 import type { BaseRate, Branch, ContractTemplate, CorporateAgreement, Db, DemoUser, Extra, FxRate, InsurancePackage, Season, Settings, TaxRule, Tenant, VehicleClass } from './types'
 
@@ -136,6 +136,15 @@ export function defaultSettings(): Settings {
     ],
     thresholds: { highDiscountPct: 15, refundAbove: { EUR: 10000, BAM: 20000, USD: 11000 }, depositExceptionAbove: { EUR: 10000, BAM: 20000, USD: 11000 }, corporateOverride: true },
     privacy: { retentionMonths: 60, maskIdentityRoles: ['role-ops', 'role-accountant'], auditRetentionMonths: 84 },
+    alertThresholds: { overdueCriticalHours: 12, pickupLookaheadHours: 24, pickupCriticalHours: 4, serviceSoonKm: 1000 },
+    // Company-defined cancellation policy: 48 h free, 25 % of the total inside the window, 50 % for a no-show. The fee is computed, never typed.
+    cancellation: {
+      freeHoursBefore: 48,
+      lateFee: { kind: 'percent_of_total', value: 25, fixed: { EUR: 5000, BAM: 10000, USD: 5500 } },
+      noShowFee: { kind: 'percent_of_total', value: 50, fixed: { EUR: 10000, BAM: 20000, USD: 11000 } },
+    },
+    workspace: { profile: 'advanced', hidden: [], shown: [] },
+    setup: { done: false, step: 0, draft: null },
   }
 }
 
@@ -160,9 +169,9 @@ export const ROLES = DEMO_ROLES
 
 export function emptyDb(anchor: string, nowIso: string): Db {
   return {
-    meta: { schema: DB_SCHEMA, anchor, createdAt: nowIso, modified: false },
+    meta: { schema: DB_SCHEMA, anchor, createdAt: nowIso, modified: false, rev: 0 },
     clock: { now: nowIso },
-    session: { userId: 'u-owner', branchId: 'all', lang: 'tr', context: 'company', partnerId: 'pt1' },
+    session: { userId: 'u-owner', branchId: 'all', lang: 'tr', context: 'company', partnerId: 'pt1', preview: false },
     counters: {},
     settings: defaultSettings(),
     branches: structuredClone(BRANCHES),

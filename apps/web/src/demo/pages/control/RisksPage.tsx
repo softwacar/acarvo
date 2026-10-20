@@ -5,33 +5,22 @@ import { userName } from '../../core/helpers'
 import { createException, reviewException } from '../../core/ops/control'
 import type { Db, Exception, Id, LinkType } from '../../core/types'
 import { L } from '../../i18n'
-import { AlertList } from '../../ui/alerts'
 import { ComboF, SelectF, TextF } from '../../ui/forms'
-import { entityHref, runAction, useAlerts, useCan, useDb, useFmt, useUrlState } from '../../ui/hooks'
-import { btnPrimary, Empty, Facts, FilterBar, FilterSelect, FinanceDialog, Kpis, Page, Panel, Segmented, Status, Tabs } from '../../ui/kit'
+import { entityHref, runAction, useCan, useDb, useFmt, useUrlState } from '../../ui/hooks'
+import { btnPrimary, Empty, Facts, FilterBar, FilterSelect, FinanceDialog, Status } from '../../ui/kit'
 import { type Col, DataTable } from '../../ui/table'
 import { ActBtn, ActionRow, DrawerSection, PromptDialog, RecordDrawer, useAct } from '../fleet/common'
 import { targetLabel } from './ApprovalsPage'
 
-type TabId = 'riskler' | 'istisnalar'
-
-const MODULE_LABEL = (): Record<string, string> => ({ rentals: L('Kiralamalar', 'Rentals'), reservations: L('Rezervasyonlar', 'Reservations'), vehicles: L('Araçlar', 'Vehicles'), customers: L('Müşteriler', 'Customers'), finance: L('Finans', 'Finance'), cash: L('Kasa', 'Cash'), maintenance: L('Bakım', 'Maintenance'), damages: L('Hasar', 'Damage'), incidents: L('Olaylar', 'Incidents'), fines: L('Cezalar', 'Fines'), approvals: L('Onaylar', 'Approvals'), documents: L('Belgeler', 'Documents'), contracts: L('Sözleşmeler', 'Contracts'), tasks: L('Görevler', 'Tasks'), corporate: L('Kurumsal', 'Corporate'), rules: L('Kurallar', 'Rules') })
-
-export function RisksPage() {
+/** Exceptions (V1.5): a review record about a deviation from the normal rule. Shown inside My Work under the concept preview. */
+export function ExceptionsSection() {
   const d = useDb()
   const can = useCan()
-  const alerts = useAlerts()
-  const [tab, setTab] = useUrlState('sekme', 'riskler')
-  const [sev, setSev] = useUrlState('onem', 'all')
-  const [mod, setMod] = useUrlState('modul', 'all')
+  const f = useFmt()
   const [status, setStatus] = useUrlState('durum', 'all')
   const [sel, setSel] = useUrlState('kayit')
   const [adding, setAdding] = useState(false)
-  const labels = MODULE_LABEL()
-  const modules = [...new Set(alerts.map((a) => a.module))]
-  const filtered = alerts.filter((a) => (sev === 'all' ? true : a.severity === sev)).filter((a) => (mod === 'all' ? true : a.module === mod))
   const exceptions = d.exceptions.filter((x) => (status === 'all' ? true : x.status === status)).sort((a, b) => b.createdAt.localeCompare(a.createdAt))
-  const f = useFmt()
   const cols: Col<Exception>[] = [
     { id: 'no', header: L('İstisna', 'Exception'), cell: (x) => <span className="tnum whitespace-nowrap font-medium text-blue">{x.no}</span>, sort: (x) => x.no },
     { id: 'title', header: L('Başlık', 'Title'), cell: (x) => <span className="line-clamp-1 font-medium">{x.title}</span> },
@@ -42,40 +31,18 @@ export function RisksPage() {
   ]
   const current = d.exceptions.find((x) => x.id === sel)
   return (
-    <Page
-      title={L('Riskler ve İstisnalar', 'Risks and Exceptions')}
-      description={L('Riskler kayıtlardan türetilen açıklanabilir uyarılardır; gizli puan yoktur. İstisna kararı bir inceleme kaydıdır: kaynak kayıttaki işlem (kapatma, tahsilat) yine kaynakta yapılır.', 'Risks are explainable alerts derived from records; there is no hidden score. An exception decision is a review record: the action on the source (closing, charging) is still taken on the source.')}
-      actions={can('risks:manage') ? <button type="button" className={btnPrimary} onClick={() => setAdding(true)}><Plus size={16} /> {L('İstisna kaydet', 'Record exception')}</button> : undefined}
-    >
-      <Kpis items={[{ label: L('Kritik', 'Critical'), value: alerts.filter((a) => a.severity === 'critical').length, tone: alerts.some((a) => a.severity === 'critical') ? 'alert' : undefined }, { label: L('Uyarı', 'Warnings'), value: alerts.filter((a) => a.severity === 'warning').length }, { label: L('Açık istisna', 'Open exceptions'), value: d.exceptions.filter((x) => x.status === 'open').length, tone: d.exceptions.some((x) => x.status === 'open') ? 'hold' : undefined }]} />
-      <Tabs<TabId> label={L('Risk bölümleri', 'Risk sections')} value={(tab as TabId) || 'riskler'} onChange={setTab} tabs={[{ id: 'riskler', label: L('Riskler', 'Risks'), count: alerts.length || undefined }, { id: 'istisnalar', label: L('İstisnalar', 'Exceptions'), count: d.exceptions.length || undefined }]} />
-      {tab === 'istisnalar' ? (
-        <>
-          <FilterBar onReset={() => setStatus('all')} active={status !== 'all'}>
-            <FilterSelect label={L('Durum', 'Status')} value={status} onChange={setStatus} options={[{ id: 'all', label: L('Tümü', 'All') }, { id: 'open', label: L('Açık', 'Open') }, { id: 'reviewed', label: L('İncelendi', 'Reviewed') }, { id: 'accepted', label: L('Kabul', 'Accepted') }, { id: 'rejected', label: L('Reddedildi', 'Rejected') }]} />
-          </FilterBar>
-          <DataTable rows={exceptions} cols={cols} rowKey={(x) => x.id} label={L('İstisna listesi', 'Exception list')} urlKey="is" defaultSort={{ id: 'no', dir: 'desc' }} onRowClick={(x) => setSel(x.id)} empty={<Empty title={L('İstisna yok', 'No exceptions')} />} />
-        </>
-      ) : (
-        <div className="space-y-4">
-          <div className="flex flex-wrap items-center gap-3">
-            <Segmented label={L('Önem', 'Severity')} value={sev} onChange={setSev} options={[{ id: 'all', label: L('Hepsi', 'All') }, { id: 'critical', label: L('Kritik', 'Critical') }, { id: 'warning', label: L('Uyarı', 'Warning') }, { id: 'info', label: L('Bilgi', 'Info') }]} />
-            <FilterSelect label={L('Modül', 'Module')} value={mod} onChange={setMod} options={[{ id: 'all', label: L('Tüm modüller', 'All modules') }, ...modules.map((m) => ({ id: m, label: labels[m] ?? m }))]} />
-          </div>
-          <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_280px]">
-            <Panel flush><AlertList alerts={filtered} empty={L('Bu filtrede risk yok.', 'No risks match this filter.')} /></Panel>
-            <Panel title={L('Modüle göre', 'By module')}>
-              <ul className="divide-y divide-line-soft text-[13.5px]">
-                {modules.map((m) => <li key={m} className="flex justify-between py-2"><span>{labels[m] ?? m}</span><span className="tnum font-medium">{alerts.filter((a) => a.module === m).length}</span></li>)}
-                {modules.length === 0 && <li className="py-2 text-ink-2">{L('Risk yok.', 'No risks.')}</li>}
-              </ul>
-            </Panel>
-          </div>
-        </div>
-      )}
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <p className="max-w-[760px] text-[13px] text-ink-2">{L('İstisna kararı bir inceleme kaydıdır: kaynak kayıttaki işlem (kapatma, tahsilat) yine kaynakta yapılır.', 'An exception decision is a review record: the action on the source (closing, charging) is still taken on the source.')}</p>
+        {can('risks:manage') && <button type="button" className={btnPrimary} onClick={() => setAdding(true)}><Plus size={16} /> {L('İstisna kaydet', 'Record exception')}</button>}
+      </div>
+      <FilterBar onReset={() => setStatus('all')} active={status !== 'all'}>
+        <FilterSelect label={L('Durum', 'Status')} value={status} onChange={setStatus} options={[{ id: 'all', label: L('Tümü', 'All') }, { id: 'open', label: L('Açık', 'Open') }, { id: 'reviewed', label: L('İncelendi', 'Reviewed') }, { id: 'accepted', label: L('Kabul', 'Accepted') }, { id: 'rejected', label: L('Reddedildi', 'Rejected') }]} />
+      </FilterBar>
+      <DataTable rows={exceptions} cols={cols} rowKey={(x) => x.id} label={L('İstisna listesi', 'Exception list')} urlKey="is" defaultSort={{ id: 'no', dir: 'desc' }} onRowClick={(x) => setSel(x.id)} empty={<Empty title={L('İstisna yok', 'No exceptions')} />} />
       {adding && <NewDialog onClose={() => setAdding(false)} />}
       {current && <Drawer x={current} onClose={() => setSel('')} />}
-    </Page>
+    </div>
   )
 }
 

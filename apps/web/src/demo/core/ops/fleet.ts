@@ -1,9 +1,9 @@
 import { B } from '../../i18n'
 import { checkVehicleAvailable, readinessOf } from '../calc/availability'
-import { addHistory, fail, hasPerm, logEvent, meOf, need, nextId, nextNo, nowOf, notify, scopeBranches, userName } from '../helpers'
+import { addHistory, fail, logEvent, meOf, need, nextId, nextNo, nowOf, notify, userName } from '../helpers'
 import { fmt } from '../money'
 import { DAY } from '../time'
-import type { Cur, Damage, Db, Expense, Fine, FuelLevel, Id, Incident, Iso, LinkType, Maintenance, Money, Task, TaskPriority, Transfer, Vehicle } from '../types'
+import type { Cur, Damage, Db, Expense, Fine, FuelLevel, Id, Incident, Iso, Maintenance, Money, Transfer, Vehicle } from '../types'
 import { postCharge } from './finance'
 
 // Fleet and operations: maintenance, damage, incidents, fines, tasks, transfers, vehicle records.
@@ -175,7 +175,7 @@ export function completeMaintenance(d: Db, id: Id, input: { cost: Money | null; 
   addHistory(d, m!.history, B('Tamamlandı', 'Completed'), B(`Bakım tamamlandı${input.cost ? ` · ${fmt(input.cost.minor, input.cost.cur)}` : ''}. Araç otomatik hazır sayılmaz; hazırlık kontrolü gerekir.`, `Maintenance completed${input.cost ? ` · ${fmt(input.cost.minor, input.cost.cur)}` : ''}. The vehicle is not automatically ready; a readiness check is needed.`))
   // The service cost lives in the Maintenance record; the expense row is linked to it and its amount is locked.
   if (input.cost && input.cost.minor > 0 && !d.expenses.some((e) => e.sourceType === 'maintenance' && e.sourceId === id)) {
-    d.expenses.push({ id: nextId(d, 'ex'), no: nextNo(d, 'G'), category: 'Bakım ve servis', vendor: d.providers.find((p) => p.id === m!.providerId)?.name ?? 'Servis', branchId: v.homeBranchId, date: nowOf(d).slice(0, 10), amount: input.cost, status: 'posted', sourceType: 'maintenance', sourceId: id, note: B(`${m!.no} bakım kaydından`, `from maintenance record ${m!.no}`), createdBy: meOf(d).id })
+    d.expenses.push({ id: nextId(d, 'ex'), no: nextNo(d, 'G'), category: 'Bakım ve servis', vendor: d.providers.find((p) => p.id === m!.providerId)?.name ?? 'Servis', branchId: v.homeBranchId, date: nowOf(d).slice(0, 10), amount: input.cost, status: 'posted', sourceType: 'maintenance', sourceId: id, link: 'source', vehicleId: v.id, note: B(`${m!.no} bakım kaydından`, `from maintenance record ${m!.no}`), createdBy: meOf(d).id })
   }
   logEvent(d, { module: 'maintenance', type: 'MaintenanceCompleted', sourceType: 'maintenance', sourceId: id, summary: B(`${m!.no} tamamlandı`, `${m!.no} completed`), before: 'in_progress', after: 'completed', cur: input.cost?.cur, minor: input.cost?.minor })
 }
@@ -390,7 +390,7 @@ export function payFineToAuthority(d: Db, id: Id): void {
   if (f!.authorityPaidAt) fail(B('Bu ceza zaten otoriteye ödenmiş.', 'This fine was already paid to the authority.'))
   f!.authorityPaidAt = nowOf(d)
   const v = vehicleOf(d, f!.vehicleId)
-  const ex: Expense = { id: nextId(d, 'ex'), no: nextNo(d, 'G'), category: 'Ceza (otorite ödemesi)', vendor: f!.authority, branchId: v.homeBranchId, date: nowOf(d).slice(0, 10), amount: f!.amount, status: 'posted', sourceType: 'fine', sourceId: f!.id, note: B(`${f!.no} otorite ödemesi`, `${f!.no} authority payment`), createdBy: meOf(d).id }
+  const ex: Expense = { id: nextId(d, 'ex'), no: nextNo(d, 'G'), category: 'Ceza (otorite ödemesi)', vendor: f!.authority, branchId: v.homeBranchId, date: nowOf(d).slice(0, 10), amount: f!.amount, status: 'posted', sourceType: 'fine', sourceId: f!.id, link: 'source', vehicleId: v.id, note: B(`${f!.no} otorite ödemesi`, `${f!.no} authority payment`), createdBy: meOf(d).id }
   d.expenses.push(ex)
   f!.expenseId = ex.id
   addHistory(d, f!.history, B('Otoriteye ödendi', 'Paid to the authority'), B(`${fmt(f!.amount.minor, f!.amount.cur)} otoriteye ödendi (şirket gideri ${ex.no}); müşteri tahsilatı değildir.`, `${fmt(f!.amount.minor, f!.amount.cur)} paid to the authority (company expense ${ex.no}); it is not a customer collection.`))
@@ -414,70 +414,7 @@ export function closeFine(d: Db, id: Id): void {
   addHistory(d, f!.history, B('Kapatıldı', 'Closed'), B('Ceza kaydı kapatıldı.', 'Fine record closed.'))
 }
 
-// --------------------------------------------------------------------------- tasks
-
-export interface TaskInput {
-  title: string
-  description: string
-  priority: TaskPriority
-  dueAt: Iso
-  ownerId?: Id
-  recipientIds: Id[]
-  pool: boolean
-  branchId?: Id
-  link?: { type: LinkType; id: Id }
-}
-
-export function createTask(d: Db, input: TaskInput): Task {
-  need(d, 'tasks:manage', B('Görev oluşturma', 'Creating a task'))
-  if (input.title.trim().length < 3) fail(B('Görev başlığı yazın.', 'Enter a task title.'), { title: B('Başlık zorunlu', 'A title is required') })
-  if (!input.pool && !input.ownerId && input.recipientIds.length === 0) fail(B('Bir sorumlu seçin veya görevi açık havuza koyun.', 'Choose an owner or put the task in the open pool.'), { owner: B('Sorumlu veya havuz seçin', 'Choose an owner or the pool') })
-  const t: Task = { id: nextId(d, 'tk'), no: nextNo(d, 'GR'), title: input.title, description: input.description, priority: input.priority, status: 'open', dueAt: input.dueAt, createdBy: meOf(d).id, createdAt: nowOf(d), ownerId: input.pool ? undefined : input.ownerId, recipientIds: input.recipientIds, pool: input.pool, branchId: input.branchId, link: input.link, history: [] }
-  d.tasks.push(t)
-  addHistory(d, t.history, B('Oluşturuldu', 'Created'), input.pool ? B('Açık havuza eklendi (uygun personel üstlenebilir).', 'Added to the open pool (an eligible employee can claim it).') : B(`Atandı: ${[input.ownerId, ...input.recipientIds].filter(Boolean).map((u) => userName(d, u as Id)).join(', ')}`, `Assigned: ${[input.ownerId, ...input.recipientIds].filter(Boolean).map((u) => userName(d, u as Id)).join(', ')}`))
-  logEvent(d, { module: 'tasks', type: 'TaskAssigned', sourceType: 'task', sourceId: t.id, summary: `${t.no} · ${t.title}`, branchId: input.branchId })
-  for (const u of new Set([input.ownerId, ...input.recipientIds].filter(Boolean) as Id[])) if (u !== meOf(d).id) notify(d, u, B(`Yeni görev: ${t.title}`, `New task: ${t.title}`), { type: 'task', id: t.id })
-  return t
-}
-
-export function claimTask(d: Db, id: Id): void {
-  const t = d.tasks.find((x) => x.id === id)
-  if (!t) fail(B('Görev bulunamadı.', 'Task not found.'))
-  if (!t!.pool || t!.ownerId) fail(B('Bu görev açık havuzda değil veya zaten üstlenilmiş.', 'This task is not in the open pool or was already claimed.'))
-  const me = meOf(d)
-  if (!hasPerm(d, 'tasks:view')) fail(B('Görevleri görme yetkiniz yok.', 'You do not have permission to view tasks.'))
-  if (t!.branchId && !scopeBranches(d).includes(t!.branchId)) fail(B('Bu görev şubenizin kapsamında değil.', 'This task is outside your branch scope.'))
-  t!.ownerId = me.id
-  t!.pool = false
-  t!.status = 'in_progress'
-  addHistory(d, t!.history, B('Üstlenildi', 'Claimed'), B(`${me.name} görevi üstlendi.`, `${me.name} claimed the task.`))
-  logEvent(d, { module: 'tasks', type: 'TaskClaimed', sourceType: 'task', sourceId: id, summary: B(`${t!.no} üstlenildi`, `${t!.no} claimed`) })
-}
-
-export function reassignTask(d: Db, id: Id, ownerId: Id): void {
-  need(d, 'tasks:manage', B('Görev devri', 'Reassigning a task'))
-  const t = d.tasks.find((x) => x.id === id)
-  if (!t) fail(B('Görev bulunamadı.', 'Task not found.'))
-  if (t!.status === 'done') fail(B('Tamamlanan görev devredilemez.', 'A completed task cannot be reassigned.'))
-  const from = t!.ownerId
-  t!.ownerId = ownerId
-  t!.pool = false
-  addHistory(d, t!.history, 'Devredildi', `${userName(d, from)} → ${userName(d, ownerId)}`)
-  notify(d, ownerId, B(`Görev size devredildi: ${t!.title}`, `A task was reassigned to you: ${t!.title}`), { type: 'task', id })
-}
-
-export function setTaskStatus(d: Db, id: Id, status: Task['status']): void {
-  const t = d.tasks.find((x) => x.id === id)
-  if (!t) fail(B('Görev bulunamadı.', 'Task not found.'))
-  const me = meOf(d)
-  const mine = t!.ownerId === me.id || t!.recipientIds.includes(me.id)
-  if (!mine && !hasPerm(d, 'tasks:manage')) fail(B('Bu görevi yalnız sorumlusu veya yönetici güncelleyebilir.', 'Only the task owner or a manager can update this task.'))
-  t!.status = status
-  t!.doneAt = status === 'done' ? nowOf(d) : undefined
-  // Completing a task changes only the task. The linked rental / maintenance / incident keeps its own state.
-  addHistory(d, t!.history, status === 'done' ? B('Tamamlandı', 'Completed') : B('Güncellendi', 'Updated'), status === 'done' ? B('Görev tamamlandı. Bağlı kayıt ayrıca işlem gerektirir.', 'Task completed. The linked record still needs its own action.') : B(`Durum: ${status}`, `Status: ${status}`))
-  logEvent(d, { module: 'tasks', type: status === 'done' ? 'TaskCompleted' : 'TaskUpdated', sourceType: 'task', sourceId: id, summary: `${t!.no} → ${status}` })
-}
+// Tasks moved to ./tasks (decision document D): pool visibility, conflict-safe claim, reopen, bulk actions.
 
 // --------------------------------------------------------------------------- transfers
 

@@ -41,14 +41,14 @@ export function deriveAlerts(d: Db): Alert[] {
     const h = hoursLate(now, r.plannedReturnAt)
     if (h < 0) continue
     if (h === 0 && nowMs < Date.parse(r.plannedReturnAt)) continue
-    push({ id: `overdue:${r.id}`, kind: 'overdue_return', severity: h >= 12 ? 'critical' : 'warning', title: L(`${r.no} · iade gecikti (${veh(r.vehicleId)?.plate})`, `${r.no} · return overdue (${veh(r.vehicleId)?.plate})`), detail: L(`${cust(r.customerId)} · planlanan iade geçti (${h} saat). Araç hâlâ müşteride.`, `${cust(r.customerId)} · planned return passed (${h} h). The vehicle is still with the customer.`), at: r.plannedReturnAt, link: { type: 'rental', id: r.id }, branchId: r.returnBranchId, module: 'rentals' })
+    push({ id: `overdue:${r.id}`, kind: 'overdue_return', severity: h >= d.settings.alertThresholds.overdueCriticalHours ? 'critical' : 'warning', title: L(`${r.no} · iade gecikti (${veh(r.vehicleId)?.plate})`, `${r.no} · return overdue (${veh(r.vehicleId)?.plate})`), detail: L(`${cust(r.customerId)} · planlanan iade geçti (${h} saat). Araç hâlâ müşteride.`, `${cust(r.customerId)} · planned return passed (${h} h). The vehicle is still with the customer.`), at: r.plannedReturnAt, link: { type: 'rental', id: r.id }, branchId: r.returnBranchId, module: 'rentals' })
   }
 
   // 2. pickups in the next 24 h (and late pickups): readiness, documents, contract, deposit
   for (const r of d.rentals) {
     if (r.status !== 'prepared') continue
     const dueMs = Date.parse(r.plannedPickupAt)
-    if (dueMs > nowMs + 24 * HOUR) continue
+    if (dueMs > nowMs + d.settings.alertThresholds.pickupLookaheadHours * HOUR) continue
     const v = veh(r.vehicleId)
     if (!v) continue
     const issues: string[] = []
@@ -63,7 +63,7 @@ export function deriveAlerts(d: Db): Alert[] {
     const ctr = d.contracts.find((x) => x.id === r.contract.id)
     if (!ctr || ctr.status !== 'signed') issues.push(L('sözleşme imzasız', 'contract unsigned'))
     if (r.deposit.required.minor > 0 && r.deposit.state !== 'held' && r.deposit.state !== 'waived') issues.push(L('depozito alınmadı', 'deposit not taken'))
-    if (issues.length) push({ id: `pickup:${r.id}`, kind: 'pickup_blocked', severity: dueMs <= nowMs + 4 * HOUR ? 'critical' : 'warning', title: L(`${r.no} · teslim hazırlığı eksik (${v.plate})`, `${r.no} · handover preparation incomplete (${v.plate})`), detail: `${c} · ${issues.join(' · ')}`, at: r.plannedPickupAt, link: { type: 'rental', id: r.id }, branchId: r.pickupBranchId, module: 'rentals' })
+    if (issues.length) push({ id: `pickup:${r.id}`, kind: 'pickup_blocked', severity: dueMs <= nowMs + d.settings.alertThresholds.pickupCriticalHours * HOUR ? 'critical' : 'warning', title: L(`${r.no} · teslim hazırlığı eksik (${v.plate})`, `${r.no} · handover preparation incomplete (${v.plate})`), detail: `${c} · ${issues.join(' · ')}`, at: r.plannedPickupAt, link: { type: 'rental', id: r.id }, branchId: r.pickupBranchId, module: 'rentals' })
   }
 
   // 3. confirmed class-only reservations close to pickup without a vehicle
@@ -93,7 +93,7 @@ export function deriveAlerts(d: Db): Alert[] {
     if (v.status === 'sold' || v.source === 'external') continue
     const over = v.odometerKm - v.service.lastKm - v.service.intervalKm
     if (over > 0) push({ id: `svc:${v.id}`, kind: 'service_overdue', severity: 'warning', title: L(`${v.plate} · periyodik bakım gecikti`, `${v.plate} · periodic service overdue`), detail: L(`${over.toLocaleString('tr')} km gecikmiş. Bakım planlayın.`, `${over.toLocaleString('tr')} km overdue. Plan a service.`), at: v.service.lastAt, link: { type: 'vehicle', id: v.id }, branchId: v.homeBranchId, module: 'maintenance' })
-    else if (over > -1000) push({ id: `svc:${v.id}`, kind: 'service_soon', severity: 'info', title: L(`${v.plate} · periyodik bakım yaklaşıyor`, `${v.plate} · periodic service approaching`), detail: L(`${(-over).toLocaleString('tr')} km kaldı.`, `${(-over).toLocaleString('tr')} km left.`), at: v.service.lastAt, link: { type: 'vehicle', id: v.id }, branchId: v.homeBranchId, module: 'maintenance' })
+    else if (over > -d.settings.alertThresholds.serviceSoonKm) push({ id: `svc:${v.id}`, kind: 'service_soon', severity: 'info', title: L(`${v.plate} · periyodik bakım yaklaşıyor`, `${v.plate} · periodic service approaching`), detail: L(`${(-over).toLocaleString('tr')} km kaldı.`, `${(-over).toLocaleString('tr')} km left.`), at: v.service.lastAt, link: { type: 'vehicle', id: v.id }, branchId: v.homeBranchId, module: 'maintenance' })
   }
 
   // 6. maintenance: planned not started, in progress past its planned end

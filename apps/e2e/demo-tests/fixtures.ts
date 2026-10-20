@@ -1,15 +1,57 @@
 import { expect, type Page } from '@playwright/test'
 
-/** The 36 canonical sidebar links (spec §4) plus the two separate contexts. */
-export const ROUTES = [
-  '/', '/komuta-merkezi', '/filo-asistani',
-  '/rezervasyonlar', '/kiralamalar', '/takvim', '/gorevler', '/araclar', '/bakim-servis', '/olay-merkezi', '/hasar-kayitlari', '/ceza-modulu',
-  '/musteriler', '/kurumsal-hesaplar', '/talep-merkezi', '/partnerler', '/arac-tedarikcileri', '/fiyatlandirma',
-  '/onay-merkezi', '/kurallar', '/gelir-kontrolu', '/riskler-ve-istisnalar', '/kapasite-planlama', '/filo-analizi', '/firsatlar', '/raporlar',
+/** The 21 V1 menu screens (decision document H.2), plus the document list that is reached from search and record links. */
+export const MENU_ROUTES = [
+  '/', '/islerim',
+  '/rezervasyonlar', '/kiralamalar', '/takvim', '/gorevler', '/araclar', '/bakim-servis', '/hasar-ve-olaylar',
+  '/musteriler', '/kurumsal-hesaplar', '/fiyatlandirma',
   '/finans', '/masraflar', '/sube-kasalari',
-  '/sozlesmeler', '/belge-merkezi', '/islem-gecmisi',
-  '/subeler', '/kullanicilar', '/roller-ve-yetkiler', '/ayarlar',
+  '/raporlar', '/onay-merkezi',
+  '/subeler', '/kullanicilar', '/islem-gecmisi', '/ayarlar',
 ]
+export const ROUTES = [...MENU_ROUTES, '/belge-merkezi']
+
+/** The 36 legacy links of the old menu: every address keeps working and lands where decision document I.3 says (path + search). */
+export const LEGACY_ROUTES: { from: string; to: string }[] = [
+  { from: '/', to: '/' },
+  { from: '/komuta-merkezi', to: '/islerim' },
+  { from: '/filo-asistani', to: '/filo-asistani' },
+  { from: '/rezervasyonlar', to: '/rezervasyonlar' },
+  { from: '/kiralamalar', to: '/kiralamalar' },
+  { from: '/takvim', to: '/takvim' },
+  { from: '/gorevler', to: '/gorevler' },
+  { from: '/araclar', to: '/araclar' },
+  { from: '/bakim-servis', to: '/bakim-servis' },
+  { from: '/olay-merkezi', to: '/hasar-ve-olaylar?sekme=olaylar' },
+  { from: '/hasar-kayitlari', to: '/hasar-ve-olaylar' },
+  { from: '/ceza-modulu', to: '/hasar-ve-olaylar?sekme=cezalar' },
+  { from: '/musteriler', to: '/musteriler' },
+  { from: '/kurumsal-hesaplar', to: '/kurumsal-hesaplar' },
+  { from: '/talep-merkezi', to: '/talep-merkezi' },
+  { from: '/partnerler', to: '/partnerler' },
+  { from: '/arac-tedarikcileri', to: '/arac-tedarikcileri' },
+  { from: '/fiyatlandirma', to: '/fiyatlandirma' },
+  { from: '/onay-merkezi', to: '/onay-merkezi' },
+  { from: '/kurallar', to: '/kurallar' },
+  { from: '/gelir-kontrolu', to: '/finans?sekme=dikkat' },
+  { from: '/riskler-ve-istisnalar', to: '/islerim?sekme=uyarilar' },
+  { from: '/kapasite-planlama', to: '/takvim?gorunum=kapasite' },
+  { from: '/filo-analizi', to: '/raporlar?rapor=filo' },
+  { from: '/firsatlar', to: '/firsatlar' },
+  { from: '/raporlar', to: '/raporlar' },
+  { from: '/finans', to: '/finans' },
+  { from: '/masraflar', to: '/masraflar' },
+  { from: '/sube-kasalari', to: '/sube-kasalari' },
+  { from: '/sozlesmeler', to: '/kiralamalar?gorunum=sozlesmeler' },
+  { from: '/belge-merkezi', to: '/belge-merkezi' },
+  { from: '/islem-gecmisi', to: '/islem-gecmisi' },
+  { from: '/subeler', to: '/subeler' },
+  { from: '/kullanicilar', to: '/kullanicilar' },
+  { from: '/roller-ve-yetkiler', to: '/kullanicilar?sekme=roller' },
+  { from: '/ayarlar', to: '/ayarlar' },
+]
+/** The V1.5 / V2 screens behind a not-active page (the concept preview opens them). */
+export const DEFERRED_ROUTES = ['/filo-asistani', '/talep-merkezi', '/partnerler', '/arac-tedarikcileri', '/kurallar', '/firsatlar']
 export const CONTEXTS = ['/platform', '/partner']
 
 /** Collects every request that targets the real API and every page error while a test runs. */

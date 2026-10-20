@@ -8,12 +8,14 @@ import { L } from '../../i18n'
 import { CheckF, DateTimeF, SelectF, TextF, branchOptions } from '../../ui/forms'
 import { runAction, useCan, useDb, useFmt, useUrlState } from '../../ui/hooks'
 import { btnPrimary, btnSmall, FinanceDialog, Notice, Page, Panel } from '../../ui/kit'
+import { ContractSection, WorkspaceSection } from './SettingsExtras'
 
 // Settings: every section edits one part of the policy and saves through one action that writes an audit entry. Changes
 // affect future transactions only; frozen price and rate snapshots never change. The exchange-rate desk exists only here.
 
 const SECTIONS = () => [
   { id: 'sirket', label: L('Şirket', 'Company') },
+  { id: 'calisma', label: L('Çalışma profili ve menü', 'Working profile and menu') },
   { id: 'bolge', label: L('Dil, bölge ve para birimleri', 'Language, region and currencies') },
   { id: 'kurlar', label: L('Döviz Kurları', 'Exchange Rates') },
   { id: 'sure', label: L('Süre ve ücret kuralları', 'Duration and fee rules') },
@@ -23,7 +25,8 @@ const SECTIONS = () => [
   { id: 'kasa', label: L('Kasa politikası', 'Cash policy') },
   { id: 'belge', label: L('Belge politikası', 'Document policy') },
   { id: 'esik', label: L('Onay eşikleri', 'Approval thresholds') },
-  { id: 'bildirim', label: L('Bildirimler', 'Notifications') },
+  { id: 'bildirim', label: L('Bildirimler ve eşikler', 'Notifications and thresholds') },
+  { id: 'sozlesme', label: L('Sözleşme şablonları', 'Contract templates') },
   { id: 'gizlilik', label: L('Gizlilik', 'Privacy') },
 ]
 
@@ -47,7 +50,7 @@ export function SettingsPage() {
           </ul>
         </nav>
         <div className="min-w-0">
-          {cur.id === 'kurlar' ? <FxDesk d={d} /> : <SectionForm key={cur.id} id={cur.id} title={cur.label} edit={edit} />}
+          {cur.id === 'kurlar' ? <FxDesk d={d} /> : cur.id === 'calisma' ? <WorkspaceSection edit={edit} /> : cur.id === 'sozlesme' ? <ContractSection /> : <SectionForm key={cur.id} id={cur.id} title={cur.label} edit={edit} />}
         </div>
       </div>
     </Page>
@@ -300,13 +303,27 @@ function Thresholds({ fieldset, save, curs = [] }: SecProps) {
 
 function Notify({ fieldset, save }: SecProps) {
   const n = useDb().settings.notify
+  const th = useDb().settings.alertThresholds
   const [on, setOn] = useState(Object.fromEntries(n.map((x) => [x.id, x.on])))
+  const [overdue, setOverdue] = useState(String(th.overdueCriticalHours))
+  const [look, setLook] = useState(String(th.pickupLookaheadHours))
+  const [crit, setCrit] = useState(String(th.pickupCriticalHours))
+  const [svc, setSvc] = useState(String(th.serviceSoonKm))
   return fieldset(
     <>
       <p className="text-[13px] text-ink-2">{L('Bunlar uygulama içi bildirimlerdir. E-posta, SMS veya anlık mesaj gönderilmez; entegrasyon yoktur.', 'These are in-app notifications. No email, SMS or push message is sent; there is no integration.')}</p>
       <ul className="space-y-1.5">{n.map((x) => <li key={x.id}><CheckF id={`nf-${x.id}`} checked={!!on[x.id]} onChange={(v) => setOn((s) => ({ ...s, [x.id]: v }))}>{x.label}</CheckF></li>)}</ul>
+      <Field label={L('Uyarı eşikleri (İşlerim → Uyarılar bu değerlerle çalışır)', 'Alert thresholds (My Work → Alerts use these values)')}>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <TextF id="th-o" label={L('Geciken iade kritik olur (saat)', 'Overdue return turns critical (hours)')} value={overdue} onChange={setOverdue} />
+          <TextF id="th-l" label={L('Teslim hazırlığı kontrol penceresi (saat)', 'Handover readiness check window (hours)')} value={look} onChange={setLook} />
+          <TextF id="th-c" label={L('Engelli teslim kritik olur (saat)', 'Blocked handover turns critical (hours)')} value={crit} onChange={setCrit} />
+          <TextF id="th-s" label={L('Periyodik bakım yaklaşıyor (km)', 'Periodic service approaching (km)')} value={svc} onChange={setSvc} />
+        </div>
+        <p className="text-[12.5px] text-ink-2">{L('Gelişmiş kural motoru V2 kapsamındadır; V1’de uyarıları bu eşiklerle ayarlarsınız.', 'The advanced rule engine is in V2; in V1 you tune the alerts with these thresholds.')}</p>
+      </Field>
     </>,
-    () => save('Bildirimler', (db) => { for (const x of db.settings.notify) x.on = !!on[x.id] }),
+    () => save('Bildirimler', (db) => { for (const x of db.settings.notify) x.on = !!on[x.id]; Object.assign(db.settings.alertThresholds, { overdueCriticalHours: num(overdue, 'Geciken iade', 1, 720), pickupLookaheadHours: num(look, 'Kontrol penceresi', 1, 168), pickupCriticalHours: num(crit, 'Engelli teslim', 1, 72), serviceSoonKm: num(svc, 'Bakım km', 0, 20000) }) }),
   )
 }
 

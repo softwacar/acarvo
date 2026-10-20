@@ -8,7 +8,11 @@ import { toast } from './dialogs'
 import { useReturnFocus } from '@/components/useReturnFocus'
 import { cn, initials } from '@/lib/utils'
 import { L, setLangGlobal } from '../i18n'
-import { demoNav, navItemOf } from '../nav'
+import { demoNav, navItemOf, otherScreens, visibleNav } from '../nav'
+import { DEFERRED, GATED_VIEWS, LEGACY } from '../core/modules'
+import { setConceptPreview } from '../core/ops/control'
+import { ScopeBadge } from './gate'
+import { inboxOf } from '../core/inbox'
 import { SCENARIOS } from '../core/scenarios'
 import { searchAll } from '../core/search'
 import { commit, resetDemo, usePersistFailed } from '../core/store'
@@ -19,7 +23,7 @@ import { btnGhost, btnPrimary, btnSecondary, FinanceDialog, Notice } from './kit
 import { DateTimeF } from './forms'
 
 const COLLAPSED_KEY = 'acarvo.demo.nav.collapsed'
-const DEFAULT_COLLAPSED = ['Müşteri & Ticari', 'Kontrol & Analiz', 'Finans', 'Kayıtlar']
+const DEFAULT_COLLAPSED: string[] = []
 const menuContent = 'z-50 min-w-[250px] max-w-[92vw] rounded-lg border border-line bg-surface p-1 shadow-[0_12px_32px_-8px_rgb(16_24_40/0.18),0_2px_6px_rgb(16_24_40/0.06)] animate-fade'
 const menuItem = 'flex min-h-9 cursor-pointer select-none items-center gap-2.5 rounded-md px-2.5 py-1.5 text-ink-2 outline-none data-[highlighted]:bg-ground data-[highlighted]:text-ink'
 
@@ -37,7 +41,8 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
   const can = useCan()
   const current = useSlug()
   const [collapsed, setCollapsed] = useState<string[]>(readCollapsed)
-  const groups = demoNav()
+  const d = useDb()
+  const groups = visibleNav(d, can)
   const activeGroup = groups.find((g) => g.items.some((i) => i.slug === current))?.key
   const toggle = (key: string) => {
     const next = collapsed.includes(key) ? collapsed.filter((l) => l !== key) : [...collapsed, key]
@@ -51,8 +56,7 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
   return (
     <nav aria-label={L('Ana menü', 'Main menu')} className="flex-1 overflow-y-auto px-3 pt-3 pb-6 [scrollbar-color:var(--ac-line)_transparent] [scrollbar-width:thin]">
       {groups.map((g) => {
-        const items = g.items.filter((i) => can(i.perm))
-        if (!items.length) return null
+        const items = g.items
         const open = !collapsed.includes(g.key) || g.key === activeGroup
         return (
           <div key={g.key} className="mt-3 first:mt-0">
@@ -94,6 +98,8 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
 function UserMenu() {
   const d = useDb()
   const me = useMe()
+  const can = useCan()
+  const others = otherScreens(d, can)
   const role = d.roles.find((r) => r.id === me.roleId)
   const navigate = useNavigate()
   return (
@@ -126,9 +132,22 @@ function UserMenu() {
             </DropdownMenu.Item>
           ))}
           <DropdownMenu.Separator className="my-1 h-px bg-line" />
-          <DropdownMenu.Item className={menuItem} onSelect={() => navigate({ to: '/kullanicilar' as never })}>
-            <UserCircle size={17} /> {L('Kullanıcılar ve roller', 'Users and roles')}
-          </DropdownMenu.Item>
+          {others.length > 0 && (
+            <>
+              <DropdownMenu.Label className="px-2.5 pt-1 pb-0.5 text-[12px] text-ink-3">{L('Menüde gizli ekranlar (çalışma profili)', 'Screens hidden from the menu (working profile)')}</DropdownMenu.Label>
+              {others.map((o) => (
+                <DropdownMenu.Item key={o.slug} className={menuItem} onSelect={() => navigate({ to: (o.slug ? '/' + o.slug : '/') as never })}>
+                  <o.icon size={17} /> {o.label}
+                </DropdownMenu.Item>
+              ))}
+              <DropdownMenu.Separator className="my-1 h-px bg-line" />
+            </>
+          )}
+          {can('users:view') && (
+            <DropdownMenu.Item className={menuItem} onSelect={() => navigate({ to: '/kullanicilar' as never })}>
+              <UserCircle size={17} /> {L('Kullanıcılar ve roller', 'Users and roles')}
+            </DropdownMenu.Item>
+          )}
           <p className="px-2.5 py-2 text-[11.5px] leading-snug text-ink-3">{L('Yetki görünümü yalnız demo arayüz simülasyonudur; gerçek sunucu güvenliği değildir.', 'Permission views are a demo UI simulation, not real server security.')}</p>
         </DropdownMenu.Content>
       </DropdownMenu.Portal>
@@ -178,10 +197,11 @@ function Notifications() {
   const me = useMe()
   const alerts = useAlerts()
   const f = useFmt()
+  const myLate = inboxOf(d).mine.filter((i) => i.kind === 'task' && i.overdue && i.reason === 'assigned').slice(0, 3)
   const stored = d.notifications.filter((n) => !n.userId || n.userId === me.id).slice(0, 8)
   const unread = stored.filter((n) => !n.read).length
-  const crit = alerts.filter((a) => a.severity === 'critical').length
-  const count = unread + crit
+  const crit = alerts.filter((a) => a.severity === 'critical' && a.kind !== 'task_overdue').length
+  const count = unread + crit + myLate.length
   return (
     <DropdownMenu.Root>
       <DropdownMenu.Trigger aria-label={`${L('Bildirimler', 'Notifications')}${count ? ` (${count})` : ''}`} className="relative grid size-10 place-items-center rounded-lg border border-line text-ink-2 outline-none hover:bg-ground data-[state=open]:bg-ground">
@@ -199,7 +219,18 @@ function Notifications() {
             )}
           </div>
           <p className="px-2.5 pb-1.5 text-[11.5px] leading-snug text-ink-3">{L('Uyarılar kayıtlardan hesaplanır; e-posta veya SMS gönderilmez.', 'Alerts are derived from records; no e-mail or SMS is sent.')}</p>
-          {alerts.slice(0, 6).map((a) => (
+          {myLate.map((i) => (
+            <DropdownMenu.Item key={i.key} asChild>
+              <Link to={entityHref(i.link.type, i.link.id) as never} className={cn(menuItem, 'items-start')}>
+                <span className="mt-1.5 size-2 shrink-0 rounded-full bg-alert" aria-hidden />
+                <span className="min-w-0 flex-1">
+                  <span className="block text-[13px] text-ink">{L('Görev gecikti', 'Task overdue')}: {i.title}</span>
+                  <span className="block text-[12px] text-ink-3">{i.detail}</span>
+                </span>
+              </Link>
+            </DropdownMenu.Item>
+          ))}
+          {alerts.filter((a) => a.kind !== 'task_overdue' || !myLate.length).slice(0, 6).map((a) => (
             <DropdownMenu.Item key={a.id} asChild>
               <Link to={entityHref(a.link.type, a.link.id) as never} className={cn(menuItem, 'items-start')}>
                 <span className={cn('mt-1.5 size-2 shrink-0 rounded-full', a.severity === 'critical' ? 'bg-alert' : a.severity === 'warning' ? 'bg-hold' : 'bg-blue')} aria-hidden />
@@ -222,8 +253,8 @@ function Notifications() {
             </DropdownMenu.Item>
           ))}
           <DropdownMenu.Item asChild>
-            <Link to={'/komuta-merkezi?sekme=uyarilar' as never} className={cn(menuItem, 'justify-center font-medium text-blue')}>
-              {L('Tüm uyarılar (Komuta Merkezi)', 'All alerts (Command Center)')}
+            <Link to={'/islerim?sekme=uyarilar' as never} className={cn(menuItem, 'justify-center font-medium text-blue')}>
+              {L('Tüm uyarılar (İşlerim)', 'All alerts (My Work)')}
             </Link>
           </DropdownMenu.Item>
         </DropdownMenu.Content>
@@ -246,13 +277,16 @@ function SearchPalette({ onClose }: { onClose: () => void }) {
     () =>
       q.trim().length < 1
         ? []
-        : demoNav()
-            .flatMap((g) => g.items)
-            .filter((i) => can(i.perm) && i.label.toLowerCase().includes(q.trim().toLowerCase()))
-            .slice(0, 5),
+        : [
+            ...demoNav()
+              .flatMap((g) => g.items)
+              .filter((i) => can(i.perm) && i.label.toLowerCase().includes(q.trim().toLowerCase()))
+              .map((i) => ({ slug: i.slug, label: i.label, href: i.slug ? '/' + i.slug : '/', moved: false })),
+            ...LEGACY.filter((l) => l.kind !== 'same' && l.kind !== 'deferred' && L(l.tr, l.en).toLowerCase().includes(q.trim().toLowerCase())).map((l) => ({ slug: l.slug, label: L(l.tr, l.en), href: l.kind === 'record-screen' ? '/' + l.slug : (l.to ?? '/'), moved: true })),
+          ].slice(0, 6),
     [q, can],
   )
-  const rows = [...pages.map((p) => ({ key: `p-${p.slug}`, title: p.label, sub: L('Sayfa', 'Page'), href: p.slug ? `/${p.slug}` : '/' })), ...hits.map((h) => ({ key: `${h.type}-${h.id}`, title: h.title, sub: `${h.group} · ${h.sub}`, href: entityHref(h.type, h.id) }))]
+  const rows = [...pages.map((p) => ({ key: `p-${p.slug}-${p.moved ? 'm' : 'n'}`, title: p.label, sub: p.moved ? L('Sayfa · yeni yerinde açılır', 'Page · opens at its new place') : L('Sayfa', 'Page'), href: p.href })), ...hits.map((h) => ({ key: `${h.type}-${h.id}`, title: h.title, sub: `${h.group} · ${h.sub}`, href: entityHref(h.type, h.id) }))]
   const go = (href: string) => {
     onClose()
     void navigate({ to: href as never })
@@ -425,7 +459,43 @@ function AboutDialog({ onClose }: { onClose: () => void }) {
   )
 }
 
-type DemoDialog = 'clock' | 'reset' | 'scenarios' | 'about' | 'search' | null
+type DemoDialog = 'clock' | 'reset' | 'scenarios' | 'about' | 'search' | 'preview' | null
+
+function PreviewSheet({ onClose }: { onClose: () => void }) {
+  const d = useDb()
+  const can = useCan()
+  const navigate = useNavigate()
+  const on = d.session.preview
+  const go = (to: string) => {
+    onClose()
+    void navigate({ to: to as never })
+  }
+  return (
+    <Sheet title={L('Gelişmiş konsept ön izlemesi', 'Advanced concept preview')} subtitle={L('V1.5 ve V2 ekranları kodda korunur; ürünün parçası değildir ve menüye bağlantı eklemez.', 'V1.5 and V2 screens are kept in the code; they are not part of the product and add no menu link.')} onClose={onClose}>
+      <div className="space-y-4">
+        <Notice tone={on ? 'hold' : 'blue'}>{on ? L('Ön izleme açık: V1.5 / V2 ekranları “Demo konsepti” bandıyla açılır. Çalışan işlemler yalnız tarayıcıdaki demo kaydını değiştirir.', 'Preview is on: V1.5 / V2 screens open under a “Demo concept” banner. Working actions only change the demo record in this browser.') : L('Ön izleme kapalı: bu ekranlar “bu sürümde etkin değil” sayfası gösterir.', 'Preview is off: these screens show a “not active in this version” page.')}</Notice>
+        {can('preview:use') ? (
+          <button type="button" className={on ? btnSecondary : btnPrimary} onClick={() => runAction((x) => setConceptPreview(x, !on), on ? L('Konsept ön izlemesi kapatıldı.', 'Concept preview is off.') : L('Gelişmiş konsept ön izlemesi açık (demo).', 'Advanced concept preview is on (demo).'))}>
+            {on ? L('Ön izlemeyi kapat', 'Turn the preview off') : L('Ön izlemeyi aç', 'Turn the preview on')}
+          </button>
+        ) : (
+          <p className="text-[13px] text-ink-2">{L('Ön izleme yetkisi yok: Sahip veya Yönetici demo rolüne geçin.', 'No preview permission: switch to the Owner or Manager demo role.')}</p>
+        )}
+        <ul className="divide-y divide-line-soft rounded-xl border border-line">
+          {[...DEFERRED.map((l) => ({ key: l.slug, label: L(l.tr, l.en), scope: l.scope, note: L(l.noteTr ?? '', l.noteEn ?? ''), to: '/' + l.slug })), ...GATED_VIEWS.map((g) => ({ key: g.id, label: L(g.tr, g.en), scope: g.scope, note: L(g.noteTr, g.noteEn), to: g.to }))].map((it) => (
+            <li key={it.key} className="flex items-start justify-between gap-3 px-4 py-3">
+              <span className="min-w-0">
+                <span className="flex items-center gap-2 text-[14px] font-medium">{it.label} <ScopeBadge scope={it.scope} /></span>
+                <span className="mt-0.5 block text-[12.5px] text-ink-2">{it.note}</span>
+              </span>
+              <button type="button" className={btnSecondary} disabled={!on} title={on ? undefined : L('Önce ön izlemeyi açın', 'Turn the preview on first')} onClick={() => go(it.to)}>{L('Aç', 'Open')}</button>
+            </li>
+          ))}
+        </ul>
+      </div>
+    </Sheet>
+  )
+}
 
 function DemoMenu({ open }: { open: (d: DemoDialog) => void }) {
   const d = useDb()
@@ -453,6 +523,9 @@ function DemoMenu({ open }: { open: (d: DemoDialog) => void }) {
             }}
           >
             <Globe size={16} /> {L('Dil: Türkçe → English', 'Language: English → Türkçe')}
+          </DropdownMenu.Item>
+          <DropdownMenu.Item className={menuItem} onSelect={() => open('preview')}>
+            <Flask size={16} /> {L('Gelişmiş konsept ön izlemesi', 'Advanced concept preview')}
           </DropdownMenu.Item>
           <DropdownMenu.Separator className="my-1 h-px bg-line" />
           <DropdownMenu.Label className="px-2.5 pt-1 pb-0.5 text-[12px] text-ink-3">{L('Bağlam', 'Context')}</DropdownMenu.Label>
@@ -508,7 +581,7 @@ function TopBar({ onMenu, open }: { onMenu: () => void; open: (d: DemoDialog) =>
         <List size={20} />
       </button>
       <nav aria-label={L('Konum', 'Location')} className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden text-ink-3 max-sm:*:hidden">
-        {item && <span className="hidden sm:inline">{L(item.group, demoNav().find((g) => g.key === item.group)?.label ?? item.group)}</span>}
+        {item && <span className="hidden sm:inline">{demoNav().find((g) => g.key === item.group)?.label ?? item.group}</span>}
         {item && <span className="hidden text-line sm:inline">/</span>}
         {item ? (
           detail ? (
@@ -588,6 +661,7 @@ export function DemoShell() {
       {dialog === 'scenarios' && <ScenarioSheet onClose={() => setDialog(null)} />}
       {dialog === 'about' && <AboutDialog onClose={() => setDialog(null)} />}
       {dialog === 'search' && <SearchPalette onClose={() => setDialog(null)} />}
+      {dialog === 'preview' && <PreviewSheet onClose={() => setDialog(null)} />}
     </div>
   )
 }

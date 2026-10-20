@@ -86,13 +86,13 @@ export const ENTITY_PATH: Record<LinkType, string> = {
   customer: '/musteriler',
   corporate: '/kurumsal-hesaplar',
   maintenance: '/bakim-servis',
-  damage: '/hasar-kayitlari',
-  incident: '/olay-merkezi',
-  fine: '/ceza-modulu',
+  damage: '/hasar-ve-olaylar',
+  incident: '/hasar-ve-olaylar?sekme=olaylar',
+  fine: '/hasar-ve-olaylar?sekme=cezalar',
   payment: '/finans',
   approval: '/onay-merkezi',
   task: '/gorevler',
-  contract: '/sozlesmeler',
+  contract: '/kiralamalar?gorunum=sozlesmeler',
   lead: '/talep-merkezi',
   quote: '/talep-merkezi',
   partner: '/partnerler',
@@ -107,7 +107,7 @@ const HAS_DETAIL = new Set<LinkType>(['vehicle', 'rental', 'reservation', 'custo
 
 export function entityHref(type: LinkType, id: Id): string {
   const base = ENTITY_PATH[type]
-  return HAS_DETAIL.has(type) ? `${base}/${id}` : `${base}?kayit=${id}`
+  return HAS_DETAIL.has(type) ? `${base}/${id}` : `${base}${base.includes('?') ? '&' : '?'}kayit=${id}`
 }
 
 /** Derived alerts for the acting user (one list for Command Center, Risks, Dashboard and the notification bell). */

@@ -5,15 +5,32 @@ import type { Contract } from '../../core/types'
 import { L } from '../../i18n'
 import { CheckF, TextF } from '../../ui/forms'
 import { runAction, useCan, useDb, useFmt, useUrlState } from '../../ui/hooks'
-import { btnPrimary, btnSecondary, Empty, Facts, FilterBar, FilterSelect, FinanceDialog, Kpis, Link2, Page, SearchBox, Status, Tabs } from '../../ui/kit'
+import { btnPrimary, btnSecondary, Empty, Facts, FilterBar, FilterSelect, FinanceDialog, Kpis, Link2, Page, SearchBox, Status } from '../../ui/kit'
 import { type Col, DataTable, downloadCsv } from '../../ui/table'
 import { RecordDrawer, DrawerSection } from '../fleet/common'
 import { ContractSheet, PrintButton } from '../shared/ContractSheet'
 
+/** Contract templates (Settings → Contract templates): the same data the old Templates tab showed. */
+export function ContractTemplatesPanel() {
+  const d = useDb()
+  return (
+    <div className="grid gap-4 md:grid-cols-2">
+      {d.templates.map((t) => (
+        <div key={t.id} className="rounded-xl border border-line bg-surface p-4">
+          <p className="text-[14.5px] font-semibold">{t.name} <span className="text-[12px] font-normal text-ink-2">({t.lang.toUpperCase()} · v{t.version}{t.active ? '' : ` · ${L('pasif', 'inactive')}`})</span></p>
+          <p className="text-[12.5px] text-ink-2">{L('Seri', 'Series')}: {t.seriesPrefix || '—'} · {t.clauses.length} {L('madde', 'clauses')}</p>
+          <ol className="mt-2 list-decimal space-y-1 pl-5 text-[13px] text-ink-2">{t.clauses.map((cl) => <li key={cl.id}>{cl.title}</li>)}</ol>
+        </div>
+      ))}
+      <p className="text-[12.5px] text-ink-2 md:col-span-2">{L('Şablon metinleri örnektir. Hukuki geçerlilik için avukat incelemesi gerekir; ACARVO sözleşmeyi hazırlar, dış imza süreci gerekiyorsa kiracıyla ayrıca yürütülür (e-imza servisi yoktur).', 'The template texts are samples. Legal validity needs a lawyer’s review; ACARVO drafts the contract and, where needed, an external signature process runs separately with the renter (there is no e-signature service).')}</p>
+    </div>
+  )
+}
+
 export function ContractsPage() {
   const d = useDb()
   const f = useFmt()
-  const [tab, setTab] = useUrlState('sekme', 'sozlesmeler')
+  const tab = 'sozlesmeler'
   const [q, setQ] = useUrlState('q')
   const [status, setStatus] = useUrlState('durum', 'all')
   const [sel, setSel] = useUrlState('kayit')
@@ -37,20 +54,8 @@ export function ContractsPage() {
       description={L('Üretilen sözleşme metni dondurulur; imzalı sürüm değişmez. Koşullar değişirse yeni sürüm üretilir ve imza yeni sürüme taşınmaz. İmza, personel cihazında yüz yüze alınır (e-imza servisi yoktur).', 'The issued contract text is frozen; a signed version is immutable. If terms change a new version is issued and the signature is not carried over. The signature is captured in person on a staff device (there is no e-signature service).')}
       actions={<button type="button" className={btnSecondary} onClick={() => downloadCsv('sozlesmeler', cols, rows)}>CSV</button>}
     >
-      <Kpis items={[{ label: L('İmza bekleyen', 'Awaiting signature'), value: d.contracts.filter((c) => c.status === 'issued').length, tone: d.contracts.some((c) => c.status === 'issued') ? 'hold' : undefined, to: '/sozlesmeler?durum=issued' }, { label: L('İmzalı', 'Signed'), value: d.contracts.filter((c) => c.status === 'signed').length }, { label: L('Yerine geçilen sürüm', 'Superseded'), value: d.contracts.filter((c) => c.status === 'superseded').length }]} />
-      <Tabs tabs={[{ id: 'sozlesmeler', label: L('Sözleşmeler', 'Contracts'), count: d.contracts.length }, { id: 'sablonlar', label: L('Şablonlar', 'Templates'), count: d.templates.length }]} value={tab as 'sozlesmeler' | 'sablonlar'} onChange={setTab} label={L('Sözleşme bölümleri', 'Contract sections')} />
-      {tab === 'sablonlar' ? (
-        <div className="grid gap-4 md:grid-cols-2">
-          {d.templates.map((t) => (
-            <div key={t.id} className="rounded-xl border border-line bg-surface p-4">
-              <p className="text-[14.5px] font-semibold">{t.name} <span className="text-[12px] font-normal text-ink-2">({t.lang.toUpperCase()} · v{t.version}{t.active ? '' : ` · ${L('pasif', 'inactive')}`})</span></p>
-              <p className="text-[12.5px] text-ink-2">{L('Seri', 'Series')}: {t.seriesPrefix || '—'} · {t.clauses.length} {L('madde', 'clauses')}</p>
-              <ol className="mt-2 list-decimal space-y-1 pl-5 text-[13px] text-ink-2">{t.clauses.map((c) => <li key={c.id}>{c.title}</li>)}</ol>
-            </div>
-          ))}
-          <p className="text-[12.5px] text-ink-2 md:col-span-2">{L('Şablonlar Ayarlar → Sözleşme Dilleri’nde yönetilir. Hukuki geçerlilik için avukat incelemesi gerekir; demo metinleri örnektir.', 'Templates are managed in Settings → Contract Languages. Legal validity needs a lawyer’s review; the demo texts are samples.')}</p>
-        </div>
-      ) : (
+      <Kpis items={[{ label: L('İmza bekleyen', 'Awaiting signature'), value: d.contracts.filter((c) => c.status === 'issued').length, tone: d.contracts.some((c) => c.status === 'issued') ? 'hold' : undefined, to: '/kiralamalar?gorunum=sozlesmeler&durum=issued' }, { label: L('İmzalı', 'Signed'), value: d.contracts.filter((c) => c.status === 'signed').length }, { label: L('Yerine geçilen sürüm', 'Superseded'), value: d.contracts.filter((c) => c.status === 'superseded').length }]} />
+      {tab === 'sozlesmeler' && (
         <>
           <FilterBar onReset={() => { setQ(''); setStatus('all') }} active={q !== '' || status !== 'all'}>
             <SearchBox label={L('Sözleşmelerde ara', 'Search contracts')} placeholder={L('No, kiralama, kiracı…', 'No, rental, renter…')} value={q} onChange={setQ} />

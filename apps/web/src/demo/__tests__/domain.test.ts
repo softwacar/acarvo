@@ -10,19 +10,19 @@ import { postCharge } from '../core/ops/finance'
 import { assertVehicleFree, confirmReservation, createReservation, issueContract, signContract } from '../core/ops/rentals'
 import { buildSeed } from '../core/seed'
 import type { Db } from '../core/types'
-import { NAV_ITEMS } from '../../nav'
+import { DEFERRED, NAV_V1 } from '../core/modules'
 
 const mkDb = (): Db => buildSeed(new Date('2026-10-19T08:00:00Z'))
 const as = (d: Db, id: string) => { d.session.userId = id }
 const code = (fn: () => unknown) => { try { fn() } catch (e) { return e instanceof DemoError ? e.code ?? e.message : String(e) } return 'NO_ERROR' }
 
 describe('routes', () => {
-  it('every one of the 36 canonical sidebar links has a demo route', () => {
+  it('every one of the 21 V1 menu screens and every deferred screen has a demo route', () => {
     const src = readFileSync(resolve(__dirname, '../router.tsx'), 'utf8')
     const paths = new Set([...src.matchAll(/\['(\/[^']*)',/g)].map((m) => m[1]))
-    const links = NAV_ITEMS.map((i) => (i.slug ? `/${i.slug}` : '/'))
-    expect(links.length).toBe(36)
-    for (const l of links) expect(paths.has(l), `missing route ${l}`).toBe(true)
+    expect(NAV_V1.length).toBe(21)
+    for (const n of NAV_V1) expect(paths.has(n.slug ? '/' + n.slug : '/'), 'missing route ' + n.slug).toBe(true)
+    for (const l of DEFERRED) expect(paths.has('/' + l.slug), 'missing deferred route ' + l.slug).toBe(true)
   })
   it('the platform console and partner portal are separate context routes', () => {
     const src = readFileSync(resolve(__dirname, '../router.tsx'), 'utf8')

@@ -41,7 +41,7 @@ export const STATUS: Record<string, Dict> = {
   incident: { open: s('Açık', 'Open', 'alert'), investigating: s('İnceleniyor', 'Investigating', 'hold'), resolved: s('Çözüldü', 'Resolved', 'ok'), closed: s('Kapalı', 'Closed', 'muted') },
   severity: { low: s('Düşük', 'Low', 'muted'), medium: s('Orta', 'Medium', 'hold'), high: s('Yüksek', 'High', 'alert'), critical: s('Kritik', 'Critical', 'alert'), minor: s('Hafif', 'Minor', 'muted'), moderate: s('Orta', 'Moderate', 'hold'), severe: s('Ağır', 'Severe', 'alert') },
   fine: { recorded: s('Kaydedildi', 'Recorded', 'hold'), liability_pending: s('Sorumluluk bekleniyor', 'Liability pending', 'hold'), assigned: s('Sorumlu belirlendi', 'Assigned', 'blue'), closed: s('Kapalı', 'Closed', 'ok') },
-  task: { open: s('Açık', 'Open', 'hold'), in_progress: s('Devam ediyor', 'In progress', 'blue'), done: s('Tamamlandı', 'Done', 'ok') },
+  task: { open: s('Açık', 'Open', 'hold'), in_progress: s('Devam ediyor', 'In progress', 'blue'), done: s('Tamamlandı', 'Done', 'ok'), cancelled: s('İptal', 'Cancelled', 'muted') },
   priority: { urgent: s('Acil', 'Urgent', 'alert'), high: s('Yüksek', 'High', 'hold'), normal: s('Normal', 'Normal', 'muted') },
   approval: { requested: s('Talep edildi', 'Requested', 'hold'), approved: s('Onaylandı (uygulanmadı)', 'Approved (not applied)', 'blue'), rejected: s('Reddedildi', 'Rejected', 'muted'), applied: s('Uygulandı', 'Applied', 'ok') },
   payment: { recorded: s('Kaydedildi (uygulanmadı)', 'Recorded (not applied)', 'hold'), applied: s('Uygulandı', 'Applied', 'ok'), voided: s('İptal (ters kayıt)', 'Voided', 'muted'), refunded: s('İade edildi', 'Refunded', 'muted'), forfeited: s('Politika bedeli', 'Policy fee', 'alert') },

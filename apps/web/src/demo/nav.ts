@@ -1,107 +1,80 @@
-import { NAV, type NavItem } from '@/nav'
+import { Bandaids, Buildings, CalendarBlank, CalendarCheck, CarProfile, ClipboardText, ClockCounterClockwise, Coins, FileText, GearSix, House, type Icon, Key, MapPin, Receipt, SealCheck, ShieldCheck, Tag, Tray, Users, Vault, Wrench } from '@phosphor-icons/react'
 import { L } from './i18n'
+import { GROUPS, type GroupKey, legacyOf, NAV_V1, profileLinks } from './core/modules'
+import type { Db } from './core/types'
 
-// The company sidebar is the canonical 36-link list of spec §4 (same slugs and icons as the application). The demo only
-// adds English labels and the permission that makes a link visible. Platform Console and the Partner Portal are
-// separate contexts and never appear here.
+// The company sidebar is the V1 menu of the decision document (H.2): 6 groups, 21 links. The 36 legacy links of spec §4
+// are not links any more; each one maps to a screen, a view or a tab of these 21 (core/modules.ts, LEGACY) and its old
+// address redirects there. Platform Console and the Partner Portal are separate contexts and never appear here.
 
-const EN: Record<string, string> = {
-  '': 'Home',
-  'komuta-merkezi': 'Command Center',
-  'filo-asistani': 'Fleet Assistant',
-  rezervasyonlar: 'Reservations',
-  kiralamalar: 'Rentals',
-  takvim: 'Calendar',
-  gorevler: 'Tasks',
-  araclar: 'Vehicles',
-  'bakim-servis': 'Maintenance & Service',
-  'olay-merkezi': 'Incident Center',
-  'hasar-kayitlari': 'Damage Records',
-  'ceza-modulu': 'Fines',
-  musteriler: 'Customers',
-  'kurumsal-hesaplar': 'Corporate Accounts',
-  'talep-merkezi': 'Lead Center',
-  partnerler: 'Partners',
-  'arac-tedarikcileri': 'Vehicle Suppliers',
-  fiyatlandirma: 'Pricing',
-  'onay-merkezi': 'Approval Center',
-  kurallar: 'Rules',
-  'gelir-kontrolu': 'Revenue Control',
-  'riskler-ve-istisnalar': 'Risks & Exceptions',
-  'kapasite-planlama': 'Capacity Planning',
-  'filo-analizi': 'Fleet Analysis',
-  firsatlar: 'Opportunities',
-  raporlar: 'Reports',
-  finans: 'Finance',
-  masraflar: 'Expenses',
-  'sube-kasalari': 'Branch Cash Registers',
-  sozlesmeler: 'Contracts',
-  'belge-merkezi': 'Document Center',
-  'islem-gecmisi': 'Audit Trail',
-  subeler: 'Branches',
-  kullanicilar: 'Users',
-  'roller-ve-yetkiler': 'Roles & Permissions',
-  ayarlar: 'Settings',
-}
-const GROUP_EN: Record<string, string> = { Genel: 'General', Operasyon: 'Operations', 'Müşteri & Ticari': 'Customers & Commercial', 'Kontrol & Analiz': 'Control & Analysis', Finans: 'Finance', Kayıtlar: 'Records', Yönetim: 'Administration' }
-
-export const PERM_OF: Record<string, string> = {
-  '': 'dashboard:view',
-  'komuta-merkezi': 'command:view',
-  'filo-asistani': 'assistant:view',
-  rezervasyonlar: 'reservations:view',
-  kiralamalar: 'rentals:view',
-  takvim: 'calendar:view',
-  gorevler: 'tasks:view',
-  araclar: 'vehicles:view',
-  'bakim-servis': 'maintenance:view',
-  'olay-merkezi': 'incidents:view',
-  'hasar-kayitlari': 'damages:view',
-  'ceza-modulu': 'fines:view',
-  musteriler: 'customers:view',
-  'kurumsal-hesaplar': 'corporate:view',
-  'talep-merkezi': 'leads:view',
-  partnerler: 'partners:view',
-  'arac-tedarikcileri': 'suppliers:view',
-  fiyatlandirma: 'pricing:view',
-  'onay-merkezi': 'approvals:view',
-  kurallar: 'rules:view',
-  'gelir-kontrolu': 'revenue:view',
-  'riskler-ve-istisnalar': 'risks:view',
-  'kapasite-planlama': 'capacity:view',
-  'filo-analizi': 'fleet:view',
-  firsatlar: 'opportunities:view',
-  raporlar: 'reports:view',
-  finans: 'finance:view',
-  masraflar: 'expenses:view',
-  'sube-kasalari': 'cash:view',
-  sozlesmeler: 'contracts:view',
-  'belge-merkezi': 'documents:view',
-  'islem-gecmisi': 'audit:view',
-  subeler: 'branches:view',
-  kullanicilar: 'users:view',
-  'roller-ve-yetkiler': 'roles:view',
-  ayarlar: 'settings:view',
+const ICON: Record<string, Icon> = {
+  '': House,
+  islerim: Tray,
+  rezervasyonlar: CalendarCheck,
+  kiralamalar: Key,
+  takvim: CalendarBlank,
+  gorevler: ClipboardText,
+  araclar: CarProfile,
+  'bakim-servis': Wrench,
+  'hasar-ve-olaylar': Bandaids,
+  musteriler: Users,
+  'kurumsal-hesaplar': Buildings,
+  fiyatlandirma: Tag,
+  finans: Coins,
+  masraflar: Receipt,
+  'sube-kasalari': Vault,
+  raporlar: FileText,
+  'onay-merkezi': SealCheck,
+  subeler: MapPin,
+  kullanicilar: ShieldCheck,
+  'islem-gecmisi': ClockCounterClockwise,
+  ayarlar: GearSix,
 }
 
 export interface DemoNavItem {
   slug: string
   label: string
-  icon: NavItem['icon']
+  icon: Icon
   perm: string
-  group: string
+  group: GroupKey
+  tier: 'basic' | 'advanced'
 }
 export interface DemoNavGroup {
-  key: string
+  key: GroupKey
   label: string
   items: DemoNavItem[]
 }
 
+const itemOf = (n: (typeof NAV_V1)[number]): DemoNavItem => ({ slug: n.slug, label: L(n.tr, n.en), icon: ICON[n.slug] ?? GearSix, perm: n.perm, group: n.group, tier: n.tier })
+
+/** All 21 links grouped (no profile or permission applied). */
 export function demoNav(): DemoNavGroup[] {
-  return NAV.map((g) => ({
-    key: g.label,
-    label: L(g.label, GROUP_EN[g.label] ?? g.label),
-    items: g.items.map((i) => ({ slug: i.slug, label: L(i.label, EN[i.slug] ?? i.label), icon: i.icon, perm: PERM_OF[i.slug] ?? '', group: g.label })),
-  }))
+  return GROUPS.map((g) => ({ key: g.key, label: L(g.tr, g.en), items: NAV_V1.filter((n) => n.group === g.key).map(itemOf) }))
 }
-export const navItemOf = (slug: string) => demoNav().flatMap((g) => g.items).find((i) => i.slug === slug)
+
+/** The links the sidebar shows: the working profile decides what is shown by default; the permission decides who may see it. */
+export function visibleNav(d: Db, can: (perm: string) => boolean): DemoNavGroup[] {
+  const shown = new Set(profileLinks(d.settings.workspace, { activeBranches: d.branches.filter((b) => b.active).length }))
+  return demoNav()
+    .map((g) => ({ ...g, items: g.items.filter((i) => shown.has(i.slug) && can(i.perm)) }))
+    .filter((g) => g.items.length > 0)
+}
+
+/** Screens the person may open that the profile keeps out of the sidebar (reachable from the user menu: nothing is lost). */
+export function otherScreens(d: Db, can: (perm: string) => boolean): DemoNavItem[] {
+  const shown = new Set(profileLinks(d.settings.workspace, { activeBranches: d.branches.filter((b) => b.active).length }))
+  return demoNav().flatMap((g) => g.items).filter((i) => !shown.has(i.slug) && can(i.perm))
+}
+
+/** Nav item for a path segment; an old (legacy) segment resolves to the screen that now holds it. */
+export function navItemOf(slug: string): DemoNavItem | undefined {
+  const all = demoNav().flatMap((g) => g.items)
+  const direct = all.find((i) => i.slug === slug)
+  if (direct) return direct
+  const leg = legacyOf(slug)
+  if (leg?.to) {
+    const target = leg.to.split('?')[0]!.replace(/^\//, '').split('/')[0] ?? ''
+    return all.find((i) => i.slug === target)
+  }
+  return undefined
+}

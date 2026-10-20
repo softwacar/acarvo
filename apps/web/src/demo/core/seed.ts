@@ -4,7 +4,8 @@ import { addHistory, logEvent, nextId, nextNo } from './helpers'
 import { addDaysYmd, dayOf, zonedIso } from './time'
 import { acceptOffer, addSupplierOffer, addWaitlist, createLead, createPartner, createQuote, createSettlement, createSourcingRequest, createSupplier, paySettlement, payPartnerCommission, receiveEngagement, returnEngagement, setLeadStatus } from './ops/commercial'
 import { applyApproval, createException, createExpense, decideApproval, requestApproval, saveRule } from './ops/control'
-import { addIncidentEvidence, chargeDamageToCustomer, chargeFineToCustomer, assignFine, createDamage, createFine, createIncident, createTask, claimTask, completeMaintenance, linkRepair, payFineToAuthority, planMaintenance, recordInsurerRecovery, setDamageLiability, setIncidentStatus, setTaskStatus, startMaintenance } from './ops/fleet'
+import { addIncidentEvidence, chargeDamageToCustomer, chargeFineToCustomer, assignFine, createDamage, createFine, createIncident, completeMaintenance, linkRepair, payFineToAuthority, planMaintenance, recordInsurerRecovery, setDamageLiability, setIncidentStatus, startMaintenance } from './ops/fleet'
+import { claimTask, completeTask, createTask } from './ops/tasks'
 import { closeSession, forfeitAdvance, holdDeposit, manualCashMove, openSession, recordPayment, releaseDeposit } from './ops/finance'
 import { closeFinancial, closeOperational, confirmReservation, convertReservation, createReservation, deliverRental, exceptionClose, find, returnRental, signContract, updateGate, cancelReservation, markNoShow, createRental } from './ops/rentals'
 import { type DbSeedCtx, customersData } from './seed-data'
@@ -676,7 +677,7 @@ function seedOperations(d: Db, T: (o: number, hm?: string, z?: string) => string
   mkTask(B('Gecikmiş iade için müşteriyi arayın', 'Call the customer about the overdue return'), B('K-… kiralaması planlanan iadeyi geçti. Müşteriyle iletişime geçip yeni iade zamanını not edin.', 'Rental K-… passed its planned return. Contact the customer and note the new return time.'), 'urgent', [0, '12:00'], { owner: 'u-ops1', branch: 'b-sjj', link: { type: 'rental', id: rentals.rd1! } })
   mkTask(B('Duster aracı yıkatın', 'Have the Duster washed'), B('Bugün 15:30 teslim öncesi araç temizliği.', 'Vehicle cleaning before the 15:30 handover today.'), 'high', [0, '14:00'], { owner: 'u-ops1', branch: 'b-sjj', link: { type: 'vehicle', id: veh(7).id } })
   mkTask(B('Mostar şubesi: sınıf rezervasyonuna araç atayın', 'Mostar branch: assign a vehicle to the class reservation'), B('Bugün 18:00 teslim edilecek Ekonomi sınıfı rezervasyona belirli araç atanmalı.', 'A specific vehicle must be assigned to the Economy class reservation due for handover today at 18:00.'), 'high', [0, '16:00'], { owner: 'u-ops2', branch: 'b-mst' })
-  const t4 = mkTask(B('Sağ arka kapı onarımı için servis teklifi alın', 'Get a service quote for the rear right door repair'), B('Hasar dosyası bağlı onarım için iki servisten teklif alın.', 'Get quotes from two services for the repair linked to the damage file.'), 'normal', [2, '17:00'], { recipients: ['u-fleet', 'u-mgr2'], branch: 'b-dbv', link: { type: 'damage', id: dm2.id } })
+  const t4 = mkTask(B('Sağ arka kapı onarımı için servis teklifi alın', 'Get a service quote for the rear right door repair'), B('Hasar dosyası bağlı onarım için iki servisten teklif alın.', 'Get quotes from two services for the repair linked to the damage file.'), 'normal', [2, '17:00'], { recipients: ['u-mgr2', 'u-ops3'], branch: 'b-dbv', link: { type: 'damage', id: dm2.id } })
   void t4
   mkTask(B('Havalimanı otopark kartlarını yenileyin', 'Renew the airport car park cards'), B('Yıllık otopark erişim kartı yenileme.', 'Annual car park access card renewal.'), 'normal', [5, '17:00'], { pool: true, branch: 'b-sjj' })
   const pool = mkTask(B('Araç sigorta poliçelerini kontrol edin', 'Check the vehicle insurance policies'), B('Süresi yaklaşan poliçelerin listesini çıkarıp yenileme teklifi isteyin.', 'List the policies that are about to expire and request renewal quotes.'), 'high', [3, '17:00'], { pool: true })
@@ -689,7 +690,7 @@ function seedOperations(d: Db, T: (o: number, hm?: string, z?: string) => string
   const done1 = mkTask(B('Müşteri sözleşme kopyalarını arşivleyin', 'Archive the customer contract copies'), B('Geçen haftanın kapanan kiralamaları.', 'Last week\'s closed rentals.'), 'normal', [-1, '17:00'], { owner: 'u-ops1', created: -4 })
   as('u-ops1')
   setNow(T(-1, '16:00'))
-  setTaskStatus(d, done1.id, 'done')
+  completeTask(d, done1.id)
   as('u-mgr')
   mkTask(B('Yeni sezon fiyat listesi toplantısı', 'New-season price list meeting'), B('Yaz sezonu tarifelerini gözden geçirin.', 'Review the summer season rates.'), 'normal', [4, '11:00'], { owner: 'u-owner' })
   mkTask(B('Lastik değişimi planı (MST)', 'Tyre change plan (MST)'), B('Vito için lastik değişimi yarın.', 'Tyre change for the Vito tomorrow.'), 'normal', [1, '09:00'], { owner: 'u-fleet', branch: 'b-mst', link: { type: 'maintenance', id: m1.id } })

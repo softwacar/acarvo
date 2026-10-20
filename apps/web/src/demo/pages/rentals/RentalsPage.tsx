@@ -7,12 +7,47 @@ import type { Rental } from '../../core/types'
 import { L } from '../../i18n'
 import { branchOptions } from '../../ui/forms'
 import { useBranchScope, useCan, useDb, useFmt, useUrlState } from '../../ui/hooks'
-import { btnPrimary, btnSecondary, Empty, FilterBar, FilterSelect, Kpis, Page, SearchBox, Status } from '../../ui/kit'
+import { btnPrimary, btnSecondary, Embedded, Empty, FilterBar, FilterSelect, Kpis, Page, SearchBox, Status, Tabs } from '../../ui/kit'
+import { ContractsPage } from '../records/ContractsPage'
 import { CustomerLink, VehicleCell } from '../../ui/domain'
 import { STATUS } from '../../ui/status'
 import { type Col, DataTable, downloadCsv } from '../../ui/table'
 
+type View = 'liste' | 'sozlesmeler'
+
+/** Rentals with a second view: the contracts of those rentals (the old Contracts link, decision document I.2 row 30). */
 export function RentalsPage() {
+  const can = useCan()
+  const [viewRaw, setView] = useUrlState('gorunum', 'liste')
+  const view: View = viewRaw === 'sozlesmeler' && can('contracts:view') ? 'sozlesmeler' : 'liste'
+  const tabs = (
+    <Tabs<View>
+      label={L('Kiralama görünümleri', 'Rental views')}
+      value={view}
+      onChange={setView}
+      tabs={[
+        { id: 'liste', label: L('Kiralamalar', 'Rentals') },
+        { id: 'sozlesmeler', label: L('Sözleşmeler', 'Contracts'), hidden: !can('contracts:view') },
+      ]}
+    />
+  )
+  if (view === 'sozlesmeler')
+    return (
+      <div className="space-y-5">
+        <header>
+          <h1 className="text-[24px] font-semibold tracking-[-0.025em]">{L('Kiralamalar', 'Rentals')}</h1>
+          <p className="mt-1 max-w-[860px] text-ink-2">{L('Sözleşme kiralamanın parçasıdır: üretilen metin dondurulur, imza yüz yüze alınır. Şablonlar Ayarlar → Sözleşme şablonları altındadır.', 'The contract is part of the rental: the issued text is frozen and the signature is taken in person. Templates are under Settings → Contract templates.')}</p>
+        </header>
+        {tabs}
+        <Embedded>
+          <ContractsPage />
+        </Embedded>
+      </div>
+    )
+  return <RentalList tabs={tabs} />
+}
+
+function RentalList({ tabs }: { tabs: React.ReactNode }) {
   const d = useDb()
   const can = useCan()
   const f = useFmt()
@@ -95,6 +130,7 @@ export function RentalsPage() {
         </>
       }
     >
+      {tabs}
       <Kpis
         items={[
           { label: L('Teslime hazırlanan', 'Preparing'), value: count((r) => r.status === 'prepared'), to: '/kiralamalar?durum=prepared' },

@@ -8,7 +8,9 @@ import type { Db, Id, Iso, LinkType } from '../../core/types'
 import { L, locale } from '../../i18n'
 import { branchOptions, classOptions } from '../../ui/forms'
 import { entityHref, useBranchScope, useDb, useFmt, useUrlState } from '../../ui/hooks'
-import { btnSecondary, Empty, FilterBar, FilterSelect, Page, Panel, Segmented } from '../../ui/kit'
+import { btnSecondary, Embedded, Empty, FilterBar, FilterSelect, Page, Panel, Segmented } from '../../ui/kit'
+import { GatedView } from '../../ui/gate'
+import { CapacityPage } from '../analytics/CapacityPage'
 import { DayAxis, HoldBars, TimelineLegend, VehicleCell } from '../../ui/domain'
 
 // Calendar views are projections of the same records the lists use: pickups, returns, maintenance and transfers.
@@ -54,7 +56,7 @@ function eventsOf(d: Db, branches: Id[], classId: string): CalEvent[] {
   return out.sort((a, b) => a.at.localeCompare(b.at))
 }
 
-type View = 'hafta' | 'gun' | 'ay' | 'gundem'
+type View = 'hafta' | 'gun' | 'ay' | 'gundem' | 'kapasite'
 
 export function CalendarPage() {
   const d = useDb()
@@ -67,6 +69,7 @@ export function CalendarPage() {
   const [branch, setBranch] = useUrlState('sube', 'all')
   const [cls, setCls] = useUrlState('sinif', 'all')
   const v = (view as View) || 'hafta'
+  const capacityView = view === 'kapasite'
   const branches = branch === 'all' ? active : [branch]
   const events = useMemo(() => eventsOf(d, branches, cls), [d, branches.join(','), cls]) // eslint-disable-line react-hooks/exhaustive-deps
   const step = v === 'ay' ? 30 : v === 'gundem' ? 14 : v === 'gun' ? 1 : 7
@@ -85,18 +88,25 @@ export function CalendarPage() {
       description={L('Teslim, iade, bakım ve transferler; kayıtların aynı verisinden çizilir. Çizelge araç müsaitliğini (Availability) gösterir, hazırlığı değil.', 'Pickups, returns, maintenance and transfers drawn from the same records. The timeline shows vehicle availability, not readiness.')}
     >
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <Segmented<View> label={L('Takvim görünümü', 'Calendar view')} value={v} onChange={setView} options={[{ id: 'gun', label: L('Gün', 'Day') }, { id: 'hafta', label: L('Hafta', 'Week') }, { id: 'ay', label: L('Ay', 'Month') }, { id: 'gundem', label: L('Gündem', 'Agenda') }]} />
-        <div className="flex items-center gap-2">
+        <Segmented<View> label={L('Takvim görünümü', 'Calendar view')} value={v} onChange={setView} options={[{ id: 'gun', label: L('Gün', 'Day') }, { id: 'hafta', label: L('Hafta', 'Week') }, { id: 'ay', label: L('Ay', 'Month') }, { id: 'gundem', label: L('Gündem', 'Agenda') }, ...(d.session.preview || capacityView ? [{ id: 'kapasite' as View, label: L('Kapasite (V1.5)', 'Capacity (V1.5)') }] : [])]} />
+        {!capacityView && <div className="flex items-center gap-2">
           <button type="button" className={cn(btnSecondary, 'px-2.5')} aria-label={L('Önceki', 'Previous')} onClick={() => shift(-1)}><CaretLeft size={15} /></button>
           <span className="min-w-[150px] text-center text-[14px] font-medium capitalize">{title}</span>
           <button type="button" className={cn(btnSecondary, 'px-2.5')} aria-label={L('Sonraki', 'Next')} onClick={() => shift(1)}><CaretRight size={15} /></button>
           <button type="button" className={btnSecondary} disabled={date === today} title={date === today ? L('Zaten bugünü görüyorsunuz', 'You are already viewing today') : undefined} onClick={() => setDate(today)}>{L('Bugün', 'Today')}</button>
-        </div>
+        </div>}
       </div>
-      <FilterBar onReset={() => { setBranch('all'); setCls('all') }} active={branch !== 'all' || cls !== 'all'}>
+      {capacityView && (
+        <GatedView title={L('Kapasite', 'Capacity')} note={L('Şube × sınıf × gün kapasitesi Takvim’in V1.5 görünümüdür. V1’de onay belirli araca bağlıdır; araç uygunluğunu bu ekranın çizelge görünümlerinden izleyin.', 'Branch × class × day capacity is the V1.5 view of the Calendar. In V1 a confirmation is tied to a specific vehicle; follow vehicle availability in the timeline views of this screen.')}>
+          <Embedded>
+            <CapacityPage />
+          </Embedded>
+        </GatedView>
+      )}
+      {!capacityView && <FilterBar onReset={() => { setBranch('all'); setCls('all') }} active={branch !== 'all' || cls !== 'all'}>
         <FilterSelect label={L('Şube', 'Branch')} value={branch} onChange={setBranch} options={[{ id: 'all', label: L('Tüm şubeler', 'All branches') }, ...branchOptions(d, active)]} />
         <FilterSelect label={L('Sınıf', 'Class')} value={cls} onChange={setCls} options={[{ id: 'all', label: L('Tüm sınıflar', 'All classes') }, ...classOptions(d)]} />
-      </FilterBar>
+      </FilterBar>}
 
       {v === 'hafta' && <WeekTimeline from={date} days={7} branches={branches} cls={cls} />}
       {v === 'gun' && <DayAgenda events={eventsOn(date)} />}

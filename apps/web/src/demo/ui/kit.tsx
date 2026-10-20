@@ -1,6 +1,6 @@
 import { ArrowRight, CaretRight, ClockCounterClockwise, Info, MagnifyingGlass, WarningCircle, X } from '@phosphor-icons/react'
 import { Link } from '@tanstack/react-router'
-import { type ReactNode, useEffect, useId, useRef, useState } from 'react'
+import { createContext, type ReactNode, useContext, useEffect, useId, useRef, useState } from 'react'
 import { Input } from '@/components/fields'
 import { Plate } from '@/components/Plate'
 import type { Tone } from '@/lib/finance-labels'
@@ -20,12 +20,19 @@ export const btnDanger = 'inline-flex h-10 items-center justify-center gap-2 rou
 
 // ---------------------------------------------------------------- page scaffolding
 
+const EmbeddedCtx = createContext(false)
+/** A screen shown inside another screen (a view or tab of the 21-link menu): its title becomes a section heading, not a second h1. */
+export function Embedded({ children }: { children: ReactNode }) {
+  return <EmbeddedCtx.Provider value>{children}</EmbeddedCtx.Provider>
+}
+
 export function Page({ title, description, actions, children }: { title: string; description?: ReactNode; actions?: ReactNode; children: ReactNode }) {
+  const embedded = useContext(EmbeddedCtx)
   return (
     <div className="space-y-5">
       <header className="flex flex-wrap items-end justify-between gap-x-4 gap-y-3">
         <div className="min-w-0">
-          <h1 className="text-[24px] font-semibold tracking-[-0.025em]">{title}</h1>
+          {embedded ? <h2 className="text-[18px] font-semibold tracking-[-0.02em]">{title}</h2> : <h1 className="text-[24px] font-semibold tracking-[-0.025em]">{title}</h1>}
           {description && <p className="mt-1 max-w-[860px] text-ink-2">{description}</p>}
         </div>
         {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
