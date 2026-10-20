@@ -1,3 +1,4 @@
+import { LinkedTasks } from '../../ui/linkedTasks'
 import { Plus } from '@phosphor-icons/react'
 import { useState } from 'react'
 import { fmt, parseAmount, sumByCur } from '../../core/money'
@@ -111,6 +112,7 @@ function Drawer({ m, onClose }: { m: Maintenance; onClose: () => void }) {
           </ActionRow>
         </DrawerSection>
       )}
+      <LinkedTasks type="maintenance" id={m.id} defaultTitle={`${m.no}: `} />
       <DrawerSection title={L('Geçmiş', 'History')}><Timeline entries={m.history} /></DrawerSection>
       {dlg === 'complete' && <CompleteDialog m={m} onClose={() => setDlg(null)} />}
       {dlg === 'cancel' && <PromptDialog title={L('Bakımı iptal et', 'Cancel maintenance')} description={L('Araç, bu aralık için uygunluğa geri döner.', 'The vehicle returns to availability for this window.')} label={L('Gerekçe', 'Reason')} confirm={L('İptal et', 'Cancel')} danger run={(t) => act((s) => cancelMaintenance(s, m.id, t), L('Bakım iptal edildi.', 'Maintenance cancelled.')) as never} onClose={() => setDlg(null)} />}

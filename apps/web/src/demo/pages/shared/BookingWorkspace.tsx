@@ -1,4 +1,4 @@
-import { X } from '@phosphor-icons/react'
+import { Plus, X } from '@phosphor-icons/react'
 import { useNavigate } from '@tanstack/react-router'
 import { useMemo, useState } from 'react'
 import { capacityCell, checkVehicleAvailable, readinessOf, type ReadinessItem } from '../../core/calc/availability'
@@ -12,8 +12,9 @@ import type { Cur, Db, Id, Iso, Reservation } from '../../core/types'
 import { L } from '../../i18n'
 import { CheckF, ComboF, DateTimeF, SelectF, AreaF, branchOptions, classOptions } from '../../ui/forms'
 import { PriceBreakdown, ReadinessList } from '../../ui/domain'
-import { runAction, useBranchScope, useDb, useFmt } from '../../ui/hooks'
-import { ActionError, BackLink, btnPrimary, btnSecondary, Facts, Page, Panel } from '../../ui/kit'
+import { runAction, useBranchScope, useCan, useDb, useFmt } from '../../ui/hooks'
+import { NewCustomerDialog } from '../customers/CustomersPage'
+import { ActionError, BackLink, btnPrimary, btnSecondary, btnSmall, Facts, Notice, Page, Panel } from '../../ui/kit'
 import { CHANNEL_LABEL } from '../../ui/status'
 
 // One booking workspace for a new reservation, an edited reservation and a directly prepared rental. The summary on the
@@ -62,7 +63,8 @@ export function BookingWorkspace({ mode, edit, preset = {} }: { mode: Mode; edit
   const [driverPick, setDriverPick] = useState('')
   const [channel, setChannel] = useState<Reservation['channel']>(edit?.channel ?? 'phone')
   const [notes, setNotes] = useState(edit?.notes ?? '')
-  const [confirmNow, setConfirmNow] = useState(false)
+  const can = useCan()
+  const [newCustomer, setNewCustomer] = useState(false)
   const [ackPrice, setAckPrice] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [fields, setFields] = useState<Record<string, string>>({})
@@ -115,7 +117,7 @@ export function BookingWorkspace({ mode, edit, preset = {} }: { mode: Mode; edit
     if (returnBranchId === pickupBranchId) setReturnBranchId(id)
   }
 
-  const submit = () => {
+  const submit = (kind: 'pending' | 'confirm' = 'pending') => {
     setError(null)
     setFields({})
     const done = (to: string) => void navigate({ to: to as never })
@@ -144,7 +146,7 @@ export function BookingWorkspace({ mode, edit, preset = {} }: { mode: Mode; edit
       done(`/rezervasyonlar/${edit.id}`)
       return
     }
-    const r = runAction((x) => createReservation(x, { customerId, corporateId: corporateId || undefined, classId, vehicleId: vehicleId || undefined, pickupBranchId, returnBranchId, pickupAt, returnAt, currency, extras: extraList, insuranceId: insuranceId || undefined, drivers: [customerId, ...drivers], channel, notes, status: confirmNow ? 'confirmed' : 'pending' }), confirmNow ? L('Rezervasyon oluşturuldu ve onaylandı.', 'Reservation created and confirmed.') : L('Rezervasyon oluşturuldu (bekliyor; kapasite tutmaz).', 'Reservation created (pending; holds no capacity).'))
+    const r = runAction((x) => createReservation(x, { customerId, corporateId: corporateId || undefined, classId, vehicleId: vehicleId || undefined, pickupBranchId, returnBranchId, pickupAt, returnAt, currency, extras: extraList, insuranceId: insuranceId || undefined, drivers: [customerId, ...drivers], channel, notes, status: kind === 'confirm' ? 'confirmed' : 'pending' }), kind === 'confirm' ? L('Kontroller geçti: rezervasyon onaylandı.', 'Checks passed: the reservation is confirmed.') : L('Bekleyen rezervasyon kaydedildi (araç veya kapasite tutmaz).', 'Pending reservation saved (it holds no vehicle or capacity).'))
     if (!r.ok) {
       setError(r.error)
       setFields(r.fields)
@@ -176,6 +178,7 @@ export function BookingWorkspace({ mode, edit, preset = {} }: { mode: Mode; edit
             <Panel title={L('Müşteri', 'Customer')}>
               <div className="grid gap-4 sm:grid-cols-2">
                 <ComboF id="bk-c" label={L('Müşteri', 'Customer')} required items={d.customers.filter((c) => !c.archived).map((c) => ({ id: c.id, label: c.name, sub: `${c.no} · ${c.country}` }))} value={customerId} onChange={setCustomerId} error={fields.customer} hint={edit ? L('Müşteri düzenlemede değişmez; farklı müşteri için yeni rezervasyon açın.', 'The customer cannot change while editing; open a new reservation instead.') : undefined} />
+                {!edit && can('customers:manage') && <div className="flex items-end"><button type="button" className={btnSmall} onClick={() => setNewCustomer(true)}><Plus size={14} /> {L('Yeni müşteri ekle', 'Add a new customer')}</button></div>}
                 <SelectF id="bk-corp" label={L('Kurumsal hesap', 'Corporate account')} value={corporateId} onChange={setCorporateId} placeholder={L('Bireysel', 'Individual')} options={d.corporates.filter((c) => c.status === 'active').map((c) => ({ id: c.id, label: c.name }))} hint={corporateId ? L('Kredi limiti para birimi başınadır; limit yoksa sınırsız sayılmaz.', 'The credit limit is per currency; no limit is not unlimited.') : undefined} />
               </div>
               <div className="mt-4">
@@ -218,6 +221,7 @@ export function BookingWorkspace({ mode, edit, preset = {} }: { mode: Mode; edit
                   options={vehicleChoices.map(({ v, ok, why }) => ({ id: v.id, label: `${v.plate} · ${v.make} ${v.model}${ok ? '' : ` — ${L('uygun değil', 'unavailable')}: ${why}`}`, disabled: !ok && v.id !== edit?.vehicleId }))}
                 />
               </div>
+              {mode === 'reservation' && !vehicleId && <Notice tone="hold">{L('Bu kayıt henüz belirli bir aracı ayırmaz. Araç seçilmezse yalnız “bekleyen” kaydedilebilir; onay için belirli bir araç gerekir.', 'This record does not reserve a specific vehicle yet. Without a vehicle it can only be saved as pending; a specific vehicle is needed to confirm.')}</Notice>}
               {cap && (
                 <p className={`mt-3 text-[13px] ${cap.min > 0 ? 'text-ink-2' : 'font-medium text-alert'}`}>
                   {cap.min > 0 ? L(`Sınıf kapasitesi: seçili günlerde en az ${cap.min} araç müsait.`, `Class capacity: at least ${cap.min} vehicle(s) free on the chosen days.`) : L(`Sınıf kapasitesi dolu: ${cap.day} günü müsait araç yok. Pending kaydedilebilir ama onay kapasite yetersizliği nedeniyle reddedilir.`, `Class capacity is full on ${cap.day}. It can be saved as pending but confirmation will be refused.`)}
@@ -262,9 +266,7 @@ export function BookingWorkspace({ mode, edit, preset = {} }: { mode: Mode; edit
             <ActionError error={error} />
             <div className="flex flex-wrap items-center justify-between gap-3">
               {mode === 'reservation' && !edit ? (
-                <CheckF id="bk-confirm" checked={confirmNow} onChange={setConfirmNow}>
-                  {L('Kaydederken onayla (araç/kapasite kontrolü yapılır)', 'Confirm on save (vehicle/capacity is checked)')}
-                </CheckF>
+                <span className="max-w-[420px] text-[12.5px] text-ink-2">{L('Bekleyen Kaydet: araç veya kapasite tutmaz. Kontrol Et ve Onayla: yetki, belirli araç, çakışma ve kredi kontrol edilir; biri başarısız olursa kayıt oluşmaz.', 'Save as Pending: holds no vehicle or capacity. Check and Confirm: permission, a specific vehicle, conflicts and credit are checked; if one fails nothing is saved.')}</span>
               ) : edit && price && edit.price && price.grossMinor !== edit.price.grossMinor ? (
                 <CheckF id="bk-ack" checked={ackPrice} onChange={setAckPrice}>
                   {L(`Yeni fiyatı kabul ediyorum: ${fmt(edit.price.grossMinor, edit.price.cur)} → ${fmt(price.grossMinor, price.cur)}`, `I accept the new price: ${fmt(edit.price.grossMinor, edit.price.cur)} → ${fmt(price.grossMinor, price.cur)}`)}
@@ -274,11 +276,19 @@ export function BookingWorkspace({ mode, edit, preset = {} }: { mode: Mode; edit
               )}
               <div className="flex gap-2">
                 <button type="button" className={btnSecondary} onClick={() => void navigate({ to: back.to as never })}>{L('Vazgeç', 'Cancel')}</button>
-                <button type="submit" className={btnPrimary} disabled={!customerId || !windowOk || (price?.blockers.length ?? 0) > 0} title={!customerId ? L('Önce müşteri seçin', 'Choose a customer first') : !windowOk ? L('Teslim ve iade zamanını düzeltin', 'Fix the pickup and return times') : (price?.blockers.length ?? 0) > 0 ? L('Fiyat engeli var: nedeni sayfada yazılı', 'A price blocker exists: the reason is shown on the page') : undefined}>
-                  {mode === 'rental' ? L('Kiralamayı hazırla', 'Prepare rental') : edit ? L('Değişiklikleri kaydet', 'Save changes') : L('Rezervasyonu kaydet', 'Save reservation')}
-                </button>
+                {mode === 'reservation' && !edit ? (
+                  <>
+                    <button type="button" className={btnSecondary} disabled={!customerId || !windowOk || (price?.blockers.length ?? 0) > 0} title={!customerId ? L('Önce müşteri seçin', 'Choose a customer first') : !windowOk ? L('Teslim ve iade zamanını düzeltin', 'Fix the pickup and return times') : (price?.blockers.length ?? 0) > 0 ? L('Fiyat engeli var: nedeni sayfada yazılı', 'A price blocker exists: the reason is shown on the page') : undefined} onClick={() => submit('pending')}>{L('Bekleyen Kaydet', 'Save as Pending')}</button>
+                    <button type="button" className={btnPrimary} disabled={!customerId || !windowOk || (price?.blockers.length ?? 0) > 0 || !vehicleId || !can('reservations:confirm')} title={!vehicleId ? L('Onay için belirli bir araç seçin; araçsız kayıt yalnız bekleyen olur', 'Choose a specific vehicle to confirm; without one the record can only be pending') : !can('reservations:confirm') ? L('Onay yetkiniz yok', 'You cannot confirm') : !customerId ? L('Önce müşteri seçin', 'Choose a customer first') : !windowOk ? L('Teslim ve iade zamanını düzeltin', 'Fix the pickup and return times') : (price?.blockers.length ?? 0) > 0 ? L('Fiyat engeli var: nedeni sayfada yazılı', 'A price blocker exists: the reason is shown on the page') : undefined} onClick={() => submit('confirm')}>{L('Kontrol Et ve Onayla', 'Check and Confirm')}</button>
+                  </>
+                ) : (
+                  <button type="submit" className={btnPrimary} disabled={!customerId || !windowOk || (price?.blockers.length ?? 0) > 0} title={!customerId ? L('Önce müşteri seçin', 'Choose a customer first') : !windowOk ? L('Teslim ve iade zamanını düzeltin', 'Fix the pickup and return times') : (price?.blockers.length ?? 0) > 0 ? L('Fiyat engeli var: nedeni sayfada yazılı', 'A price blocker exists: the reason is shown on the page') : undefined}>
+                    {mode === 'rental' ? L('Kiralamayı hazırla', 'Prepare rental') : L('Değişiklikleri kaydet', 'Save changes')}
+                  </button>
+                )}
               </div>
             </div>
+            {newCustomer && <NewCustomerDialog quick onClose={() => setNewCustomer(false)} onCreated={(id) => setCustomerId(id)} />}
             {(!customerId || (price?.blockers.length ?? 0) > 0) && (
               <p className="text-right text-[12.5px] text-ink-2">{!customerId ? L('Kaydetmek için müşteri seçin.', 'Choose a customer to save.') : L('Fiyat hesaplanamadığı için kaydedilemez (sağdaki nedene bakın).', 'Cannot save because the price cannot be calculated (see the reason on the right).')}</p>
             )}

@@ -1,3 +1,5 @@
+import { LinkedTasks, useLinkedTasks } from '../../ui/linkedTasks'
+import { isOpenTask } from '../../core/ops/tasks'
 import { CaretDown } from '@phosphor-icons/react'
 import { Link, useNavigate, useParams } from '@tanstack/react-router'
 import { DropdownMenu } from 'radix-ui'
@@ -19,7 +21,7 @@ import { byCurText } from '../fleet/common'
 import { docStateOf } from './CustomersPage'
 
 const menuItem = 'flex min-h-9 cursor-pointer select-none items-center gap-2 rounded-md px-2.5 py-1.5 text-[13.5px] text-ink-2 outline-none data-[highlighted]:bg-ground data-[highlighted]:text-ink'
-type TabId = 'ozet' | 'kayitlar' | 'belgeler' | 'iletisim' | 'finans' | 'gizlilik'
+type TabId = 'ozet' | 'kayitlar' | 'belgeler' | 'iletisim' | 'finans' | 'gorevler' | 'gizlilik'
 
 export function Customer360Page() {
   const { id } = useParams({ strict: false }) as { id: string }
@@ -42,6 +44,7 @@ function Detail({ c }: { c: Customer }) {
   const navigate = useNavigate()
   const mask = useMasker()
   const [tab, setTab] = useUrlState('sekme', 'ozet')
+  const openTasks = useLinkedTasks('customer', c.id).filter(isOpenTask).length
   const [dlg, setDlg] = useState<null | 'restrict' | 'note' | 'doc' | 'contact' | 'gdpr' | 'merge' | 'edit'>(null)
   const rentals = d.rentals.filter((r) => r.customerId === c.id || r.drivers.some((x) => x.customerId === c.id)).sort((a, b) => b.plannedPickupAt.localeCompare(a.plannedPickupAt))
   const reservations = d.reservations.filter((r) => r.customerId === c.id).sort((a, b) => b.pickupAt.localeCompare(a.pickupAt))
@@ -97,6 +100,7 @@ function Detail({ c }: { c: Customer }) {
             { id: 'belgeler', label: L('Belgeler', 'Documents'), count: docs.filter((x) => x.state !== 'valid').length || undefined },
             { id: 'iletisim', label: L('Notlar ve iletişim', 'Notes and contact'), count: c.notes.length + c.contacts.length },
             { id: 'finans', label: L('Finans', 'Finance'), hidden: !can('finance:view') },
+            { id: 'gorevler', label: L('Görevler', 'Tasks'), count: openTasks || undefined },
             { id: 'gizlilik', label: L('Kişisel veri', 'Privacy') },
           ]}
         />
@@ -126,6 +130,7 @@ function Detail({ c }: { c: Customer }) {
             </Panel>
           </div>
         )}
+        {tab === 'gorevler' && <LinkedTasks type="customer" id={c.id} defaultTitle={`${c.name}: `} />}
         {tab === 'kayitlar' && <Panel title={L('Rezervasyon ve kiralamalar', 'Reservations and rentals')}><RecordList c={c} reservations={reservations} rentals={rentals} /></Panel>}
         {tab === 'belgeler' && (
           <Panel title={L('Belgeler', 'Documents')} description={L('Demo belgeleri örnektir: dosya veya gerçek kişisel veri içermez.', 'Demo documents are placeholders: no file or real personal data.')} action={can('documents:manage') ? <button type="button" className={btnPrimary} onClick={() => setDlg('doc')}>{L('Belge ekle', 'Add document')}</button> : undefined}>

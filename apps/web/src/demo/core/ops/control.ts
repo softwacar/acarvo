@@ -2,7 +2,9 @@ import { B } from '../../i18n'
 import { isRateActive } from '../calc/fx'
 import { addHistory, fail, hasPerm, logEvent, meOf, need, nextId, nextNo, nowOf, notify, userName } from '../helpers'
 import { CURRENCIES, fmt } from '../money'
+import { advanceLedger } from '../calc/finance'
 import { ALWAYS_VISIBLE, NAV_V1, PROFILES, type WorkspaceSettings } from '../modules'
+import { approvalRisk, level2Blocker, STARTER_MUST_AUTHORIZE } from '../risk'
 import type { Approval, ApprovalType, Cur, Db, Expense, FxRate, Id, Iso, LinkType, Money, Role, Rule } from '../types'
 import { completeRefund, cashMove, findDrawer, requestRefund, voidCharge, voidPayment } from './finance'
 import { repriceOf } from './rentals'
@@ -23,6 +25,8 @@ export const APPROVAL_TYPES: { type: ApprovalType; label: string; target: LinkTy
 export const approvalLabel = (t: ApprovalType) => APPROVAL_TYPES.find((x) => x.type === t)!.label
 
 export interface ApprovalInput {
+  /** Financial correction of an advance policy fee: the retained amount the correction asks for. */
+  adjust?: { paymentId: Id; retainedMinor: number }
   type: ApprovalType
   target: { type: LinkType; id: Id }
   reason: string
@@ -35,6 +39,11 @@ export interface ApprovalInput {
 export function requestApproval(d: Db, input: ApprovalInput): Approval {
   need(d, 'approvals:request', B('Onay talebi', 'Approval request'))
   const def = APPROVAL_TYPES.find((x) => x.type === input.type)!
+  const risk = approvalRisk(d, input.type, input.requested)
+  if (risk >= 2) {
+    const why = level2Blocker(d, meOf(d).id, STARTER_MUST_AUTHORIZE.has(input.type))
+    if (why) fail(why, {}, 'LEVEL2_LOCKED')
+  }
   const fields: Record<string, string> = {}
   if (input.reason.trim().length < 10) fields.reason = B('Gerekçeyi en az 10 karakterle yazın', 'Write the reason in at least 10 characters')
   if (!def.target.includes(input.target.type)) fields.target = B('Bu onay türü için uygun olmayan hedef', 'Target not suitable for this approval type')
@@ -56,11 +65,12 @@ export function requestApproval(d: Db, input: ApprovalInput): Approval {
     if (input.paymentId) {
       if (!adv || adv.kind !== 'advance' || adv.reservationId !== input.target.id && adv.rentalId !== input.target.id) fail(B('Kaparo kaydı bu hedefe ait değil.', 'The advance does not belong to this target.'), { amount: B('Kaparo bulunamadı', 'Advance not found') })
       if (adv!.status !== 'recorded') fail(B('Yalnız tutulan (uygulanmamış) kaparo iade edilebilir.', 'Only a held (unapplied) advance can be refunded.'), { amount: B('Kaparo artık tutulmuyor', 'The advance is no longer held') })
-      if (input.requested.cur !== adv!.tender.cur || input.requested.minor !== adv!.tender.minor) fail(B(`Kaparo iadesi tahsil edilen tutarın tamamı olmalı: ${fmt(adv!.tender.minor, adv!.tender.cur)}.`, `An advance refund must be the full amount that was taken: ${fmt(adv!.tender.minor, adv!.tender.cur)}.`), { amount: B('Tahsil edilen tutarın tamamı', 'The full amount taken') })
-      if (d.refunds.some((x) => x.paymentId === adv!.id && (x.status === 'requested' || x.status === 'approved'))) fail(B('Bu kaparo için açık bir iade talebi var.', 'There is already an open refund request for this advance.'))
+      const ledger = advanceLedger(d, adv!)
+      if (input.requested.cur !== adv!.tender.cur) fail(B(`Kaparo iadesi kaparonun para biriminde (${adv!.tender.cur}) olmalı.`, `An advance refund must be in the advance currency (${adv!.tender.cur}).`), { amount: B('Para birimi uyumsuz', 'Currency mismatch') })
+      if (input.requested.minor > ledger.refundableMinor) fail(B(`İade tutarı iade edilebilir kaparoyu aşıyor: en fazla ${fmt(ledger.refundableMinor, ledger.cur)} (kaparo ${fmt(ledger.tenderMinor, ledger.cur)} − politika bedeli ${fmt(ledger.retainedMinor, ledger.cur)} − iade edilen ${fmt(ledger.refundedMinor, ledger.cur)}). Aynı kaparo iki kez iade edilemez.`, `The refund exceeds the refundable advance: at most ${fmt(ledger.refundableMinor, ledger.cur)} (advance ${fmt(ledger.tenderMinor, ledger.cur)} − policy fee ${fmt(ledger.retainedMinor, ledger.cur)} − already refunded ${fmt(ledger.refundedMinor, ledger.cur)}). The same advance cannot be refunded twice.`), { amount: B('İade edilebilir tutarı aşıyor', 'Exceeds the refundable amount') })
     } else if (src!.currency !== input.requested.cur) fail(B(`İade, kaydın para biriminde (${src!.currency}) olmalı; kur dönüşümü yapılmaz.`, `The refund must be in the record's currency (${src!.currency}); no conversion is made.`), { amount: 'Para birimi uyumsuz' })
   }
-  const a: Approval = { id: nextId(d, 'ap'), no: nextNo(d, 'ON'), type: input.type, status: 'requested', requesterId: meOf(d).id, target: input.target, reason: input.reason, requested: input.requested, proposedPct: input.proposedPct, paymentId: input.paymentId, createdAt: nowOf(d), history: [] }
+  const a: Approval = { id: nextId(d, 'ap'), no: nextNo(d, 'ON'), type: input.type, status: 'requested', risk, adjust: input.adjust, requesterId: meOf(d).id, target: input.target, reason: input.reason, requested: input.requested, proposedPct: input.proposedPct, paymentId: input.paymentId, createdAt: nowOf(d), history: [] }
   d.approvals.push(a)
   addHistory(d, a.history, B('Talep edildi', 'Requested'), input.reason)
   if (input.type === 'refund' && input.requested) {
@@ -142,12 +152,27 @@ export function applyApproval(d: Db, id: Id): Approval {
       break
     }
     case 'financial_correction': {
+      if (a!.adjust) {
+        // Deviation from the cancellation policy: the retained fee of an advance is changed with an independent approval.
+        const adv = d.payments.find((x) => x.id === a!.adjust!.paymentId)
+        if (!adv || adv.kind !== 'advance' || adv.status === 'voided') fail(B('Düzeltilecek kaparo bulunamadı.', 'The advance to correct was not found.'))
+        const room = adv!.tender.minor - (adv!.refundedMinor ?? 0)
+        if (a!.adjust.retainedMinor < 0 || a!.adjust.retainedMinor > room) fail(B('Düzeltme tutarı kaparonun kalan kısmını aşamaz.', 'The correction cannot exceed the remaining part of the advance.'))
+        const before = adv!.retainedMinor ?? 0
+        adv!.retainedMinor = a!.adjust.retainedMinor
+        if (adv!.status === 'forfeited' && a!.adjust.retainedMinor < adv!.tender.minor) {
+          adv!.status = 'recorded'
+          adv!.advanceState = 'unapplied'
+        }
+        logEvent(d, { module: 'finance', type: 'AdvanceFeeCorrected', sourceType: 'payment', sourceId: adv!.id, summary: B(`Kaparo ${adv!.no}: politika bedeli ${fmt(before, adv!.tender.cur)} → ${fmt(a!.adjust.retainedMinor, adv!.tender.cur)} (${a!.no})`, `Advance ${adv!.no}: policy fee ${fmt(before, adv!.tender.cur)} → ${fmt(a!.adjust.retainedMinor, adv!.tender.cur)} (${a!.no})`), cur: adv!.tender.cur, minor: a!.adjust.retainedMinor })
+        break
+      }
       const pay = d.payments.find((x) => x.id === a!.target.id)
-      if (pay) voidPayment(d, pay.id, B(`Finansal düzeltme ${a!.no}: ${a!.reason}`, `Financial correction ${a!.no}: ${a!.reason}`))
+      if (pay) voidPayment(d, pay.id, B(`Finansal düzeltme ${a!.no}: ${a!.reason}`, `Financial correction ${a!.no}: ${a!.reason}`), a!.id)
       else {
         const ch = d.charges.find((x) => x.id === a!.target.id)
         if (!ch) fail(B('Düzeltilecek ödeme/kalem bulunamadı.', 'The payment/charge to correct was not found.'))
-        voidCharge(d, ch!.id, B(`Finansal düzeltme ${a!.no}: ${a!.reason}`, `Financial correction ${a!.no}: ${a!.reason}`))
+        voidCharge(d, ch!.id, B(`Finansal düzeltme ${a!.no}: ${a!.reason}`, `Financial correction ${a!.no}: ${a!.reason}`), a!.id)
       }
       break
     }

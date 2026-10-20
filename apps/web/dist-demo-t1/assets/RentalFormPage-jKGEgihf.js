@@ -1,0 +1,1 @@
+import{N as e}from"./utils-B_iHWVRW.js";import{z as t}from"./kit-BDhh2thb.js";import{t as n}from"./BookingWorkspace-05HX90s6.js";var r=e();function i(){let[e]=t(`musteri`),[i]=t(`arac`),[a]=t(`baslangic`),[o]=t(`bitis`);return(0,r.jsx)(n,{mode:`rental`,preset:{customerId:e||void 0,vehicleId:i||void 0,from:a||void 0,to:o||void 0}})}export{i as RentalFormPage};

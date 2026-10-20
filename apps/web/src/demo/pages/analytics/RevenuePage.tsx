@@ -2,14 +2,12 @@ import { Link } from '@tanstack/react-router'
 import { CheckCircle, WarningCircle } from '@phosphor-icons/react'
 import { rentalFinance } from '../../core/calc/finance'
 import { fmt } from '../../core/money'
-import { financeSummary } from '../../core/metrics'
 import type { Cur, Db, Id, LinkType } from '../../core/types'
 import { L } from '../../i18n'
 import { BarsV, ChartCard, SERIES } from '../../ui/charts'
 import { SelectF } from '../../ui/forms'
 import { entityHref, useBranchScope, useDb, useUrlState } from '../../ui/hooks'
-import { Kpis, Page, Panel } from '../../ui/kit'
-import { byCurText } from '../fleet/common'
+import { Panel } from '../../ui/kit'
 
 // Revenue control: reconciliation checks over the same finance records. Every check names the records that fail it.
 
@@ -27,7 +25,7 @@ function checksOf(d: Db, branches: Id[]): Check[] {
   const noCharge = delivered.filter((r) => !d.charges.some((c) => c.rentalId === r.id && c.kind === 'base' && c.status === 'posted'))
   const dupBase = delivered.filter((r) => d.charges.filter((c) => c.rentalId === r.id && c.kind === 'base' && c.status === 'posted').length > 1)
   const over = rentals.filter((r) => fin(r.id).overpaidMinor > 0)
-  const unapplied = rentals.filter((r) => fin(r.id).unappliedMinor > 0)
+  const unapplied = rentals.filter((r) => fin(r.id).unappliedMinor - fin(r.id).unverifiedMinor > 0) // verified but not applied; an unverified line is a pending step, not an inconsistency
   const closedOpen = rentals.filter((r) => ['closed', 'exception_closed', 'loss_closed'].includes(r.status) && r.financeStatus === 'open')
   const cashPays = d.payments.filter((p) => p.method === 'cash' && p.status !== 'voided' && p.drawerId && branches.includes(p.branchId))
   const cashMissing = cashPays.filter((p) => !d.cashMovements.some((m) => m.sourceType === 'payment' && m.sourceId === p.id && m.kind === 'in'))
@@ -39,7 +37,7 @@ function checksOf(d: Db, branches: Id[]): Check[] {
     { key: 'nocharge', label: L('Teslim edilmiş, kiralama bedeli kalemi yok', 'Delivered without a rental charge'), rule: L('Her teslimde tam bir kiralama bedeli kalemi doğar.', 'Every handover posts exactly one rental charge.'), failing: noCharge.map((r) => link(r, r.status)) },
     { key: 'dup', label: L('Birden fazla kiralama bedeli kalemi', 'More than one rental charge'), rule: L('Aynı anahtarla ikinci kalem açılmaz (tek seferlik).', 'A second charge with the same key is never created (idempotent).'), failing: dupBase.map((r) => link(r, L('mükerrer kalem', 'duplicate charge'))) },
     { key: 'over', label: L('Fazla ödenmiş kiralama', 'Overpaid rentals'), rule: L('Kalemden fazla uygulanan tutar iade adayıdır; negatif bakiye olarak gizlenmez.', 'Applied above the charge is a refund candidate; never hidden as a negative balance.'), failing: over.map((r) => link(r, fmt(fin(r.id).overpaidMinor, fin(r.id).cur))) },
-    { key: 'unapplied', label: L('Uygulanmamış ödeme', 'Unapplied payments'), rule: L('Kaydedilen ödeme kalemlere uygulanana kadar borcu düşürmez.', 'A recorded payment does not reduce the balance until applied.'), failing: unapplied.map((r) => link(r, fmt(fin(r.id).unappliedMinor, fin(r.id).cur))) },
+    { key: 'unapplied', label: L('Doğrulanmış ama uygulanmamış ödeme', 'Verified but unapplied payments'), rule: L('Doğrulanan ödeme açık kalemlere uygulanır; kalem yoksa kalemin oluşmasını bekler.', 'A verified payment is applied to the open charges; without a charge it waits for the charge.'), failing: unapplied.map((r) => link(r, fmt(fin(r.id).unappliedMinor - fin(r.id).unverifiedMinor, fin(r.id).cur))) },
     { key: 'closedopen', label: L('Operasyonel kapalı, finans açık', 'Operationally closed, finance open'), rule: L('Operasyonel kapanış finansal kapanış değildir; bakiye, depozito ve onaylar çözülmelidir.', 'Operational closure is not financial closure; balance, deposit and approvals must be resolved.'), failing: closedOpen.map((r) => link(r, `${fmt(fin(r.id).outstandingMinor, fin(r.id).cur)} ${L('kalan', 'outstanding')}`)) },
     { key: 'cashmissing', label: L('Nakit ödemenin kasa hareketi yok', 'Cash payment without a drawer movement'), rule: L('Her nakit ödeme, o para birimindeki açık kasaya bir giriş yazar.', 'Every cash payment posts one inflow to the open drawer of that currency.'), failing: cashMissing.map((p) => ({ type: 'payment' as const, id: p.id, text: `${p.no} · ${fmt(p.tender.minor, p.tender.cur)}` })) },
     { key: 'noncash', label: L('Nakit olmayan ödemenin kasaya yazılması', 'Non-cash payment posted to a drawer'), rule: L('Kart ve havale hiçbir zaman nakit kasasına girmez.', 'Card and bank transfer never enter a cash drawer.'), failing: nonCashInDrawer.map((m) => ({ type: 'payment' as const, id: m.sourceId!, text: m.reason })) },
@@ -48,12 +46,10 @@ function checksOf(d: Db, branches: Id[]): Check[] {
   ]
 }
 
-export function RevenuePage() {
+/** Monthly charged vs collected, per currency (shown at the bottom of Finance → Attention). */
+export function RevenueChart() {
   const d = useDb()
   const { active } = useBranchScope()
-  const sum = financeSummary(d, active)
-  const checks = checksOf(d, active)
-  const bad = checks.filter((c) => c.failing.length)
   const curs = [...new Set(d.charges.filter((c) => c.status === 'posted').map((c) => c.cur))].sort() as Cur[]
   const [cur, setCur] = useUrlState('para', curs[0] ?? d.settings.company.baseCurrency)
   const tz = d.settings.company.tz
@@ -66,11 +62,7 @@ export function RevenuePage() {
   const charged = months.map((m) => d.charges.filter((c) => c.status === 'posted' && c.cur === cur && c.postedAt && monthOf(c.postedAt) === m && active.some((b) => d.rentals.find((r) => r.id === c.rentalId)?.pickupBranchId === b)).reduce((a, c) => a + c.amountMinor, 0))
   const collected = months.map((m) => d.payments.filter((p) => p.status === 'applied' && p.obligationCur === cur && monthOf(p.recordedAt) === m && active.includes(p.branchId)).reduce((a, p) => a + p.allocations.reduce((x, y) => x + y.minor, 0), 0))
   return (
-    <Page
-      title={L('Gelir Kontrolü', 'Revenue Control')}
-      description={L('Kayıtlar arası mutabakat kontrolleri: hesap kalemi, ödeme, depozito ve kasa birbirini tutmalı. Her kontrol, başarısız olan kayıtları adıyla listeler. Toplamlar para birimi başınadır.', 'Reconciliation checks between records: charges, payments, deposits and cash must agree. Each check lists the failing records by name. Totals are per currency.')}
-    >
-      <Kpis items={[{ label: L('Hesaplanan', 'Charged'), value: byCurText(sum.charged, fmt) }, { label: L('Tahsil edilen', 'Collected'), value: byCurText(sum.collected, fmt) }, { label: L('Açık bakiye', 'Outstanding'), value: byCurText(sum.outstanding, fmt), tone: 'hold' }, { label: L('Başarısız kontrol', 'Failing checks'), value: `${bad.length} / ${checks.length}`, tone: bad.length ? 'alert' : 'ok' }]} />
+    <div className="space-y-3">
       <div className="flex items-end justify-between gap-3">
         <h2 className="text-[15px] font-semibold">{L('Aylık hesaplanan ve tahsil edilen', 'Monthly charged and collected')}</h2>
         <div className="w-28"><SelectF id="rv-c" label={L('Para birimi', 'Currency')} value={cur} onChange={setCur} options={(curs.length ? curs : [cur]).map((c) => ({ id: c, label: c }))} /></div>
@@ -83,22 +75,40 @@ export function RevenuePage() {
         head={[L('Ay', 'Month'), L('Hesaplanan', 'Charged'), L('Tahsil edilen', 'Collected')]}
         rows={months.map((m, i) => [m, fmt(charged[i]!, cur), fmt(collected[i]!, cur)])}
       />
-      <Panel title={L('Mutabakat kontrolleri', 'Reconciliation checks')} flush>
-        <ul className="divide-y divide-line-soft">
-          {checks.map((c) => (
-            <li key={c.key} className="px-4 py-3 sm:px-5">
-              <div className="flex items-start gap-3">
-                {c.failing.length === 0 ? <CheckCircle size={18} weight="fill" className="mt-0.5 shrink-0 text-ok" /> : <WarningCircle size={18} weight="fill" className="mt-0.5 shrink-0 text-alert" />}
-                <div className="min-w-0 flex-1">
-                  <p className="text-[13.5px] font-medium">{c.label} <span className={`ml-1 text-[12px] font-medium ${c.failing.length ? 'text-alert' : 'text-ok'}`}>{c.failing.length ? `${c.failing.length} ${L('kayıt', 'record(s)')}` : L('Geçti', 'Passed')}</span></p>
-                  <p className="text-[12.5px] text-ink-2">{c.rule}</p>
-                  {c.failing.length > 0 && <ul className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1 text-[13px]">{c.failing.slice(0, 8).map((f) => <li key={f.id + f.text}><Link to={entityHref(f.type, f.id) as never} className="text-blue hover:underline">{f.text}</Link></li>)}{c.failing.length > 8 && <li className="text-ink-2">+{c.failing.length - 8}</li>}</ul>}
-                </div>
+    </div>
+  )
+}
+
+/**
+ * The old reconciliation checks of "Gelir Kontrolü". They test the SYSTEM's own consistency (a charge exists for every handover, a cash
+ * payment has a drawer movement…). They are integrity checks for the operator and the setup, not a revenue-loss indicator, so they
+ * live in Settings → Operational readiness. No amount is invented here.
+ */
+export function IntegrityChecks() {
+  const d = useDb()
+  const { active } = useBranchScope()
+  const checks = checksOf(d, active)
+  const bad = checks.filter((c) => c.failing.length)
+  return (
+    <Panel
+      title={L('Veri bütünlüğü kontrolleri', 'Data integrity checks')}
+      description={L(`${checks.length} kontrolün ${bad.length} tanesi başarısız. Bunlar sistemin kendi tutarlılığını sınar; gerçek gelir kaybı göstergesi değildir ve tutar uydurmaz.`, `${bad.length} of ${checks.length} checks fail. They test the system's own consistency; they are not a revenue-loss indicator and invent no amount.`)}
+      flush
+    >
+      <ul className="divide-y divide-line-soft">
+        {checks.map((c) => (
+          <li key={c.key} className="px-4 py-3 sm:px-5">
+            <div className="flex items-start gap-3">
+              {c.failing.length === 0 ? <CheckCircle size={18} weight="fill" className="mt-0.5 shrink-0 text-ok" /> : <WarningCircle size={18} weight="fill" className="mt-0.5 shrink-0 text-alert" />}
+              <div className="min-w-0 flex-1">
+                <p className="text-[13.5px] font-medium">{c.label} <span className={`ml-1 text-[12px] font-medium ${c.failing.length ? 'text-alert' : 'text-ok'}`}>{c.failing.length ? `${c.failing.length} ${L('kayıt', 'record(s)')}` : L('Geçti', 'Passed')}</span></p>
+                <p className="text-[12.5px] text-ink-2">{c.rule}</p>
+                {c.failing.length > 0 && <ul className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1 text-[13px]">{c.failing.slice(0, 8).map((f) => <li key={f.id + f.text}><Link to={entityHref(f.type, f.id) as never} className="text-blue hover:underline">{f.text}</Link></li>)}{c.failing.length > 8 && <li className="text-ink-2">+{c.failing.length - 8}</li>}</ul>}
               </div>
-            </li>
-          ))}
-        </ul>
-      </Panel>
-    </Page>
+            </div>
+          </li>
+        ))}
+      </ul>
+    </Panel>
   )
 }

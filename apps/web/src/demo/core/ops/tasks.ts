@@ -37,6 +37,11 @@ export function canClaim(d: Db, t: Task, user: DemoUser): boolean {
   return !t.poolRoleIds?.length || t.poolRoleIds.includes(user.roleId)
 }
 
+/** Would this person have been allowed to take the task from the pool (permission, branch scope, role)? Ignores who holds it now. */
+function wasEligible(d: Db, t: Task, user: DemoUser): boolean {
+  return hasPerm(d, 'tasks:view', user) && branchInScope(d, t.branchId, user) && (!t.poolRoleIds?.length || t.poolRoleIds.includes(user.roleId))
+}
+
 /**
  * Who sees a task: the people it is assigned to, its creator, the people who may claim it from the pool, and managers
  * inside their branch scope. Everybody else (another branch, another role) does not see it at all.
@@ -114,8 +119,13 @@ export function createTask(d: Db, input: TaskInput): Task {
 
 /** Claims a pool task. `expectedVersion` is the version the person was looking at (optional). */
 export function claimTask(d: Db, id: Id, expectedVersion?: number): Task {
-  const t = find(d, id)
   const me = meOf(d)
+  const task = d.tasks.find((x) => x.id === id)
+  if (!task) fail(B('Görev bulunamadı.', 'Task not found.'))
+  // Somebody else got there first. A person who could have taken it from the pool is told who won (a conflict, HTTP 409 in the real service);
+  // everybody else just sees that it is outside their scope.
+  if (task!.ownerId && task!.ownerId !== me.id && wasEligible(d, task!, me) && !canSeeTask(d, task!, me)) fail(B(`Bu görevi az önce ${userName(d, task!.ownerId)} üstlendi. Listeyi yenileyin.`, `${userName(d, task!.ownerId)} has just claimed this task. Refresh the list.`), { owner: userName(d, task!.ownerId) }, 'CONFLICT')
+  const t = find(d, id)
   if (!isOpenTask(t)) fail(B('Tamamlanmış veya iptal edilmiş görev üstlenilemez.', 'A completed or cancelled task cannot be claimed.'))
   if (t.ownerId && t.ownerId !== me.id) fail(B(`Bu görevi az önce ${userName(d, t.ownerId)} üstlendi. Listeyi yenileyin.`, `${userName(d, t.ownerId)} has just claimed this task. Refresh the list.`), { owner: userName(d, t.ownerId) }, 'CONFLICT')
   if (t.ownerId === me.id) fail(B('Bu görevi zaten siz üstlendiniz.', 'You have already claimed this task.'), {}, 'CONFLICT')
@@ -133,6 +143,7 @@ export function claimTask(d: Db, id: Id, expectedVersion?: number): Task {
 export function startTask(d: Db, id: Id): Task {
   const t = find(d, id)
   const me = meOf(d)
+  if (t.pool && !t.ownerId) fail(B('Önce görevi üstlenin.', 'Claim the task first.'))
   if (!isMyTask(t, me.id) && !mayManage(d)) fail(B('Görevi yalnız sorumlusu veya yönetici başlatabilir.', 'Only the owner or a manager can start the task.'), {}, 'FORBIDDEN')
   if (t.pool && !t.ownerId) fail(B('Önce görevi üstlenin.', 'Claim the task first.'))
   if (t.status !== 'open') fail(B('Yalnız açık görev başlatılır.', 'Only an open task can be started.'))
@@ -146,6 +157,7 @@ export function startTask(d: Db, id: Id): Task {
 export function completeTask(d: Db, id: Id, note = ''): Task {
   const t = find(d, id)
   const me = meOf(d)
+  if (t.pool && !t.ownerId) fail(B('Havuzdaki görevi tamamlamadan önce üstlenin.', 'Claim a pool task before completing it.'))
   if (!isMyTask(t, me.id) && !mayManage(d)) fail(B('Görevi yalnız sorumlusu veya yönetici tamamlayabilir.', 'Only the owner or a manager can complete the task.'), {}, 'FORBIDDEN')
   if (t.pool && !t.ownerId) fail(B('Havuzdaki görevi tamamlamadan önce üstlenin.', 'Claim a pool task before completing it.'))
   if (!isOpenTask(t)) fail(B('Bu görev zaten kapalı.', 'This task is already closed.'))
@@ -282,4 +294,38 @@ export function bulkComplete(d: Db, ids: Id[]): BulkResult {
   }
   if (!res.done.length) fail(B(`Hiçbir görev tamamlanamadı: ${res.skipped.map((s) => `${s.no} (${s.reason})`).join('; ')}`, `No task could be completed: ${res.skipped.map((s) => `${s.no} (${s.reason})`).join('; ')}`))
   return res
+}
+
+/** Short human name of the record a task points at (plate, number, name). */
+export function recordLabel(d: Db, link: { type: LinkType; id: Id }): string {
+  const by: Partial<Record<LinkType, string | undefined>> = {
+    vehicle: d.vehicles.find((x) => x.id === link.id)?.plate,
+    rental: d.rentals.find((x) => x.id === link.id)?.no,
+    reservation: d.reservations.find((x) => x.id === link.id)?.no,
+    customer: d.customers.find((x) => x.id === link.id)?.name,
+    maintenance: d.maintenance.find((x) => x.id === link.id)?.no,
+    damage: d.damages.find((x) => x.id === link.id)?.no,
+    incident: d.incidents.find((x) => x.id === link.id)?.no,
+    fine: d.fines.find((x) => x.id === link.id)?.no,
+    corporate: d.corporates.find((x) => x.id === link.id)?.name,
+  }
+  return by[link.type] ?? link.id
+}
+
+/** The branch a linked record belongs to, so a task created from it starts in the right branch. */
+export function recordBranch(d: Db, link: { type: LinkType; id: Id }): Id | undefined {
+  switch (link.type) {
+    case 'vehicle':
+      return d.vehicles.find((x) => x.id === link.id)?.homeBranchId
+    case 'rental':
+      return d.rentals.find((x) => x.id === link.id)?.pickupBranchId
+    case 'reservation':
+      return d.reservations.find((x) => x.id === link.id)?.pickupBranchId
+    case 'maintenance':
+      return d.vehicles.find((v) => v.id === d.maintenance.find((m) => m.id === link.id)?.vehicleId)?.homeBranchId
+    case 'damage':
+      return d.vehicles.find((v) => v.id === d.damages.find((x) => x.id === link.id)?.vehicleId)?.homeBranchId
+    default:
+      return undefined
+  }
 }

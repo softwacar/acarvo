@@ -552,6 +552,10 @@ export interface Payment {
   /** Advances only: the policy fee kept and the amount already paid back (minor, tender currency). */
   retainedMinor?: number
   refundedMinor?: number
+  /** The full policy fee computed for the cancellation / no-show (tender currency); the part above the advance is a customer receivable. */
+  policyFeeMinor?: number
+  /** Why the fee is what it is (the rule that applied), so nobody has to guess. */
+  policyFeeRule?: string
 }
 
 export interface DepositRecord {
@@ -946,6 +950,8 @@ export interface Approval {
   no: string
   type: ApprovalType
   status: 'requested' | 'approved' | 'rejected' | 'applied'
+  /** Risk level at the moment of the request (0 low … 3 critical); level 2 needs an independent authorizer. */
+  risk?: 0 | 1 | 2 | 3
   requesterId: Id
   reviewerId?: Id
   appliedBy?: Id

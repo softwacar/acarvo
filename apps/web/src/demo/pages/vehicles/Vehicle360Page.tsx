@@ -1,3 +1,5 @@
+import { LinkedTasks, useLinkedTasks } from '../../ui/linkedTasks'
+import { isOpenTask } from '../../core/ops/tasks'
 import { CaretDown, ClipboardText, Plus } from '@phosphor-icons/react'
 import { Link, useParams } from '@tanstack/react-router'
 import { DropdownMenu } from 'radix-ui'
@@ -23,7 +25,7 @@ import { ReadinessList, VehicleTimeline } from '../../ui/domain'
 import { FUEL_LABEL, FUEL_TYPE_LABEL, MAINT_TYPE_LABEL } from '../../ui/status'
 import { DamageDialog, IncidentDialog, LocationDialog, MaintenanceDialog, OdometerDialog, TaskDialog, TransferDialog, VehicleDocDialog } from '../shared/FleetDialogs'
 
-type Tab = 'genel' | 'musaitlik' | 'kiralamalar' | 'kontroller' | 'bakim' | 'belgeler' | 'finans' | 'gecmis'
+type Tab = 'genel' | 'musaitlik' | 'kiralamalar' | 'kontroller' | 'bakim' | 'belgeler' | 'finans' | 'gorevler' | 'gecmis'
 
 interface Ctx {
   v: Vehicle
@@ -70,6 +72,7 @@ export function Vehicle360Page() {
   const now = d.clock.now
 
   const data = useVehicleData(v)
+  const openTasks = useLinkedTasks('vehicle', id).filter(isOpenTask).length
 
   if (!v || !data) {
     return (
@@ -95,6 +98,7 @@ export function Vehicle360Page() {
     { id: 'bakim', label: L('Bakım ve lastikler', 'Service & tyres') },
     { id: 'belgeler', label: L('Belgeler ve riskler', 'Documents & risks') },
     { id: 'finans', label: L('Finans ve performans', 'Finance & performance') },
+    { id: 'gorevler', label: L('Görevler', 'Tasks'), count: openTasks || undefined },
     { id: 'gecmis', label: L('Konum ve geçmiş', 'Location & history') },
   ]
 
@@ -141,7 +145,7 @@ export function Vehicle360Page() {
                 <DropdownMenu.Portal>
                   <DropdownMenu.Content align="end" sideOffset={6} className="z-50 min-w-[230px] rounded-lg border border-line bg-surface p-1 shadow-[0_12px_32px_-8px_rgb(16_24_40/0.18)]">
                     {can('incidents:manage') && <DropdownMenu.Item className={menuItem} onSelect={() => setDlg('incident')}>{L('Olay kaydı aç', 'Open incident')}</DropdownMenu.Item>}
-                    {can('tasks:manage') && <DropdownMenu.Item className={menuItem} onSelect={() => setDlg('task')}>{L('Görev oluştur', 'Create task')}</DropdownMenu.Item>}
+                    {(can('tasks:create') || can('tasks:manage')) && <DropdownMenu.Item className={menuItem} onSelect={() => setDlg('task')}>{L('Görev oluştur', 'Create task')}</DropdownMenu.Item>}
                     {can('vehicles:manage') && <DropdownMenu.Item className={menuItem} onSelect={() => setDlg('transfer')}>{L('Transfer talebi', 'Request transfer')}</DropdownMenu.Item>}
                     {can('vehicles:manage') && <DropdownMenu.Item className={menuItem} onSelect={() => setDlg('doc')}>{L('Belge ekle', 'Add document')}</DropdownMenu.Item>}
                     {can('vehicles:manage') && <DropdownMenu.Item className={menuItem} onSelect={() => setDlg('km')}>{L('Kilometre kaydı', 'Record odometer')}</DropdownMenu.Item>}
@@ -171,6 +175,7 @@ export function Vehicle360Page() {
         {tab === 'bakim' && <Service c={ctx} />}
         {tab === 'belgeler' && <Docs c={ctx} />}
         {tab === 'finans' && <Performance c={ctx} />}
+        {tab === 'gorevler' && <LinkedTasks type="vehicle" id={v.id} defaultTitle={`${v.plate}: `} />}
         {tab === 'gecmis' && <LocationHistory c={ctx} />}
       </div>
 

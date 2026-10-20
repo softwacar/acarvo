@@ -81,7 +81,8 @@ export function CustomersPage() {
   )
 }
 
-function NewCustomerDialog({ onClose, onCreated }: { onClose: () => void; onCreated: (id: string) => void }) {
+/** New customer. Also used from the reservation workspace (quick create): the identity, licence and document checks of the handover still apply. */
+export function NewCustomerDialog({ onClose, onCreated, quick = false }: { onClose: () => void; onCreated: (id: string) => void; quick?: boolean }) {
   const d = useDb()
   const [name, setName] = useState('')
   const [phone, setPhone] = useState('')
@@ -98,7 +99,7 @@ function NewCustomerDialog({ onClose, onCreated }: { onClose: () => void; onCrea
   return (
     <FinanceDialog
       title={L('Yeni müşteri', 'New customer')}
-      description={L('Mükerrer kayıt kontrolü yazarken çalışır. Belgeler müşteri oluştuktan sonra Belgeler sekmesinden eklenir.', 'Duplicate detection runs as you type. Documents are added after creation from the Documents tab.')}
+      description={quick ? L('Hızlı kayıt: rezervasyon için asgari bilgi. Kimlik ve ehliyet belgeleri teslimden önce Müşteri → Belgeler’den eklenmelidir; eksikse Teslim Masası engeller.', 'Quick create: the minimum for a reservation. Identity and licence documents must be added under Customer → Documents before handover; the Delivery Desk blocks while they are missing.') : L('Mükerrer kayıt kontrolü yazarken çalışır. Belgeler müşteri oluştuktan sonra Belgeler sekmesinden eklenir.', 'Duplicate detection runs as you type. Documents are added after creation from the Documents tab.')}
       confirm={L('Müşteriyi oluştur', 'Create customer')}
       onClose={onClose}
       onSubmit={() => {

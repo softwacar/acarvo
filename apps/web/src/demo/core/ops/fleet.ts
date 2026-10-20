@@ -1,6 +1,6 @@
 import { B } from '../../i18n'
 import { checkVehicleAvailable, readinessOf } from '../calc/availability'
-import { addHistory, fail, logEvent, meOf, need, nextId, nextNo, nowOf, notify, userName } from '../helpers'
+import { addHistory, fail, hasPerm, logEvent, meOf, need, nextId, nextNo, nowOf, notify, userName } from '../helpers'
 import { fmt } from '../money'
 import { DAY } from '../time'
 import type { Cur, Damage, Db, Expense, Fine, FuelLevel, Id, Incident, Iso, Maintenance, Money, Transfer, Vehicle } from '../types'
@@ -291,15 +291,48 @@ export function linkRepair(d: Db, id: Id, plannedStart: Iso, plannedEnd: Iso, pr
   return m
 }
 
+/** People who may start or approve the lifting of a block (damages:unblock). Both steps need one of them, and they must be two different people. */
+const unblockers = (d: Db) => d.users.filter((u) => u.status === 'active' && hasPerm(d, 'damages:unblock', u))
+
+/** Step 1 (risk level 2): a person with the unblock authority asks for the block to be lifted, with a reason. */
+export function requestUnblock(d: Db, id: Id, reason: string): void {
+  need(d, 'damages:unblock', B('Engel kaldırma talebi', 'Requesting to lift a block'))
+  const dm = d.damages.find((x) => x.id === id)
+  if (!dm || !dm.blocksVehicle) fail(B('Bu hasarda açık engel yok.', 'This damage has no open block.'))
+  if (dm!.unblock && !dm!.unblock.approvedBy && !dm!.unblock.rejectedBy) fail(B('Bu engel için zaten açık bir kaldırma talebi var.', 'There is already an open request to lift this block.'))
+  if (reason.trim().length < 10) fail(B('Gerekçeyi en az 10 karakterle yazın.', 'Write the reason in at least 10 characters.'), { reason: B('Gerekçeyi en az 10 karakterle yazın', 'Write the reason in at least 10 characters') })
+  const others = unblockers(d).filter((u) => u.id !== meOf(d).id)
+  if (!others.length) fail(B('Engeli kaldırmak için ikinci bir bağımsız yetkili (Sahip/Yönetici) gerekir; şu an yok, işlem kilitli. Kullanıcılar ve Roller’den ikinci yetkili ekleyin.', 'Lifting a block needs a second independent authorizer (Owner/Manager); there is none right now, so the action is locked. Add one in Users & Roles.'), {}, 'LEVEL2_LOCKED')
+  dm!.unblock = { requestedBy: meOf(d).id, requestedAt: nowOf(d), reason }
+  addHistory(d, dm!.history, B('Engel kaldırma talebi', 'Request to lift the block'), reason)
+  logEvent(d, { module: 'damages', type: 'BlockLiftRequested', sourceType: 'damage', sourceId: id, summary: B(`${dm!.no} engeli için kaldırma talebi`, `Request to lift the block of ${dm!.no}`), reason })
+  for (const u of others) notify(d, u.id, B(`Hasar engeli kaldırma onayı bekliyor: ${dm!.no}`, `A damage block is waiting for approval: ${dm!.no}`), { type: 'damage', id }, 'approval')
+}
+
+/** Step 2: an independent authorizer (not the requester, not the person who reported the damage) approves and the block is lifted. */
 export function unblockVehicle(d: Db, id: Id): void {
   need(d, 'damages:unblock', B('Engel kaldırma', 'Lifting a block'))
   const dm = d.damages.find((x) => x.id === id)
   if (!dm || !dm.blocksVehicle) fail(B('Bu hasarda açık engel yok.', 'This damage has no open block.'))
-  // Four eyes: the person who reported the damage cannot lift its block.
+  const req = dm!.unblock
+  if (!req || req.approvedBy || req.rejectedBy) fail(B('Önce bir engel kaldırma talebi açılmalı; onay başka bir yetkiliden gelir.', 'A request to lift the block must be opened first; the approval comes from another authorized person.'), {}, 'NEEDS_REQUEST')
+  if (req!.requestedBy === meOf(d).id) fail(B('Talebi açan kişi onaylayamaz: bağımsız ikinci bir yetkili gerekir (dört göz).', 'The person who made the request cannot approve it: an independent second authorized person is needed (four eyes).'), {}, 'FOUR_EYES')
   if (dm!.createdBy === meOf(d).id) fail(B('Hasarı bildiren kişi engeli kaldıramaz: ikinci bir yetkili gerekir (dört göz).', 'The person who reported the damage cannot lift the block: a second authorised person is needed (four eyes).'), {}, 'FOUR_EYES')
   dm!.blocksVehicle = false
-  addHistory(d, dm!.history, B('Engel kaldırıldı', 'Block lifted'), B('Araç engeli kaldırıldı. Araç başka kayıtlar nedeniyle yine uygun olmayabilir; hazırlık ayrıca kontrol edilir.', 'The vehicle block was lifted. The vehicle may still be unavailable because of other records; readiness is checked separately.'))
+  dm!.unblock = { ...req!, approvedBy: meOf(d).id, approvedAt: nowOf(d) }
+  addHistory(d, dm!.history, B('Engel kaldırıldı', 'Block lifted'), B('Araç engeli bağımsız onayla kaldırıldı. Araç başka kayıtlar nedeniyle yine uygun olmayabilir; hazırlık ayrıca kontrol edilir.', 'The vehicle block was lifted with an independent approval. The vehicle may still be unavailable because of other records; readiness is checked separately.'))
   logEvent(d, { module: 'damages', type: 'BlockLifted', sourceType: 'damage', sourceId: id, summary: B(`${dm!.no} engeli kaldırıldı`, `${dm!.no} block lifted`) })
+}
+
+export function rejectUnblock(d: Db, id: Id, reason: string): void {
+  need(d, 'damages:unblock', B('Engel kaldırma talebi', 'Request to lift a block'))
+  const dm = d.damages.find((x) => x.id === id)
+  const req = dm?.unblock
+  if (!dm || !req || req.approvedBy || req.rejectedBy) fail(B('Reddedilecek açık talep yok.', 'There is no open request to reject.'))
+  if (req!.requestedBy === meOf(d).id) fail(B('Talebi açan kişi kararı veremez.', 'The requester cannot decide it.'), {}, 'FOUR_EYES')
+  if (reason.trim().length < 5) fail(B('Ret gerekçesini yazın.', 'Enter the rejection reason.'), { reason: B('Ret gerekçesi zorunlu', 'A rejection reason is required') })
+  dm!.unblock = { ...req!, rejectedBy: meOf(d).id }
+  addHistory(d, dm!.history, B('Engel kaldırma reddedildi', 'Lifting the block was rejected'), reason)
 }
 
 // --------------------------------------------------------------------------- incidents

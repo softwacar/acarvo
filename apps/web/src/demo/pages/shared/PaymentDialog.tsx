@@ -4,6 +4,7 @@ import { cashByCurrency, rentalFinance } from '../../core/calc/finance'
 import { tenderForObligation } from '../../core/calc/fx'
 import { fmt, parseAmount, toInput } from '../../core/money'
 import { recordPayment, previewPayment } from '../../core/ops/finance'
+import { RiskBadge } from './FinanceBits'
 import type { Cur, Id, PaymentMethod } from '../../core/types'
 import { L } from '../../i18n'
 import { MoneyF, SelectF, TextF } from '../../ui/forms'
@@ -68,7 +69,7 @@ export function PaymentDialog({ rentalId, reservationId, kind = 'payment', onClo
         fin
           ? [
               [L('Mevcut açık bakiye', 'Outstanding now'), fmt(outstanding, fin.cur)],
-              [L('Bu ödemeden sonra', 'After this payment'), afterOutstanding === null ? L('Kur Bekleniyor: bakiye değişmez', 'Awaiting Rate: balance unchanged') : fmt(afterOutstanding, fin.cur)],
+              [L('Doğrulanınca açık bakiye', 'Outstanding once verified'), afterOutstanding === null ? L('Kur Bekleniyor: bakiye değişmez', 'Awaiting Rate: balance unchanged') : fmt(afterOutstanding, fin.cur)],
             ]
           : undefined
       }
@@ -87,7 +88,7 @@ export function PaymentDialog({ rentalId, reservationId, kind = 'payment', onClo
         }
         const r = runAction(
           (x) => recordPayment(x, { rentalId, reservationId, kind, payer: { type: payerType, id: payerType === 'customer' ? subject.customerId : payerType === 'corporate' ? subject.corporateId : undefined, name: payerName }, method, tenderMinor: minor, tenderCur: cur, branchId: branch, reference, note }),
-          L('Ödeme demo ortamında kaydedildi (gerçek tahsilat yapılmadı).', 'Payment recorded in the demo (no real collection).'),
+          L('Ödeme kaydedildi · doğrulama bekliyor: başka bir yetkili doğrulayınca bakiyeden düşer (demo; gerçek tahsilat yapılmadı).', 'Payment recorded · awaiting verification: the balance drops when somebody else verifies it (demo; no real collection).'),
         )
         if (!r.ok) {
           setFields(r.fields)
@@ -142,6 +143,7 @@ export function PaymentDialog({ rentalId, reservationId, kind = 'payment', onClo
       )}
       {method === 'cash' && drawerOpen && <p className="text-[12.5px] text-ink-3">{L(`Nakit ${cur} kasasına girer. Kasadaki beklenen: ${fmt(cashByCurrency(d, branch)[cur] ?? 0, cur)}.`, `Cash enters the ${cur} drawer. Expected in the drawer: ${fmt(cashByCurrency(d, branch)[cur] ?? 0, cur)}.`)}</p>}
       {method !== 'cash' && <p className="text-[12.5px] text-ink-3">{L('Kart ve havale fiziksel nakit kasasına eklenmez.', 'Card and bank transfer never enter the physical cash drawer.')}</p>}
+      <p className="flex flex-wrap items-center gap-2 text-[12.5px] text-ink-2"><RiskBadge level={1} /> {L('Kaydeden kişi doğrulayamaz; başka bir yetkili doğrular, sonra ödeme uygulanır.', 'The person who records it cannot verify it; another authorized person verifies, then the payment is applied.')}</p>
       <TextF id="pay-note" label={L('Not (isteğe bağlı)', 'Note (optional)')} value={note} onChange={setNote} />
     </FinanceDialog>
   )

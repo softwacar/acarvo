@@ -49,6 +49,36 @@ export function useDb(): Db {
 
 const emit = () => listeners.forEach((l) => l())
 
+// ------------------------------------------------------------------ other tabs of the same browser
+// Every saved change carries a revision (meta.rev). When another tab saves a newer one, this tab adopts it, keeping its own
+// session (acting user, branch filter, language). That makes "two people claim the same task" consistent across two tabs
+// as soon as the first save has landed. The window between a click and the save (a few tens of milliseconds) is not
+// covered: the demo is a browser concept, not a server. The real service decides with a transaction (HTTP 409).
+const TAB_ID = Math.random().toString(36).slice(2)
+let channel: BroadcastChannel | null = null
+try {
+  channel = typeof BroadcastChannel !== 'undefined' ? new BroadcastChannel('acarvo-demo-sync') : null
+} catch {
+  channel = null
+}
+function announce() {
+  try {
+    channel?.postMessage({ from: TAB_ID, rev: db?.meta.rev ?? 0 })
+  } catch {
+    // best effort only
+  }
+}
+if (channel)
+  channel.onmessage = (e: MessageEvent<{ from: string; rev: number }>) => {
+    if (!persistEnabled || !db || e.data.from === TAB_ID || e.data.rev <= db.meta.rev) return
+    void readSaved().then((saved) => {
+      if (!saved || !db || saved.meta?.schema !== DB_SCHEMA || saved.meta.rev <= db.meta.rev) return
+      version++
+      db = { ...saved, session: { ...saved.session, userId: db.session.userId, branchId: db.session.branchId, lang: db.session.lang, context: db.session.context, preview: db.session.preview } }
+      emit()
+    })
+  }
+
 // ------------------------------------------------------------------ persistence
 
 function openIdb(): Promise<IDBDatabase> {
@@ -120,7 +150,10 @@ function writeNow() {
   saveTimer = null
   if (!db) return
   idbPut(db)
-    .then(() => setPersistFailed(false))
+    .then(() => {
+      setPersistFailed(false)
+      announce()
+    })
     .catch(() => {
       try {
         localStorage.setItem(LS_KEY, JSON.stringify(db))
@@ -167,7 +200,9 @@ export async function loadDemo(opts: { persist?: boolean } = {}): Promise<{ migr
 /** Starts again from the initial scenario. Only the demo state is affected. */
 export async function resetDemo(): Promise<void> {
   version++
+  const prevRev = db?.meta.rev ?? 0
   db = buildSeed(new Date())
+  db.meta.rev = prevRev + 1
   setLangGlobal(db.session.lang)
   try {
     await idbClear()
@@ -190,6 +225,7 @@ export function commit<T>(fn: (d: Db) => T): T {
   const draft = structuredClone(getDb())
   const result = fn(draft)
   draft.meta.modified = true
+  draft.meta.rev = (db?.meta.rev ?? 0) + 1
   version++
   db = draft
   scheduleSave()

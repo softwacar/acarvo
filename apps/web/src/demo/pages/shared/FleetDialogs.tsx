@@ -1,12 +1,12 @@
 import { useState } from 'react'
 import { parseAmount } from '../../core/money'
 import { addDaysYmd, dayOf, zonedIso } from '../../core/time'
-import { createTask } from '../../core/ops/tasks'
+import { createTask, recordBranch, recordLabel } from '../../core/ops/tasks'
 import { addVehicleDocument, arriveTransfer, createDamage, createIncident, createTransfer, departTransfer, planMaintenance, recordLocation, recordOdometer, createVehicle } from '../../core/ops/fleet'
 import type { Db, Id, LinkType, TaskPriority } from '../../core/types'
 import { L } from '../../i18n'
 import { AreaF, CheckF, ComboF, DateF, DateTimeF, MoneyF, type PickItem, SelectF, TextF, branchOptions, classOptions, userOptions } from '../../ui/forms'
-import { runAction, useDb, useFmt } from '../../ui/hooks'
+import { runAction, useCan, useDb, useFmt, useMe } from '../../ui/hooks'
 import { FinanceDialog, Notice } from '../../ui/kit'
 import { DOC_LABEL } from '../../core/calc/policy'
 import { INCIDENT_KIND_LABEL, MAINT_TYPE_LABEL } from '../../ui/status'
@@ -141,25 +141,28 @@ export function IncidentDialog({ vehicleId, rentalId, onClose, onCreated }: { ve
 export function TaskDialog({ link, onClose, defaultTitle = '' }: { link?: { type: LinkType; id: Id }; onClose: () => void; defaultTitle?: string }) {
   const d = useDb()
   const f = useFmt()
+  const me = useMe()
+  const manage = useCan()('tasks:manage')
   const tz = f.zone()
   const [title, setTitle] = useState(defaultTitle)
   const [desc, setDesc] = useState('')
   const [prio, setPrio] = useState<TaskPriority>('normal')
   const [due, setDue] = useState(zonedIso(dayOf(d.clock.now, tz), '17:00', tz))
-  const [mode, setMode] = useState<'one' | 'many' | 'pool'>('one')
-  const [owner, setOwner] = useState('')
+  const [mode, setMode] = useState<'one' | 'many' | 'pool'>(manage ? 'one' : 'one')
+  const [owner, setOwner] = useState(manage ? '' : me.id)
   const [many, setMany] = useState<string[]>([])
-  const [branch, setBranch] = useState('')
+  const [branch, setBranch] = useState(link ? (recordBranch(d, link) ?? '') : '')
+  const [roles, setRoles] = useState<string[]>([])
   const [fields, setFields] = useState<Record<string, string>>({})
-  const staff = userOptions(d)
+  const staff = manage ? userOptions(d) : userOptions(d).filter((u) => u.id === me.id)
   return (
     <FinanceDialog
       title={L('Görev oluştur', 'Create task')}
-      description={L('Görevi tamamlamak yalnız görevi değiştirir; bağlı kiralama, bakım veya olay kaydı ayrıca işlem gerektirir.', 'Completing a task changes only the task; the linked rental, maintenance or incident still needs its own action.')}
+      description={L('Görevi tamamlamak yalnız görevi değiştirir; bağlı kiralama, bakım veya hasar kaydı ayrıca işlem gerektirir.', 'Completing a task changes only the task; the linked rental, maintenance or damage record still needs its own action.')}
       confirm={L('Oluştur', 'Create')}
       onClose={onClose}
       onSubmit={() => {
-        const r = runAction((x) => createTask(x, { title, description: desc, priority: prio, dueAt: due, ownerId: mode === 'one' ? owner || undefined : undefined, recipientIds: mode === 'many' ? many : [], pool: mode === 'pool', branchId: branch || undefined, link }), L('Görev oluşturuldu (demo).', 'Task created (demo).'))
+        const r = runAction((x) => createTask(x, { title, description: desc, priority: prio, dueAt: due, ownerId: mode === 'one' ? owner || undefined : undefined, recipientIds: mode === 'many' ? many : [], pool: mode === 'pool', poolRoleIds: mode === 'pool' ? roles : undefined, branchId: branch || undefined, link }), L('Görev oluşturuldu (demo).', 'Task created (demo).'))
         if (!r.ok) {
           setFields(r.fields)
           return r.error
@@ -167,13 +170,18 @@ export function TaskDialog({ link, onClose, defaultTitle = '' }: { link?: { type
         onClose()
       }}
     >
+      {link && (
+        <Notice tone="blue">
+          {L('Bağlı kayıt', 'Linked record')}: <span className="font-medium" data-testid="task-link">{recordLabel(d, link)}</span> · {L('kayıt görevden değişmez.', 'the record is not changed by the task.')}
+        </Notice>
+      )}
       <TextF id="tk-t" label={L('Başlık', 'Title')} required value={title} onChange={setTitle} error={fields.title} />
       <AreaF id="tk-d" label={L('Açıklama', 'Description')} value={desc} onChange={setDesc} rows={2} />
       <div className="grid gap-4 sm:grid-cols-2">
         <SelectF id="tk-p" label={L('Öncelik', 'Priority')} value={prio} onChange={(v) => setPrio(v as TaskPriority)} options={[{ id: 'urgent', label: L('Acil', 'Urgent') }, { id: 'high', label: L('Yüksek', 'High') }, { id: 'normal', label: L('Normal', 'Normal') }]} />
-        <DateTimeF id="tk-due" label={L('Son tarih', 'Due')} value={due} onChange={setDue} tz={tz} />
+        <DateTimeF id="tk-due" label={L('Son tarih', 'Due')} value={due} onChange={setDue} tz={tz} error={fields.due} />
       </div>
-      <SelectF id="tk-m" label={L('Kime', 'Assign to')} value={mode} onChange={(v) => setMode(v as typeof mode)} options={[{ id: 'one', label: L('Tek personel (sorumlu)', 'One person (owner)') }, { id: 'many', label: L('Birden çok personele duyur', 'Announce to several people') }, { id: 'pool', label: L('Açık havuz: uygun personel üstlenir', 'Open pool: eligible staff claim it') }]} />
+      <SelectF id="tk-m" label={L('Kime', 'Assign to')} value={mode} onChange={(v) => setMode(v as typeof mode)} options={[{ id: 'one', label: manage ? L('Tek personel (sorumlu)', 'One person (owner)') : L('Kendime', 'Myself') }, ...(manage ? [{ id: 'many', label: L('Birden çok personele duyur', 'Announce to several people') }] : []), { id: 'pool', label: L('Açık havuz: uygun personel üstlenir', 'Open pool: eligible staff claim it') }]} />
       {mode === 'one' && <SelectF id="tk-o" label={L('Sorumlu', 'Owner')} value={owner} onChange={setOwner} placeholder={L('Seçin', 'Choose')} options={staff} error={fields.owner} />}
       {mode === 'many' && (
         <fieldset className="space-y-1.5">
@@ -185,8 +193,19 @@ export function TaskDialog({ link, onClose, defaultTitle = '' }: { link?: { type
           ))}
         </fieldset>
       )}
-      <SelectF id="tk-b" label={L('Şube (isteğe bağlı)', 'Branch (optional)')} value={branch} onChange={setBranch} placeholder={L('Tüm şubeler', 'All branches')} options={branchOptions(d)} />
-      {link && <Notice tone="blue">{L('Bu görev bir kayda bağlanacak; kayıt görevden değişmez.', 'This task will be linked to a record; the record is not changed by the task.')}</Notice>}
+      <SelectF id="tk-b" label={L('Şube (isteğe bağlı)', 'Branch (optional)')} value={branch} onChange={setBranch} placeholder={L('Tüm şubeler', 'All branches')} options={branchOptions(d)} error={fields.branch} hint={mode === 'pool' ? L('Havuzdaki görevi yalnız bu şubenin kapsamındaki personel görür ve üstlenir.', 'Only staff in this branch’s scope see and claim a pool task.') : undefined} />
+      {mode === 'pool' && (
+        <fieldset className="space-y-1.5">
+          <legend className="mb-1.5 text-[13.5px] font-medium">{L('Rol filtresi (boş = her uygun rol)', 'Role filter (empty = every eligible role)')}</legend>
+          <div className="flex flex-wrap gap-x-5">
+            {d.roles.map((r) => (
+              <CheckF key={r.id} id={`tk-role-${r.id}`} checked={roles.includes(r.id)} onChange={(v) => setRoles(v ? [...roles, r.id] : roles.filter((x) => x !== r.id))}>
+                {r.name}
+              </CheckF>
+            ))}
+          </div>
+        </fieldset>
+      )}
     </FinanceDialog>
   )
 }

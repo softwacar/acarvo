@@ -1,7 +1,8 @@
 import { B } from '../../i18n'
-import { allocatePayment, computeCashExpected, openSessionOf, rentalFinance } from '../calc/finance'
+import { advanceLedger, allocatePayment, computeCashExpected, openSessionOf, rentalFinance } from '../calc/finance'
+import { cancellationFee } from '../calc/policy'
 import { convertTenderToObligation } from '../calc/fx'
-import { addHistory, fail, logEvent, need, nextId, nextNo, nowOf, meOf } from '../helpers'
+import { addHistory, fail, logEvent, need, nextId, nextNo, nowOf, meOf, userName } from '../helpers'
 import { fmt } from '../money'
 import type { Charge, Cur, Db, DepositRecord, Drawer, Id, Money, Payment, PaymentMethod, PriceLine, RefundRecord, Rental } from '../types'
 
@@ -38,7 +39,8 @@ export function postCharge(d: Db, input: { rentalId: Id; kind: PriceLine['kind']
   return c
 }
 
-export function voidCharge(d: Db, chargeId: Id, reason: string): void {
+export function voidCharge(d: Db, chargeId: Id, reason: string, approvalId?: Id): void {
+  if (!approvalId) fail(B('Hesap kalemi iptali (ters kayıt) yüksek riskli bir işlemdir: yalnız onaylanıp uygulanmış bir Finansal Düzeltme ile yapılır. Onay Merkezi’nden talep açın.', 'Voiding a charge (a reversal) is a high-risk action: it is done only through an approved and applied Financial Correction. Open a request in the Approval Center.'), {}, 'NEEDS_APPROVAL')
   const c = d.charges.find((x) => x.id === chargeId)
   if (!c) fail(B('Kalem bulunamadı.', 'Charge not found.'))
   if (c!.status === 'voided') return
@@ -134,13 +136,80 @@ export function recordPayment(d: Db, input: PaymentInput): Payment {
     after: 'recorded',
   })
   if (drawerId) cashMove(d, drawerId, 'in', input.tenderMinor, input.kind === 'advance' ? B('Kaparo (nakit)', 'Advance (cash)') : B('Müşteri tahsilatı (nakit)', 'Customer payment (cash)'), 'payment', p.id)
-  if (rental && input.kind === 'payment') applyPayment(d, p)
+  // Recorded ≠ Verified ≠ Applied: the line does not reduce the balance until somebody else verifies it (risk level 1).
   return p
+}
+
+/**
+ * Independent verification (risk level 1): somebody other than the person who recorded the line confirms it. Verifying a
+ * payment applies it to the open posted charges; a verified advance is applied at delivery. The audit trail keeps both steps.
+ */
+export function verifyPayment(d: Db, paymentId: Id): Payment {
+  need(d, 'finance:verify', B('Tahsilat doğrulama', 'Verifying a payment'))
+  const p = d.payments.find((x) => x.id === paymentId)
+  if (!p) fail(B('Ödeme bulunamadı.', 'Payment not found.'))
+  if (p!.status === 'voided') fail(B('İptal edilmiş ödeme doğrulanamaz.', 'A reversed payment cannot be verified.'))
+  if (p!.verifiedAt) fail(B('Bu ödeme zaten doğrulanmış.', 'This payment is already verified.'))
+  if (p!.recordedBy === meOf(d).id) fail(B('Kaydı açan kişi doğrulayamaz: ikinci bir yetkili gerekir (bağımsız doğrulama).', 'The person who recorded it cannot verify it: a second authorized person is needed (independent verification).'), {}, 'FOUR_EYES')
+  p!.verifiedBy = meOf(d).id
+  p!.verifiedAt = nowOf(d)
+  logEvent(d, { module: 'finance', type: 'PaymentVerified', sourceType: p!.rentalId ? 'rental' : 'reservation', sourceId: (p!.rentalId ?? p!.reservationId)!, summary: B(`${p!.no} doğrulandı (kaydeden ${userName(d, p!.recordedBy)}, doğrulayan ${userName(d, meOf(d).id)})`, `${p!.no} verified (recorded by ${userName(d, p!.recordedBy)}, verified by ${userName(d, meOf(d).id)})`), cur: p!.tender.cur, minor: p!.tender.minor, branchId: p!.branchId, before: 'recorded', after: 'verified' })
+  const rental = p!.rentalId ? d.rentals.find((r) => r.id === p!.rentalId) : undefined
+  if (rental && p!.kind === 'payment') applyPayment(d, p!)
+  else if (rental && p!.kind === 'advance') applyHeldAdvances(d, rental)
+  return p!
+}
+
+/**
+ * Seed and scenario helper: the money line is verified by somebody other than the person who recorded it, exactly as in real
+ * use, and the acting user is restored afterwards. Not used by any screen.
+ */
+export function verifyByAnother(d: Db, what: { payment?: Payment; deposit?: DepositRecord }): void {
+  const me = d.session.userId
+  const recordedBy = what.payment?.recordedBy ?? what.deposit?.by
+  d.session.userId = ['u-acc', 'u-owner', 'u-mgr'].find((u) => u !== recordedBy)!
+  try {
+    if (what.payment) verifyPayment(d, what.payment.id)
+    else if (what.deposit) verifyDeposit(d, what.deposit.id)
+  } finally {
+    d.session.userId = me
+  }
+}
+
+/** Reconciliation is its own track: an applied payment is matched against the drawer count, the POS slip or the bank statement. It does not change any balance. */
+export function reconcilePayments(d: Db, ids: Id[], ref: string): number {
+  need(d, 'finance:reconcile', B('Mutabakat', 'Reconciliation'))
+  if (ref.trim().length < 3) fail(B('Mutabakat referansını yazın (kasa sayımı, POS özeti veya ekstre).', 'Enter the reconciliation reference (drawer count, POS slip or statement).'), { ref: B('Referans zorunlu', 'A reference is required') })
+  let n = 0
+  for (const id of ids) {
+    const p = d.payments.find((x) => x.id === id)
+    if (!p || p.status !== 'applied' || p.reconciledAt) continue
+    p.reconciledAt = nowOf(d)
+    p.reconciledBy = meOf(d).id
+    p.reconcileRef = ref
+    n += 1
+    logEvent(d, { module: 'finance', type: 'PaymentReconciled', sourceType: p.rentalId ? 'rental' : 'reservation', sourceId: (p.rentalId ?? p.reservationId)!, summary: B(`${p.no} mutabık (${ref})`, `${p.no} reconciled (${ref})`), cur: p.tender.cur, minor: p.tender.minor, branchId: p.branchId })
+  }
+  if (!n) fail(B('Mutabakata uygun (uygulanmış, henüz mutabık olmayan) ödeme yok.', 'There is no payment ready for reconciliation (applied and not yet reconciled).'))
+  return n
+}
+
+/** Deposits follow the same two-person rule: recorded by one person, verified by another. Releasing or offsetting needs a verified deposit. */
+export function verifyDeposit(d: Db, depositId: Id): DepositRecord {
+  need(d, 'finance:verify', B('Depozito doğrulama', 'Verifying a deposit'))
+  const dep = d.deposits.find((x) => x.id === depositId)
+  if (!dep) fail(B('Depozito bulunamadı.', 'Deposit not found.'))
+  if (dep!.verifiedAt) fail(B('Bu depozito zaten doğrulanmış.', 'This deposit is already verified.'))
+  if (dep!.by === meOf(d).id) fail(B('Depoziti kaydeden kişi doğrulayamaz: ikinci bir yetkili gerekir.', 'The person who recorded the deposit cannot verify it: a second authorized person is needed.'), {}, 'FOUR_EYES')
+  dep!.verifiedBy = meOf(d).id
+  dep!.verifiedAt = nowOf(d)
+  logEvent(d, { module: 'finance', type: 'DepositVerified', sourceType: 'rental', sourceId: dep!.rentalId, summary: B(`Depozito doğrulandı (${fmt(dep!.amount.minor, dep!.amount.cur)})`, `Deposit verified (${fmt(dep!.amount.minor, dep!.amount.cur)})`), cur: dep!.amount.cur, minor: dep!.amount.minor })
+  return dep!
 }
 
 /** Applies a recorded payment to the open posted charges of its rental (oldest first). */
 export function applyPayment(d: Db, p: Payment): void {
-  if (p.status !== 'recorded' || !p.rentalId) return
+  if (p.status !== 'recorded' || !p.rentalId || !p.verifiedAt) return
   const { allocations, leftoverMinor } = allocatePayment(d, p.rentalId, p.appliedMinor, d.settings.payment.allowOverpayment)
   if (!allocations.length) return
   if (leftoverMinor > 0 && !d.settings.payment.allowOverpayment) {
@@ -160,9 +229,12 @@ export function applyPayment(d: Db, p: Payment): void {
 /** Advances held for a reservation: moved to the rental, then applied when a charge is posted. */
 export function applyHeldAdvances(d: Db, rental: Rental): void {
   for (const p of d.payments) {
-    if (p.rentalId !== rental.id || p.kind !== 'advance' || p.status !== 'recorded') continue
+    if (p.rentalId !== rental.id || p.kind !== 'advance' || p.status !== 'recorded' || !p.verifiedAt) continue
     if (p.advanceState === 'unapplied') continue
-    const { allocations } = allocatePayment(d, rental.id, p.appliedMinor, true)
+    const remainingTender = p.tender.minor - Math.min(p.tender.minor, p.retainedMinor ?? 0) - (p.refundedMinor ?? 0)
+    if (remainingTender <= 0) continue
+    const usable = remainingTender === p.tender.minor ? p.appliedMinor : Math.round((p.appliedMinor * remainingTender) / p.tender.minor)
+    const { allocations } = allocatePayment(d, rental.id, usable, true)
     if (!allocations.length) continue
     p.allocations = allocations
     p.status = 'applied'
@@ -171,11 +243,12 @@ export function applyHeldAdvances(d: Db, rental: Rental): void {
     logEvent(d, { module: 'finance', type: 'AdvanceApplied', sourceType: 'rental', sourceId: rental.id, summary: B(`Kaparo ${p.no} hesap kalemine mahsup edildi`, `Advance ${p.no} was applied to the charge`), cur: p.obligationCur, minor: p.appliedMinor })
   }
   // Ordinary recorded payments waiting for a charge (paid before delivery) are applied as well.
-  for (const p of d.payments) if (p.rentalId === rental.id && p.kind === 'payment' && p.status === 'recorded') applyPayment(d, p)
+  for (const p of d.payments) if (p.rentalId === rental.id && p.kind === 'payment' && p.status === 'recorded' && p.verifiedAt) applyPayment(d, p)
 }
 
-export function voidPayment(d: Db, paymentId: Id, reason: string): void {
-  need(d, 'finance:apply', B('Ödeme iptali', 'Payment reversal'))
+export function voidPayment(d: Db, paymentId: Id, reason: string, approvalId?: Id): void {
+  if (!approvalId) fail(B('Ödeme iptali (ters kayıt) yüksek riskli bir işlemdir: yalnız onaylanıp uygulanmış bir Finansal Düzeltme ile yapılır. Onay Merkezi’nden talep açın.', 'Reversing a payment is a high-risk action: it is done only through an approved and applied Financial Correction. Open a request in the Approval Center.'), {}, 'NEEDS_APPROVAL')
+  need(d, 'approvals:apply', B('Ödeme iptali', 'Payment reversal'))
   const p = d.payments.find((x) => x.id === paymentId)
   if (!p) fail(B('Ödeme bulunamadı.', 'Payment not found.'))
   if (p!.status === 'voided') fail(B('Bu ödeme zaten iptal edilmiş.', 'This payment was already reversed.'))
@@ -223,6 +296,7 @@ export function releaseDeposit(d: Db, depositId: Id, kind: 'released' | 'applied
   const dep = d.deposits.find((x) => x.id === depositId)
   if (!dep) fail(B('Depozito bulunamadı.', 'Deposit not found.'))
   if (dep!.state !== 'held') fail(B('Bu depozito zaten çözülmüş.', 'This deposit was already resolved.'))
+  if (!dep!.verifiedAt) fail(B('Depozito henüz doğrulanmadı: ikinci bir yetkili doğrulamadan iade veya mahsup edilemez.', 'The deposit is not verified yet: it cannot be released or offset before a second authorized person verifies it.'), {}, 'NOT_VERIFIED')
   const rental = d.rentals.find((r) => r.id === dep!.rentalId)!
   if (kind === 'applied') {
     const f = rentalFinance(d, rental.id)
@@ -279,6 +353,10 @@ export function completeRefund(d: Db, refundId: Id): void {
   if (r!.status !== 'approved') fail(B('İade önce Onay Merkezi\'nde onaylanıp uygulanmalı.', 'The refund must first be approved and applied in the Approval Center.'))
   const advance = r!.paymentId ? d.payments.find((x) => x.id === r!.paymentId) : undefined
   if (r!.paymentId && (!advance || advance.kind !== 'advance' || advance.status !== 'recorded')) fail(B('Bu kaparo artık iade edilemez (uygulanmış, iade edilmiş veya iptal).', 'This advance can no longer be refunded (applied, refunded or reversed).'))
+  if (advance) {
+    const room = advance.tender.minor - Math.min(advance.tender.minor, advance.retainedMinor ?? 0) - (advance.refundedMinor ?? 0)
+    if (r!.amount.minor > room) fail(B('İade tutarı kalan kullanılabilir kaparoyu aşıyor; aynı kaparo ikinci kez iade edilemez.', 'The refund exceeds the remaining usable advance; the same advance cannot be refunded twice.'), {}, 'OVER_REFUND')
+  }
   const branchId = advance ? advance.branchId : r!.rentalId ? d.rentals.find((x) => x.id === r!.rentalId)!.pickupBranchId : d.reservations.find((x) => x.id === r!.reservationId)!.pickupBranchId
   if (r!.method === 'cash') {
     const drawer = findDrawer(d, branchId, r!.amount.cur)
@@ -291,10 +369,14 @@ export function completeRefund(d: Db, refundId: Id): void {
   r!.status = 'completed'
   r!.completedAt = nowOf(d)
   if (advance) {
-    // The advance is paid back once: it is no longer held and can never be applied to a charge.
-    advance.status = 'refunded'
-    advance.advanceState = 'refunded'
-    advance.allocations = []
+    // A partial refund leaves the remaining advance held and usable; only when nothing remains is the advance closed. It is never refunded twice.
+    advance.refundedMinor = (advance.refundedMinor ?? 0) + r!.amount.minor
+    const left = advance.tender.minor - Math.min(advance.tender.minor, advance.retainedMinor ?? 0) - advance.refundedMinor
+    if (left <= 0) {
+      advance.status = 'refunded'
+      advance.advanceState = 'refunded'
+      advance.allocations = []
+    }
   }
   logEvent(d, { module: 'finance', type: 'RefundCompleted', sourceType: r!.rentalId ? 'rental' : 'reservation', sourceId: (r!.rentalId ?? r!.reservationId)!, summary: B(`${r!.no} iade edildi (kayıt)`, `${r!.no} refunded (record)`), cur: r!.amount.cur, minor: r!.amount.minor })
 }
@@ -358,23 +440,46 @@ export function closeSession(d: Db, drawerId: Id, countedMinor: number, variance
 }
 
 /**
- * Keeps a held advance as a policy fee after a cancellation or no-show (spec §65: Held → Forfeited). It is a recorded
- * decision with a visible reason; the money stays with the company and is never applied to a charge afterwards.
+ * Applies the company's cancellation policy to the advances held on a cancelled / no-show reservation (risk level 0: the fee is
+ * computed by the system from the policy, nobody types an amount, and no formal approval is needed for the standard fee).
+ * The fee is kept from the advance; what remains is refundable in whole or in part. A fee above the advance is a customer receivable.
  */
-export function forfeitAdvance(d: Db, paymentId: Id, reason: string): Payment {
-  need(d, 'finance:apply', B('Kaparo politika bedeli', 'Advance policy fee'))
+export function applyCancellationPolicy(d: Db, reservationId: Id, kind: 'cancel' | 'no_show'): Payment[] {
+  const r = d.reservations.find((x) => x.id === reservationId)
+  if (!r) fail(B('Rezervasyon bulunamadı.', 'Reservation not found.'))
+  const settled: Payment[] = []
+  for (const p of d.payments.filter((x) => x.reservationId === reservationId && x.kind === 'advance' && x.status === 'recorded' && x.advanceState === 'unapplied' && x.policyFeeMinor === undefined)) {
+    const fee = cancellationFee(d, r!, nowOf(d), kind)
+    // the fee is in the reservation currency; the advance may have been taken in another currency at the recorded business rate
+    const ratio = p.appliedMinor > 0 ? p.tender.minor / p.appliedMinor : 1
+    const feeTender = p.tender.cur === r!.currency ? fee.feeMinor : Math.round(fee.feeMinor * ratio)
+    const open = d.refunds.some((x) => x.paymentId === p.id && (x.status === 'requested' || x.status === 'approved'))
+    p.policyFeeMinor = feeTender
+    p.policyFeeRule = fee.rule
+    p.retainedMinor = open ? 0 : Math.min(feeTender, p.tender.minor)
+    if (p.retainedMinor >= p.tender.minor && p.tender.minor > 0) {
+      p.status = 'forfeited'
+      p.advanceState = 'forfeited'
+      p.forfeitedAt = nowOf(d)
+      p.forfeitReason = fee.rule
+    }
+    const l = advanceLedger(d, p)
+    logEvent(d, { module: 'finance', type: 'AdvancePolicyFee', sourceType: 'reservation', sourceId: r!.id, summary: B(`Kaparo ${p.no}: politika bedeli ${fmt(feeTender, p.tender.cur)} otomatik hesaplandı; iade edilebilir ${fmt(l.refundableMinor, p.tender.cur)}`, `Advance ${p.no}: policy fee ${fmt(feeTender, p.tender.cur)} computed automatically; refundable ${fmt(l.refundableMinor, p.tender.cur)}`), reason: fee.rule, cur: p.tender.cur, minor: feeTender, branchId: p.branchId })
+    addHistory(d, r!.history, B('Kaparo politika bedeli', 'Advance policy fee'), B(`${p.no} · kaparo ${fmt(p.tender.minor, p.tender.cur)} · politika bedeli ${fmt(l.retainedMinor, p.tender.cur)}${l.receivableMinor ? ` · müşteri alacağı ${fmt(l.receivableMinor, p.tender.cur)}` : ''} · iade edilebilir ${fmt(l.refundableMinor, p.tender.cur)} (${fee.rule})`, `${p.no} · advance ${fmt(p.tender.minor, p.tender.cur)} · policy fee ${fmt(l.retainedMinor, p.tender.cur)}${l.receivableMinor ? ` · customer receivable ${fmt(l.receivableMinor, p.tender.cur)}` : ''} · refundable ${fmt(l.refundableMinor, p.tender.cur)} (${fee.rule})`))
+    settled.push(p)
+  }
+  return settled
+}
+
+/** Settles an advance whose reservation was cancelled before the policy existed (or whose fee was never computed): the same automatic computation, no typed amount. */
+export function settleAdvance(d: Db, paymentId: Id): Payment {
+  need(d, 'finance:apply', B('Kaparo politikası', 'Advance policy'))
   const p = d.payments.find((x) => x.id === paymentId)
   if (!p || p.kind !== 'advance') fail(B('Kaparo kaydı bulunamadı.', 'Advance record not found.'))
   const r = d.reservations.find((x) => x.id === p!.reservationId)
-  if (!r || (r.status !== 'cancelled' && r.status !== 'no_show')) fail(B('Kaparo yalnız iptal edilen veya gelmeyen rezervasyonda politika bedeli olarak tutulabilir.', 'An advance can be kept as a policy fee only on a cancelled or no-show reservation.'))
-  if (p!.status !== 'recorded' || p!.advanceState !== 'unapplied') fail(B('Bu kaparo artık tutulan durumda değil.', 'This advance is no longer held.'))
-  if (reason.trim().length < 10) fail(B('Politika bedeli gerekçesini en az 10 karakterle yazın.', 'Write the policy fee reason in at least 10 characters.'), { reason: B('Gerekçeyi en az 10 karakterle yazın', 'Write the reason in at least 10 characters') })
-  if (d.refunds.some((x) => x.paymentId === p!.id && (x.status === 'requested' || x.status === 'approved'))) fail(B('Bu kaparo için açık bir iade talebi var.', 'There is an open refund request for this advance.'))
-  p!.status = 'forfeited'
-  p!.advanceState = 'forfeited'
-  p!.forfeitReason = reason
-  p!.forfeitedAt = nowOf(d)
-  logEvent(d, { module: 'finance', type: 'AdvanceForfeited', sourceType: 'reservation', sourceId: r!.id, summary: B(`Kaparo ${p!.no} politika bedeli olarak tutuldu`, `Advance ${p!.no} was kept as a policy fee`), reason, cur: p!.tender.cur, minor: p!.tender.minor, branchId: p!.branchId, before: 'unapplied', after: 'forfeited' })
-  addHistory(d, r!.history, B('Kaparo politika bedeli', 'Advance policy fee'), B(`${p!.no} · ${fmt(p!.tender.minor, p!.tender.cur)} politika bedeli olarak tutuldu: ${reason}`, `${p!.no} · ${fmt(p!.tender.minor, p!.tender.cur)} kept as a policy fee: ${reason}`))
+  if (!r || (r.status !== 'cancelled' && r.status !== 'no_show')) return fail(B('Politika bedeli yalnız iptal edilen veya gelmeyen rezervasyonda uygulanır.', 'The policy fee applies only to a cancelled or no-show reservation.'))
+  if (p!.policyFeeMinor !== undefined) fail(B('Bu kaparo için politika bedeli zaten hesaplanmış.', 'The policy fee was already computed for this advance.'))
+  const done = applyCancellationPolicy(d, r.id, r.status === 'no_show' ? 'no_show' : 'cancel')
+  if (!done.length) fail(B('Bu kaparo artık tutulan durumda değil.', 'This advance is no longer held.'))
   return p!
 }

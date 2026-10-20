@@ -6,7 +6,8 @@ import { acceptOffer, addSupplierOffer, addWaitlist, createLead, createPartner, 
 import { applyApproval, createException, createExpense, decideApproval, requestApproval, saveRule } from './ops/control'
 import { addIncidentEvidence, chargeDamageToCustomer, chargeFineToCustomer, assignFine, createDamage, createFine, createIncident, completeMaintenance, linkRepair, payFineToAuthority, planMaintenance, recordInsurerRecovery, setDamageLiability, setIncidentStatus, startMaintenance } from './ops/fleet'
 import { claimTask, completeTask, createTask } from './ops/tasks'
-import { closeSession, forfeitAdvance, holdDeposit, manualCashMove, openSession, recordPayment, releaseDeposit } from './ops/finance'
+import { closeSession, holdDeposit, manualCashMove, openSession, recordPayment, releaseDeposit, verifyByAnother } from './ops/finance'
+import { checkVehicleAvailable } from './calc/availability'
 import { closeFinancial, closeOperational, confirmReservation, convertReservation, createReservation, deliverRental, exceptionClose, find, returnRental, signContract, updateGate, cancelReservation, markNoShow, createRental } from './ops/rentals'
 import { type DbSeedCtx, customersData } from './seed-data'
 import { emptyDb, seasonsFor } from './seed-base'
@@ -121,7 +122,7 @@ export function buildSeed(real: Date): Db {
         as('u-mgr')
         d.rentals.find((x) => x.id === r.id)!.deposit.state = 'waived'
         as(user)
-      } else holdDeposit(d, r.id, dm, B('Teslimde alındı', 'Received at handover'))
+      } else verifyByAnother(d, { deposit: holdDeposit(d, r.id, dm, B('Teslimde alındı', 'Received at handover')) })
     }
     const startKm = vh.odometerKm
     deliverRental(d, r.id, { km: startKm, fuel: 'full', photos: 5, pins: [], note: '' })
@@ -134,7 +135,7 @@ export function buildSeed(real: Date): Db {
       const payCur = s.payCur ?? s.cur
       setNow(new Date(Date.parse(from) + 3_600_000).toISOString())
       const amount = payCur === s.cur ? target : Math.round(target * 2)
-      recordPayment(d, { rentalId: r.id, kind: 'payment', payer: { type: s.corp ? 'corporate' : 'customer', id: s.corp ?? cu.id, name: s.corp ? (d.corporates.find((x) => x.id === s.corp)?.name ?? cu.name) : cu.name }, method, tenderMinor: amount, tenderCur: payCur, branchId: pb, reference: method === 'card' ? `POS-${r.id.toUpperCase()}` : '' })
+      verifyByAnother(d, { payment: recordPayment(d, { rentalId: r.id, kind: 'payment', payer: { type: s.corp ? 'corporate' : 'customer', id: s.corp ?? cu.id, name: s.corp ? (d.corporates.find((x) => x.id === s.corp)?.name ?? cu.name) : cu.name }, method, tenderMinor: amount, tenderCur: payCur, branchId: pb, reference: method === 'card' ? `POS-${r.id.toUpperCase()}` : '' }) })
     }
     if (!s.retAt) return r
     setNow(T(s.retAt[0], s.retAt[1]))
@@ -483,7 +484,8 @@ function seedReservations(d: Db, T: (o: number, hm?: string, z?: string) => stri
     as(o.by ?? (br === 'b-sjj' ? 'u-ops1' : br === 'b-mst' ? 'u-ops2' : 'u-ops3'))
     setNow(T(o.created ?? -2, '11:00'))
     const r = createReservation(d, { customerId: C(c).id, corporateId: o.corp, classId: cls, vehicleId: v ? veh(v).id : undefined, pickupBranchId: br, returnBranchId: br, pickupAt: T(from[0], from[1]), returnAt: T(to[0], to[1]), currency: cur, extras: o.extras ?? [], insuranceId: o.ins, drivers: [C(c).id, ...(o.drivers ?? []).map((n) => C(n).id)], channel: o.channel ?? 'phone', partnerId: o.partnerId })
-    if (o.status !== 'pending') {
+    // V1: only a reservation with a specific vehicle is confirmed; a class request stays pending and holds nothing.
+    if (o.status !== 'pending' && v) {
       as('u-mgr')
       confirmReservation(d, r.id)
     }
@@ -499,7 +501,7 @@ function seedReservations(d: Db, T: (o: number, hm?: string, z?: string) => stri
   mk(16, 22, 'cl-cmp', 'b-dbv', [2, '10:00'], [7, '10:00'], 'EUR', { ins: 'in-cdw' })
   mk(9, 23, 'cl-suv', 'b-dbv', [1, '10:00'], [6, '10:00'], 'EUR', { ins: 'in-scdw' })
   mk(23, 25, 'cl-van', 'b-dbv', [4, '10:00'], [11, '10:00'], 'EUR')
-  // Class-only reservations (demand without a vehicle)
+  // Class-only requests (demand without a vehicle): pending, a specific vehicle is assigned before they can be confirmed
   mk(19, null, 'cl-eco', 'b-mst', [0, '18:00'], [2, '18:00'], 'BAM', { ins: 'in-cdw', created: -1 })
   mk(21, null, 'cl-suv', 'b-sjj', [1, '12:00'], [5, '12:00'], 'BAM', { corp: 'co4', channel: 'corporate' })
   mk(24, null, 'cl-prm', 'b-dbv', [4, '10:00'], [8, '10:00'], 'EUR', { ins: 'in-scdw' })
@@ -516,17 +518,26 @@ function seedReservations(d: Db, T: (o: number, hm?: string, z?: string) => stri
     const pct = d.settings.payment.advanceRequiredPct
     const minor = Math.round(((res.price?.grossMinor ?? 0) * pct) / 100)
     const cu = d.customers.find((x) => x.id === res.customerId)!
-    return recordPayment(d, { reservationId: res.id, kind: 'advance', payer: { type: 'customer', id: cu.id, name: cu.name }, method: 'card', tenderMinor: minor, tenderCur: res.currency, branchId, reference: ref, note: B('Kaparo (rezervasyon güvencesi)', 'Advance (reservation guarantee)') })
+    const adv = recordPayment(d, { reservationId: res.id, kind: 'advance', payer: { type: 'customer', id: cu.id, name: cu.name }, method: 'card', tenderMinor: minor, tenderCur: res.currency, branchId, reference: ref, note: B('Kaparo (rezervasyon güvencesi)', 'Advance (reservation guarantee)') })
+    verifyByAnother(d, { payment: adv })
+    return adv
   }
   // The demo story customer: confirmed reservation with a vehicle, advance held, ready to be converted to a rental
   const kv = veh(4)
   const kapRes = mk(41, 4, kv.classId, 'b-sjj', [4, '10:00'], [8, '10:00'], 'EUR', { ins: 'in-cdw', channel: 'phone', created: -1 })
   takeAdvance(kapRes, [-1, '12:30'], 'b-sjj', 'POS-DEMO-KAP-0001')
+  // The cancellation-policy story (K-13): a 200 EUR advance on a reservation that starts tomorrow. Cancelling now costs the fixed 50 EUR policy
+  // fee, so 150 EUR can be refunded in whole or in part. The advance is typed here; the fee is computed by the company policy.
+  const polVeh = d.vehicles.find((x) => x.homeBranchId === 'b-sjj' && x.status === 'active' && x.source === 'internal' && checkVehicleAvailable(d, x, T(1, '10:00'), T(3, '10:00'), d.clock.now, {}).ok)!
+  const polRes = mk(41, d.vehicles.indexOf(polVeh) + 1, polVeh.classId, 'b-sjj', [1, '10:00'], [3, '10:00'], 'EUR', { channel: 'phone', created: -1 })
+  as('u-ops1')
+  setNow(T(-1, '13:00'))
+  verifyByAnother(d, { payment: recordPayment(d, { reservationId: polRes.id, kind: 'advance', payer: { type: 'customer', id: C(41).id, name: C(41).name }, method: 'card', tenderMinor: 20000, tenderCur: 'EUR', branchId: 'b-sjj', reference: 'POS-DEMO-KAP-0004', note: B('Kaparo (rezervasyon güvencesi)', 'Advance (reservation guarantee)') }) })
   // Cancelled and no-show
   const cx = mk(1, null, 'cl-eco', 'b-sjj', [-4, '10:00'], [-1, '10:00'], 'BAM', { created: -10 })
   const cxAdvance = takeAdvance(cx, [-9, '12:30'], 'b-sjj', 'POS-DEMO-KAP-0002')
   as('u-ops1')
-  setNow(T(-6, '12:00'))
+  setNow(T(-7, '12:00'))
   cancelReservation(d, cx.id, B('Müşteri uçuşunu iptal etti', 'The customer cancelled their flight'))
   // The cancelled reservation's advance is paid back through the four-eyes refund approval (requester ≠ decider ≠ applier)
   setNow(T(-5, '10:00'))
@@ -541,15 +552,16 @@ function seedReservations(d: Db, T: (o: number, hm?: string, z?: string) => stri
   const cx2 = mk(2, null, 'cl-cmp', 'b-mst', [3, '10:00'], [6, '10:00'], 'EUR', { created: -2, status: 'pending' })
   setNow(T(-1, '10:00'))
   cancelReservation(d, cx2.id, B('Fiyat uygun bulunmadı', 'The price was not acceptable'))
-  const ns = mk(16, null, 'cl-eco', 'b-dbv', [-2, '10:00'], [1, '10:00'], 'EUR', { created: -8 })
+  const nsVeh = d.vehicles.filter((x) => x.homeBranchId === 'b-dbv' && x.classId === 'cl-eco' && x.status === 'active' && x.source === 'internal').findIndex((x) => checkVehicleAvailable(d, x, T(-2, '10:00'), T(1, '10:00'), T(-8, '11:00'), {}).ok)
+  const nsPick = d.vehicles.filter((x) => x.homeBranchId === 'b-dbv' && x.classId === 'cl-eco' && x.status === 'active' && x.source === 'internal')[nsVeh]!
+  const ns = mk(16, d.vehicles.indexOf(nsPick) + 1, 'cl-eco', 'b-dbv', [-2, '10:00'], [1, '10:00'], 'EUR', { created: -8 })
   const nsAdvance = takeAdvance(ns, [-8, '13:00'], 'b-dbv', 'POS-DEMO-KAP-0003')
   setNow(T(-1, '18:00'))
   as('u-ops3')
   markNoShow(d, ns.id)
   // The no-show customer's advance is kept as a policy fee, with a visible reason
-  as('u-mgr')
-  setNow(T(-1, '19:00'))
-  forfeitAdvance(d, nsAdvance.id, B('Gelmedi; ücretsiz iptal süresi geçmişti (politika bedeli).', 'No-show; the free cancellation period had passed (policy fee).'))
+  // markNoShow applied the company's no-show policy by itself: the fee is computed, nobody typed a reason or an amount
+  void nsAdvance
   as('u-ops3')
   // waitlist
   as('u-ops1')
@@ -798,13 +810,13 @@ function seedControl(d: Db, T: (o: number, hm?: string, z?: string) => string, a
   as('u-ops2')
   setNow(T(-1, '16:00'))
   requestApproval(d, { type: 'deposit_exception', target: { type: 'rental', id: rentals.rp2! }, reason: B('Kurumsal bağlantılı müşteri; depozito yarıya indirilsin.', 'Customer linked to a corporate account; reduce the deposit by half.'), requested: { minor: 15000, cur: 'EUR' } })
-  as('u-ops3')
+  as('u-mgr') // a financial correction is started by an authorizer and decided by another one (risk level 2)
   setNow(T(-2, '12:00'))
   const a3 = requestApproval(d, { type: 'financial_correction', target: { type: 'payment', id: d.payments.find((p) => p.rentalId === rentals.rd4 && p.status === 'applied')?.id ?? d.payments[0]!.id }, reason: B('Ödeme yanlış kiralamaya girilmiş; ters kayıt istiyorum.', 'The payment was entered on the wrong rental; I want a reversal.'), requested: null })
   as('u-mgr2')
   setNow(T(-2, '15:00'))
   decideApproval(d, a3.id, 'approve', 'Evrak kontrol edildi.')
-  as('u-ops1')
+  as('u-mgr2')
   setNow(T(-3, '10:00'))
   const a4 = requestApproval(d, { type: 'corporate_credit_override', target: { type: 'corporate', id: 'co3' }, reason: B('Una Tours kredi limiti dolmak üzere; etkinlik kiralaması için ek pay.', 'Una Tours is about to reach its credit limit; an extra allowance for an event rental.'), requested: { minor: 100000, cur: 'EUR' } })
   as('u-mgr')

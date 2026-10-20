@@ -1,3 +1,5 @@
+import { LinkedTasks, useLinkedTasks } from '../../ui/linkedTasks'
+import { isOpenTask } from '../../core/ops/tasks'
 import { CaretDown } from '@phosphor-icons/react'
 import { Link, useParams } from '@tanstack/react-router'
 import { DropdownMenu } from 'radix-ui'
@@ -6,7 +8,9 @@ import { cn } from '@/lib/utils'
 import { checkVehicleAvailable, readinessOf } from '../../core/calc/availability'
 import { rentalFinance } from '../../core/calc/finance'
 import { fmt } from '../../core/money'
-import { releaseDeposit, voidCharge } from '../../core/ops/finance'
+import { releaseDeposit } from '../../core/ops/finance'
+import { AuditButton, StageBadge, VerifyButton } from '../shared/FinanceBits'
+import { ApprovalRequestDialog } from '../shared/ApprovalRequestDialog'
 import { cancelRental, closeFinancial, exceptionClose, extendRental, financialCloseChecks, reopenFinancial, swapVehicle } from '../../core/ops/rentals'
 import type { Rental } from '../../core/types'
 import { L } from '../../i18n'
@@ -36,7 +40,7 @@ export function Rental360Page() {
 }
 
 type Dlg = null | 'extend' | 'swap' | 'cancel' | 'exception' | 'loss' | 'pay' | 'damage' | 'incident' | 'reopen'
-type TabId = 'ozet' | 'teslim' | 'iade' | 'sozlesme' | 'sigorta' | 'finans' | 'gecmis'
+type TabId = 'ozet' | 'teslim' | 'iade' | 'sozlesme' | 'sigorta' | 'finans' | 'gorevler' | 'gecmis'
 
 function Detail({ r }: { r: Rental }) {
   const d = useDb()
@@ -44,6 +48,7 @@ function Detail({ r }: { r: Rental }) {
   const f = useFmt()
   const defTab: TabId = r.status === 'prepared' ? 'teslim' : r.status === 'delivered' ? 'iade' : 'ozet'
   const [tab, setTab] = useUrlState('sekme', defTab)
+  const openTasks = useLinkedTasks('rental', r.id).filter(isOpenTask).length
   const [dlg, setDlg] = useState<Dlg>(null)
   const [error, setError] = useState<string | null>(null)
   const customer = d.customers.find((c) => c.id === r.customerId)
@@ -117,11 +122,13 @@ function Detail({ r }: { r: Rental }) {
             { id: 'sozlesme', label: L('Sözleşme', 'Contract') },
             { id: 'sigorta', label: L('Sigorta ve Hasar', 'Cover and Damage') },
             { id: 'finans', label: L('Finans', 'Finance'), count: fin.outstandingMinor > 0 ? 1 : undefined },
+            { id: 'gorevler', label: L('Görevler', 'Tasks'), count: openTasks || undefined },
             { id: 'gecmis', label: L('Geçmiş', 'History'), count: r.history.length },
           ]}
         />
 
         {tab === 'ozet' && <OverviewTab r={r} go={go} />}
+        {tab === 'gorevler' && <LinkedTasks type="rental" id={r.id} defaultTitle={`${r.no}: `} />}
         {tab === 'teslim' && <DeskTab r={r} go={go} />}
         {tab === 'iade' && <ReturnTab r={r} go={go} />}
         {tab === 'sozlesme' && <ContractTab r={r} />}
@@ -257,10 +264,10 @@ function FinanceTab({ r, onPay, onReopen, act }: { r: Rental; onPay: () => void;
           { label: L('Hesap kalemleri', 'Charges'), value: fmt(fin.chargesMinor, fin.cur), hint: L('Hesaplanan borç', 'Amount owed') },
           { label: L('Uygulanan', 'Applied'), value: fmt(fin.appliedMinor, fin.cur), hint: L('Kalemlere işlenen ödeme', 'Payments allocated to charges') },
           { label: L('Kalan', 'Outstanding'), value: fmt(fin.outstandingMinor, fin.cur), tone: fin.outstandingMinor ? 'hold' : undefined },
-          { label: L('Uygulanmamış', 'Unapplied'), value: fmt(fin.unappliedMinor, fin.cur), hint: L('Kaydedildi ama uygulanmadı', 'Recorded but not applied'), tone: fin.unappliedMinor ? 'hold' : undefined },
+          { label: L('Uygulanmamış', 'Unapplied'), value: fmt(fin.unappliedMinor, fin.cur), hint: fin.unverifiedMinor ? L(`${fmt(fin.unverifiedMinor, fin.cur)} doğrulama bekliyor`, `${fmt(fin.unverifiedMinor, fin.cur)} awaiting verification`) : L('Kaydedildi ama uygulanmadı', 'Recorded but not applied'), tone: fin.unappliedMinor ? 'hold' : undefined },
         ]}
       />
-      <Panel title={L('Hesap kalemleri', 'Charges')} description={L('Hesap kalemi ödeme değildir; ödeme kaydedilince de kaleme uygulanana kadar borç düşmez.', 'A charge is not a payment; recording a payment does not reduce the balance until it is applied.')} action={r.status !== 'prepared' && r.status !== 'cancelled' && can('finance:record') ? <button type="button" className={btnPrimary} onClick={onPay}>{L('Ödeme al', 'Take payment')}</button> : undefined}>
+      <Panel title={L('Hesap kalemleri', 'Charges')} description={L('Hesap kalemi ödeme değildir; ödeme kaydedilince de başka bir yetkili doğrulayıp kaleme uygulanana kadar borç düşmez. Kalem iptali yüksek riskli bir Finansal Düzeltmedir.', 'A charge is not a payment; recording a payment does not reduce the balance until somebody else verifies it and it is applied. Voiding a charge is a high-risk Financial Correction.')} action={r.status !== 'prepared' && r.status !== 'cancelled' && can('finance:record') ? <button type="button" className={btnPrimary} onClick={onPay}>{L('Ödeme al', 'Take payment')}</button> : undefined}>
         {fin.charges.length === 0 ? <p className="text-[13.5px] text-ink-2">{L('Teslimle birlikte kiralama bedeli hesap kalemi doğar.', 'The rental charge arises at handover.')}</p> : (
           <ul className="divide-y divide-line-soft">
             {fin.charges.map((c) => (
@@ -268,7 +275,7 @@ function FinanceTab({ r, onPay, onReopen, act }: { r: Rental; onPay: () => void;
                 <span><span className="tnum font-medium">{c.no}</span> · {c.label}</span>
                 <span className="flex items-center gap-3"><span className={cn('tnum', c.status === 'voided' && 'text-ink-3 line-through')}>{fmt(c.amountMinor, c.cur)}</span>
                   <Status kind="charge" value={c.status} />
-                  {c.status === 'posted' && can('finance:apply') && <button type="button" className={btnSmall} onClick={() => setVoiding(c.id)}>{L('İptal', 'Void')}</button>}
+                  {c.status === 'posted' && can('approvals:request') && <button type="button" className={btnSmall} onClick={() => setVoiding(c.id)}>{L('Düzeltme talep et', 'Request correction')}</button>}
                 </span>
               </li>
             ))}
@@ -281,7 +288,7 @@ function FinanceTab({ r, onPay, onReopen, act }: { r: Rental; onPay: () => void;
             {fin.payments.map((p) => (
               <li key={p.id} className="flex flex-wrap items-center justify-between gap-2 py-2.5 text-[13.5px]">
                 <span><span className="tnum font-medium">{p.no}</span> · {fmt(p.tender.minor, p.tender.cur)} · {METHOD_LABEL()[p.method]}{p.tender.cur !== p.obligationCur ? ` · ${L('eşdeğer', 'equiv.')} ${fmt(p.appliedMinor, p.obligationCur)}` : ''}<span className="block text-[12.5px] text-ink-2">{f.dt(p.recordedAt, p.branchId)}{p.rate ? ` · ${L('kur', 'rate')} 1 ${p.rate.base} = ${p.rate.rate} ${p.rate.quote}` : ''}</span></span>
-                {p.kind === 'advance' ? <AdvanceStatus p={p} /> : <Status kind="payment" value={p.status} />}
+                <span className="flex flex-wrap items-center gap-2">{p.kind === 'advance' && <AdvanceStatus p={p} />}<StageBadge p={p} /><VerifyButton p={p} /><AuditButton needles={[p.no, p.id]} title={`${L('Ödeme', 'Payment')} ${p.no}`} /></span>
               </li>
             ))}
           </ul>
@@ -293,11 +300,12 @@ function FinanceTab({ r, onPay, onReopen, act }: { r: Rental; onPay: () => void;
             <ul className="divide-y divide-line-soft">
               {deposits.map((x) => (
                 <li key={x.id} className="space-y-2 py-2.5 text-[13.5px]">
-                  <div className="flex items-center justify-between gap-2"><span className="tnum font-medium">{fmt(x.amount.minor, x.amount.cur)} · {METHOD_LABEL()[x.method]}</span><Status kind="deposit" value={x.state} /></div>
-                  {x.state === 'held' && can('finance:apply') && (
+                  <div className="flex items-center justify-between gap-2"><span className="tnum font-medium">{fmt(x.amount.minor, x.amount.cur)} · {METHOD_LABEL()[x.method]}</span><span className="flex items-center gap-2"><Status kind="deposit" value={x.state} /><span className="text-[12px] text-ink-2">{x.verifiedAt ? L('doğrulandı', 'verified') : L('doğrulama bekliyor', 'awaiting verification')}</span></span></div>
+                  {x.state === 'held' && (
                     <div className="flex flex-wrap gap-2">
-                      <button type="button" className={btnSmall} onClick={() => act((s) => releaseDeposit(s, x.id, 'released'), L('Depozito iade edildi.', 'Deposit released.'))}>{L('İade et', 'Release')}</button>
-                      <button type="button" className={btnSmall} onClick={() => act((s) => releaseDeposit(s, x.id, 'applied'), L('Depozito açık bakiyeye mahsup edildi.', 'Deposit applied to the open balance.'))}>{L('Bakiyeye mahsup et', 'Apply to balance')}</button>
+                      <VerifyButton dep={x} />
+                      {can('finance:apply') && <button type="button" className={btnSmall} disabled={!x.verifiedAt} title={x.verifiedAt ? undefined : L('Önce başka bir yetkili doğrulamalı', 'Another authorized person must verify it first')} onClick={() => act((s) => releaseDeposit(s, x.id, 'released'), L('Depozito iade edildi.', 'Deposit released.'))}>{L('İade et', 'Release')}</button>}
+                      {can('finance:apply') && <button type="button" className={btnSmall} disabled={!x.verifiedAt} title={x.verifiedAt ? undefined : L('Önce başka bir yetkili doğrulamalı', 'Another authorized person must verify it first')} onClick={() => act((s) => releaseDeposit(s, x.id, 'applied'), L('Depozito açık bakiyeye mahsup edildi.', 'Deposit applied to the open balance.'))}>{L('Bakiyeye mahsup et', 'Apply to balance')}</button>}
                     </div>
                   )}
                 </li>
@@ -320,7 +328,7 @@ function FinanceTab({ r, onPay, onReopen, act }: { r: Rental; onPay: () => void;
           </div>
         </Panel>
       </div>
-      {voiding && <ReasonDialog title={L('Hesap kalemini iptal et', 'Void charge')} desc={L('Kalem silinmez; iptal gerekçesiyle ters kayıt olarak kalır. Ödeme uygulanmış kalem iptal edilemez.', 'The charge is not deleted; it stays as a reversal with a reason. A charge with applied payments cannot be voided.')} confirm={L('İptal et', 'Void')} danger min={3} onClose={() => setVoiding(null)} run={(reason) => runAction((s) => voidCharge(s, voiding, reason), L('Hesap kalemi iptal edildi (ters kayıt).', 'Charge voided (reversal).'))} />}
+      {voiding && <ApprovalRequestDialog type="financial_correction" target={{ type: 'payment', id: voiding }} onClose={() => setVoiding(null)} hint={L('Hesap kalemi iptali yüksek riskli (Seviye 2) bir işlemdir; bağımsız bir yetkili onaylar ve uygular.', 'Voiding a charge is a high-risk (level 2) action; an independent authorizer approves and applies it.')} />}
     </div>
   )
 }

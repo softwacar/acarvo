@@ -11,10 +11,64 @@ export interface RentalFinance {
   outstandingMinor: number
   /** Payments recorded against the rental but not (yet) applied to a posted charge. */
   unappliedMinor: number
+  /** Of those, the part nobody has verified yet (it cannot reduce the balance until somebody else verifies it). */
+  unverifiedMinor: number
   /** Applied more than owed: shown as a credit / refund candidate, never hidden as a negative balance. */
   overpaidMinor: number
   charges: Charge[]
   payments: Payment[]
+}
+
+/**
+ * The record → verify → apply line of one payment (decision document M.1). Reconciliation and the audit trail are NOT steps of this
+ * line: reconciliation is a separate flag (`reconciledAt`), the audit trail is the immutable event list. A payment can be
+ * applied for months and still wait for reconciliation, and it keeps collecting audit events after it is applied.
+ */
+export type PaymentStage = 'recorded' | 'verified' | 'applied' | 'voided'
+export function stageOf(p: Pick<Payment, 'status' | 'verifiedAt'>): PaymentStage {
+  if (p.status === 'voided') return 'voided'
+  if (p.status === 'applied') return 'applied'
+  return p.verifiedAt ? 'verified' : 'recorded'
+}
+/** Reconciliation state of an applied payment: separate from the stage. */
+export const isReconciled = (p: Pick<Payment, 'reconciledAt'>) => !!p.reconciledAt
+
+/**
+ * The advance (kaparo) ledger of one advance: policy fee, customer receivable, real refund, remaining usable advance and the
+ * history. Money lines are in the tender currency of the advance. An advance is neither revenue nor a deposit.
+ */
+export interface AdvanceLedger {
+  cur: Cur
+  tenderMinor: number
+  /** Policy fee kept from the advance (automatic, set by the company policy). */
+  retainedMinor: number
+  /** Fee above the advance: the customer owes it (informational, not collected here). */
+  receivableMinor: number
+  /** Already paid back to the customer. */
+  refundedMinor: number
+  /** Asked for but not paid yet (requested / approved refund). */
+  pendingRefundMinor: number
+  /** What can still be requested back: advance − fee − refunded − pending. */
+  refundableMinor: number
+  /** What is still held for this customer: advance − fee − refunded. */
+  remainingMinor: number
+}
+export function advanceLedger(db: Db, p: Payment): AdvanceLedger {
+  const tender = p.tender.minor
+  const retained = Math.min(tender, p.retainedMinor ?? 0)
+  const refunded = p.refundedMinor ?? 0
+  const pending = db.refunds.filter((r) => r.paymentId === p.id && (r.status === 'requested' || r.status === 'approved')).reduce((a, r) => a + r.amount.minor, 0)
+  const remaining = Math.max(0, tender - retained - refunded)
+  return {
+    cur: p.tender.cur,
+    tenderMinor: tender,
+    retainedMinor: retained,
+    receivableMinor: Math.max(0, (p.policyFeeMinor ?? 0) - retained),
+    refundedMinor: refunded,
+    pendingRefundMinor: pending,
+    refundableMinor: Math.max(0, remaining - pending),
+    remainingMinor: remaining,
+  }
 }
 
 export function rentalFinance(db: Db, rentalId: Id): RentalFinance {
@@ -26,8 +80,9 @@ export function rentalFinance(db: Db, rentalId: Id): RentalFinance {
   const chargesMinor = posted.reduce((a, c) => a + c.amountMinor, 0)
   const appliedMinor = payments.filter((p) => p.status === 'applied').reduce((a, p) => a + p.allocations.reduce((x, al) => x + al.minor, 0), 0)
   const unappliedMinor = payments.filter((p) => p.status === 'recorded').reduce((a, p) => a + p.appliedMinor, 0)
+  const unverifiedMinor = payments.filter((p) => p.status === 'recorded' && !p.verifiedAt).reduce((a, p) => a + p.appliedMinor, 0)
   const outstanding = chargesMinor - appliedMinor
-  return { cur, chargesMinor, appliedMinor, outstandingMinor: Math.max(0, outstanding), unappliedMinor, overpaidMinor: Math.max(0, -outstanding), charges, payments }
+  return { cur, chargesMinor, appliedMinor, outstandingMinor: Math.max(0, outstanding), unappliedMinor, unverifiedMinor, overpaidMinor: Math.max(0, -outstanding), charges, payments }
 }
 
 /** Oldest-first allocation of an applied amount onto the open posted charges of a rental. */

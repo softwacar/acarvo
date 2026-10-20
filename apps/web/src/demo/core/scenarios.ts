@@ -2,7 +2,7 @@ import { checkVehicleAvailable } from './calc/availability'
 import { isRateActive } from './calc/fx'
 import { fail, nowOf } from './helpers'
 import { endFxRate } from './ops/control'
-import { holdDeposit } from './ops/finance'
+import { holdDeposit, verifyByAnother } from './ops/finance'
 import { createRental, deliverRental, find, signContract, updateGate } from './ops/rentals'
 import {L, B } from '../i18n'
 import type { Db, PriceSnapshot, Rental } from './types'
@@ -60,7 +60,7 @@ export function prepareSplitPaymentRental(d: Db): Rental {
   const rental = createRental(d, { customerId: customer.id, drivers: [customer.id], vehicleId: v.id, classId: v.classId, pickupBranchId: 'b-sjj', returnBranchId: 'b-sjj', plannedPickupAt: now, plannedReturnAt: to, currency: 'EUR', extras: [], notes: B('Demo senaryosu: çoklu tahsilat (500 EUR)', 'Demo scenario: split payment (500 EUR)'), price })
   signContract(d, rental.id, customer.name, true)
   updateGate(d, rental.id, { docsChecked: true, driverOk: true })
-  if (rental.deposit.required.minor > 0) holdDeposit(d, rental.id, 'card', 'Demo senaryosu')
+  if (rental.deposit.required.minor > 0) verifyByAnother(d, { deposit: holdDeposit(d, rental.id, 'card', 'Demo senaryosu') })
   deliverRental(d, rental.id, { km: v.odometerKm, fuel: 'full', photos: 5, pins: [], note: '' })
   d.session.userId = as
   return find.rental(d, rental.id)!

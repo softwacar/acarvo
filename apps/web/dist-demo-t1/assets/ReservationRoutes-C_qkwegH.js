@@ -1,0 +1,1 @@
+import{N as e}from"./utils-B_iHWVRW.js";import{i as t}from"./ReservationFormPage-0HzsL3TS.js";var n=e(),r=()=>(0,n.jsx)(t,{mode:`create`}),i=()=>(0,n.jsx)(t,{mode:`edit`});export{i as EditReservationPage,r as NewReservationPage};

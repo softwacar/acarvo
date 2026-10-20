@@ -11,6 +11,8 @@ import { btnPrimary, btnSecondary, Empty, Facts, FilterBar, FilterSelect, Financ
 import { type Col, DataTable, downloadCsv } from '../../ui/table'
 import { ActBtn, ActionRow, DrawerSection, PromptDialog, RecordDrawer, useAct } from '../fleet/common'
 import { ApprovalRequestDialog } from '../shared/ApprovalRequestDialog'
+import { RiskBadge } from '../shared/FinanceBits'
+import { IndependencePanel } from '../shared/Independence'
 import { Link } from '@tanstack/react-router'
 
 type TabId = 'bekleyen' | 'uygulanacak' | 'tamam' | 'hepsi'
@@ -36,6 +38,7 @@ export function ApprovalsPage() {
   const cols: Col<Approval>[] = [
     { id: 'no', header: L('Talep', 'Request'), cell: (a) => <span className="tnum whitespace-nowrap font-medium text-blue">{a.no}</span>, sort: (a) => a.no, csv: (a) => a.no },
     { id: 'type', header: L('Tür', 'Type'), cell: (a) => loc(approvalLabel(a.type)), csv: (a) => loc(approvalLabel(a.type)) },
+    { id: 'risk', header: L('Risk', 'Risk'), cell: (a) => <RiskBadge level={(a.risk ?? 1) as 0 | 1 | 2 | 3} />, hideBelow: 'lg', sort: (a) => a.risk ?? 1 },
     { id: 'amt', header: L('İstenen', 'Requested'), align: 'right', cell: (a) => (a.requested ? <span className="tnum whitespace-nowrap">{fmt(a.requested.minor, a.requested.cur)}</span> : a.proposedPct ? <span className="tnum">%{a.proposedPct}</span> : '—'), hideBelow: 'md' },
     { id: 'by', header: L('Talep eden', 'Requested by'), cell: (a) => userName(d, a.requesterId), hideBelow: 'lg' },
     { id: 'when', header: L('Tarih', 'Date'), cell: (a) => <span className="tnum text-[13px]">{f.dt(a.createdAt)}</span>, sort: (a) => a.createdAt, hideBelow: 'lg', csv: (a) => a.createdAt },
@@ -59,6 +62,7 @@ export function ApprovalsPage() {
         <FilterSelect label={L('Tür', 'Type')} value={type} onChange={setType} options={[{ id: 'all', label: L('Tümü', 'All') }, ...APPROVAL_TYPES.map((t) => ({ id: t.type, label: loc(t.label) }))]} />
       </FilterBar>
       <DataTable rows={rows} cols={cols} rowKey={(a) => a.id} label={L('Onay listesi', 'Approval list')} urlKey="on" defaultSort={{ id: 'when', dir: 'desc' }} onRowClick={(a) => setSel(a.id)} empty={<Empty title={L('Bu görünümde talep yok', 'No requests in this view')} />} />
+      <IndependencePanel compact />
       {adding && <NewRequestDialog onClose={() => setAdding(false)} />}
       {current && <Drawer a={current} onClose={() => setSel('')} />}
     </Page>

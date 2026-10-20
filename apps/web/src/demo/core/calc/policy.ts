@@ -1,3 +1,4 @@
+import { B } from '../../i18n'
 import { L } from '../../i18n'
 import { dayOf, DAY } from '../time'
 import type { Cur, Customer, Db, Id, Iso, Money } from '../types'
@@ -93,4 +94,33 @@ export function evaluateDepositPolicy(db: Db, classId: Id, insuranceId: Id | und
   const pkg = insuranceId ? db.insurance.find((p) => p.id === insuranceId) : undefined
   const effect = pkg?.depositEffect[cur] ?? 0
   return { ok: true, required: { minor: Math.max(0, row + effect), cur } }
+}
+
+// --------------------------------------------------------------------------- cancellation / no-show fee (company policy)
+
+export interface PolicyFee {
+  kind: 'free' | 'late' | 'no_show'
+  /** Fee in the reservation currency (minor units). */
+  feeMinor: number
+  cur: string
+  hoursBefore: number
+  /** The rule that applied, in words (shown next to the amount). */
+  rule: string
+}
+
+/**
+ * The cancellation fee of a reservation, computed from the company policy. Staff cannot type another amount: a deviation is
+ * a Financial Correction that an independent authorizer approves. A cancellation at least `freeHoursBefore` hours before pickup is free.
+ */
+export function cancellationFee(d: Db, r: { currency: string; pickupAt: string; price: { grossMinor: number; days: number } | null }, at: string, kind: 'cancel' | 'no_show'): PolicyFee {
+  const pol = d.settings.cancellation
+  const hoursBefore = Math.floor((Date.parse(r.pickupAt) - Date.parse(at)) / 3_600_000)
+  const gross = r.price?.grossMinor ?? 0
+  const days = Math.max(1, r.price?.days ?? 1)
+  const rule = kind === 'no_show' ? pol.noShowFee : pol.lateFee
+  if (kind === 'cancel' && hoursBefore >= pol.freeHoursBefore)
+    return { kind: 'free', feeMinor: 0, cur: r.currency, hoursBefore, rule: B(`Teslime ${pol.freeHoursBefore} saatten fazla var: ücretsiz iptal.`, `More than ${pol.freeHoursBefore} hours before pickup: free cancellation.`) }
+  const feeMinor = rule.kind === 'percent_of_total' ? Math.round((gross * rule.value) / 100) : rule.kind === 'first_day' ? Math.round(gross / days) : (rule.fixed[r.currency] ?? 0)
+  const ruleText = rule.kind === 'percent_of_total' ? B(`Toplamın %${rule.value}'i`, `${rule.value}% of the total`) : rule.kind === 'first_day' ? B('Bir günlük bedel', 'One day of the rental') : B('Sabit bedel', 'Fixed fee')
+  return { kind: kind === 'no_show' ? 'no_show' : 'late', feeMinor, cur: r.currency, hoursBefore, rule: kind === 'no_show' ? B(`Gelmedi: ${ruleText}`, `No-show: ${ruleText}`) : B(`Teslime ${Math.max(0, hoursBefore)} saat kala iptal (ücretsiz süre ${pol.freeHoursBefore} saat): ${ruleText}`, `Cancelled ${Math.max(0, hoursBefore)} h before pickup (free period ${pol.freeHoursBefore} h): ${ruleText}`) }
 }

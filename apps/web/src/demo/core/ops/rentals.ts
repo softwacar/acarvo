@@ -8,7 +8,7 @@ import { fmt, roundHalf } from '../money'
 import { addDaysYmd, dayOf, HOUR, startOfDay } from '../time'
 import type { Contract, Customer, Db, FuelLevel, Id, Inspection, InspectionPin, Iso, Money, PriceSnapshot, Rental, Reservation, Vehicle } from '../types'
 import { createDamage } from './fleet'
-import { applyHeldAdvances, postCharge } from './finance'
+import { applyHeldAdvances, postCharge, applyCancellationPolicy } from './finance'
 
 // Reservation and rental operations. A reservation is not a rental; a class-only reservation does not hold a vehicle;
 // operational Closed is not Financially Closed; a finished maintenance or return does not make a vehicle Ready.
@@ -161,7 +161,9 @@ export function confirmReservation(d: Db, id: Id): Reservation {
   if (r!.status !== 'pending') fail(B('Yalnız bekleyen (Pending) rezervasyon onaylanır.', 'Only a pending reservation can be confirmed.'))
   if (r!.price?.blockers.length) fail(B(`Fiyat hesaplanamadı: ${r!.price.blockers[0]}`, `The price cannot be calculated: ${r!.price.blockers[0]}`))
   if (r!.vehicleId) assertVehicleFree(d, r!.vehicleId, r!.pickupAt, r!.returnAt, { reservationId: id })
-  else assertClassCapacity(d, r!, id)
+  // V1: a confirmation is tied to a specific vehicle. A class request stays pending and holds nothing; class capacity is the V1.5 concept (preview only).
+  else if (d.session.preview) assertClassCapacity(d, r!, id)
+  else fail(B('Onay için belirli bir araç seçin. Sınıf bazlı kayıt yalnız “bekleyen” kalır ve henüz belirli bir aracı ayırmaz (sınıf kapasitesi V1.5).', 'Choose a specific vehicle to confirm. A class-based record stays pending and does not reserve a specific vehicle yet (class capacity is V1.5).'), { vehicle: B('Onay için belirli araç gerekir', 'A specific vehicle is needed to confirm') }, 'VEHICLE_REQUIRED')
   checkCorporateCredit(d, r!.corporateId, r!.currency, r!.price?.grossMinor ?? 0)
   r!.status = 'confirmed'
   addHistory(d, r!.history, B('Onaylandı', 'Approved'), r!.vehicleId ? B('Rezervasyon onaylandı; araç tahsisi kapasite tutuyor.', 'Reservation confirmed; the vehicle allocation holds capacity.') : B('Rezervasyon onaylandı; yalnız sınıf: belirli bir araç tahsis edilmedi.', 'Reservation confirmed; class-only: no specific vehicle allocated.'))
@@ -192,7 +194,8 @@ export function cancelReservation(d: Db, id: Id, reason: string): Reservation {
   r!.status = 'cancelled'
   r!.cancelReason = reason
   const held = d.payments.filter((p) => p.reservationId === id && p.kind === 'advance' && p.status === 'recorded')
-  addHistory(d, r!.history, B('İptal edildi', 'Cancelled'), reason + (held.length ? B(` · ${held.length} kaparo tutuluyor: iade için Onay Merkezi'nde iade talebi açın.`, ` · ${held.length} advance(s) held: open a refund request in the Approval Center to return them.`) : ''))
+  addHistory(d, r!.history, B('İptal edildi', 'Cancelled'), reason + (held.length ? B(` · ${held.length} kaparo tutuluyor: politika bedeli otomatik hesaplandı, kalanın iadesi için talep açın.`, ` · ${held.length} advance(s) held: the policy fee was computed automatically; open a refund request for the rest.`) : ''))
+  applyCancellationPolicy(d, id, 'cancel')
   logEvent(d, { module: 'reservations', type: 'ReservationCancelled', sourceType: 'reservation', sourceId: id, summary: `${r!.no} iptal`, reason, before: 'active', after: 'cancelled' })
   return r!
 }
@@ -204,7 +207,8 @@ export function markNoShow(d: Db, id: Id): Reservation {
   if (r!.status !== 'confirmed') fail(B('Yalnız onaylı rezervasyon "gelmedi" yapılabilir.', 'Only a confirmed reservation can be marked as a no-show.'))
   if (Date.parse(r!.pickupAt) > Date.parse(nowOf(d))) fail(B('Teslim zamanı henüz gelmedi.', 'The pickup time has not come yet.'))
   r!.status = 'no_show'
-  addHistory(d, r!.history, 'Gelmedi', B('Müşteri gelmedi; araç tahsisi serbest bırakıldı. Kaparo otomatik gelir sayılmaz.', 'The customer did not show up; the vehicle hold was released. An advance does not automatically become revenue.'))
+  addHistory(d, r!.history, 'Gelmedi', B('Müşteri gelmedi; araç tahsisi serbest bırakıldı. Kaparo otomatik gelir sayılmaz; gelmeme politika bedeli otomatik hesaplanır.', 'The customer did not show up; the vehicle hold was released. An advance does not automatically become revenue; the no-show policy fee is computed automatically.'))
+  applyCancellationPolicy(d, id, 'no_show')
   logEvent(d, { module: 'reservations', type: 'ReservationNoShow', sourceType: 'reservation', sourceId: id, summary: `${r!.no} gelmedi`, before: 'confirmed', after: 'no_show' })
   return r!
 }

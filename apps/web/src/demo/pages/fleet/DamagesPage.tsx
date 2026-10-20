@@ -1,12 +1,14 @@
+import { LinkedTasks } from '../../ui/linkedTasks'
 import { Plus } from '@phosphor-icons/react'
 import { useState } from 'react'
 import { fmt, parseAmount } from '../../core/money'
-import { chargeDamageToCustomer, customerShare, linkRepair, recordInsurerRecovery, setDamageLiability, setDamageStatus, unblockVehicle } from '../../core/ops/fleet'
+import { chargeDamageToCustomer, customerShare, linkRepair, recordInsurerRecovery, rejectUnblock, requestUnblock, setDamageLiability, setDamageStatus, unblockVehicle } from '../../core/ops/fleet'
 import { addDaysYmd, dayOf, zonedIso } from '../../core/time'
 import type { Damage } from '../../core/types'
 import { L } from '../../i18n'
 import { CheckF, DateTimeF, MoneyF, SelectF, TextF } from '../../ui/forms'
-import { runAction, useBranchScope, useCan, useDb, useFmt, useUrlState } from '../../ui/hooks'
+import { runAction, useBranchScope, useCan, useDb, useFmt, useMe, useUrlState } from '../../ui/hooks'
+import { userName } from '../../core/helpers'
 import { btnPrimary, btnSecondary, Empty, Facts, FilterBar, FilterSelect, FinanceDialog, Kpis, Link2, Notice, Page, SearchBox, Status, Timeline } from '../../ui/kit'
 import { VehicleCell } from '../../ui/domain'
 import { LIABILITY_LABEL, STATUS } from '../../ui/status'
@@ -74,7 +76,7 @@ export function DamagesPage() {
   )
 }
 
-type Dlg = null | 'liability' | 'recovery' | 'repair' | 'close'
+type Dlg = null | 'liability' | 'recovery' | 'repair' | 'close' | 'unblock' | 'unblockReject'
 
 function Drawer({ x, onClose }: { x: Damage; onClose: () => void }) {
   const d = useDb()
@@ -90,9 +92,11 @@ function Drawer({ x, onClose }: { x: Damage; onClose: () => void }) {
   const share = customerShare(x)
   const manage = can('damages:manage')
   const closed = x.status === 'closed'
+  const me = useMe()
+  const pending = x.unblock && !x.unblock.approvedBy && !x.unblock.rejectedBy ? x.unblock : undefined
   return (
     <RecordDrawer title={x.no} subtitle={`${v.plate} · ${x.area}`} onClose={onClose} error={error}>
-      {x.blocksVehicle && <Notice tone="alert">{L('Bu hasar aracı kullanıma kapatıyor. Engeli kaldırmak, hasarı bildiren kişiden farklı ikinci bir yetkili ister (dört göz).', 'This damage blocks the vehicle. Lifting the block needs a second authorised person who did not report it (four eyes).')}</Notice>}
+      {x.blocksVehicle && <Notice tone="alert">{L('Bu hasar aracı kullanıma kapatıyor. Engeli kaldırmak yüksek riskli (Seviye 2) bir işlemdir: bir yetkili talep eder, hasarı bildirenden ve talep edenden farklı bağımsız ikinci bir yetkili onaylar.', 'This damage blocks the vehicle. Lifting the block is a high-risk (level 2) action: one authorized person requests it and an independent second authorized person, other than the reporter and the requester, approves.')}</Notice>}
       <Facts
         single
         rows={[
@@ -119,12 +123,23 @@ function Drawer({ x, onClose }: { x: Damage; onClose: () => void }) {
             {share && !x.chargeId && can('finance:record') && <ActBtn onClick={() => act((s) => chargeDamageToCustomer(s, x.id), L('Müşteri payı hesap kalemi olarak yazıldı (tek kalem).', 'Customer share posted as a single charge.'))}>{L('Müşteri payını kalem yaz', 'Post customer share')}</ActBtn>}
             {x.liability !== 'undetermined' && can('finance:record') && <ActBtn onClick={() => setDlg('recovery')}>{L('Sigorta geri ödemesi', 'Insurer recovery')}</ActBtn>}
             {!x.repairMaintenanceId && can('maintenance:manage') && <ActBtn onClick={() => setDlg('repair')}>{L('Onarım bağla', 'Link repair')}</ActBtn>}
-            {x.blocksVehicle && can('damages:unblock') && <ActBtn onClick={() => act((s) => unblockVehicle(s, x.id), L('Araç engeli kaldırıldı (hazırlık ayrıca kontrol edilir).', 'Vehicle block lifted (readiness is checked separately).'))}>{L('Engeli kaldır', 'Lift block')}</ActBtn>}
+            {x.blocksVehicle && can('damages:unblock') && !pending && <ActBtn onClick={() => setDlg('unblock')}>{L('Engel kaldırma talep et', 'Request to lift the block')}</ActBtn>}
+            {x.blocksVehicle && can('damages:unblock') && pending && pending.requestedBy !== me.id && <ActBtn onClick={() => act((s) => unblockVehicle(s, x.id), L('Araç engeli bağımsız onayla kaldırıldı (hazırlık ayrıca kontrol edilir).', 'Vehicle block lifted with an independent approval (readiness is checked separately).'))}>{L('Onayla ve engeli kaldır', 'Approve and lift the block')}</ActBtn>}
+            {x.blocksVehicle && can('damages:unblock') && pending && pending.requestedBy !== me.id && <ActBtn onClick={() => setDlg('unblockReject')}>{L('Talebi reddet', 'Reject the request')}</ActBtn>}
             <ActBtn onClick={() => setDlg('close')}>{L('Dosyayı kapat', 'Close file')}</ActBtn>
           </ActionRow>
         </DrawerSection>
       )}
+      <LinkedTasks type="damage" id={x.id} defaultTitle={`${x.no}: `} />
       <DrawerSection title={L('Geçmiş', 'History')}><Timeline entries={x.history} /></DrawerSection>
+      {x.blocksVehicle && pending && (
+        <p className="rounded-lg border border-hold/40 bg-hold-soft px-3 py-2 text-[13px]" data-testid="unblock-pending">
+          <span className="font-medium">{L('Engel kaldırma talebi (Seviye 2)', 'Request to lift the block (level 2)')}:</span> {userName(d, pending.requestedBy)} — {pending.reason}.{' '}
+          {pending.requestedBy === me.id ? L('Onay için bağımsız ikinci bir yetkili gerekir; talebi açan onaylayamaz.', 'An independent second authorized person must approve; the requester cannot.') : L('Siz bağımsız yetkilisiniz: onaylayabilir veya reddedebilirsiniz.', 'You are the independent authorizer: you can approve or reject.')}
+        </p>
+      )}
+      {dlg === 'unblock' && <PromptDialog title={L('Engel kaldırma talebi', 'Request to lift the block')} description={L('Araç engelini kaldırmak yüksek riskli (Seviye 2) bir işlemdir: talebi siz açarsınız, bağımsız ikinci bir yetkili onaylar. İkinci yetkili yoksa işlem kilitli kalır.', 'Lifting a vehicle block is a high-risk (level 2) action: you open the request and an independent second authorized person approves. If there is no second authorizer the action stays locked.')} label={L('Gerekçe (en az 10 karakter)', 'Reason (at least 10 characters)')} confirm={L('Talep et', 'Request')} min={10} run={(t) => act((s) => requestUnblock(s, x.id, t), L('Engel kaldırma talebi açıldı; bağımsız yetkili bekleniyor.', 'Request opened; waiting for an independent authorizer.')) as never} onClose={() => setDlg(null)} />}
+      {dlg === 'unblockReject' && <PromptDialog title={L('Talebi reddet', 'Reject the request')} description={L('Engel yerinde kalır; ret gerekçesi hasar geçmişine yazılır.', 'The block stays; the reason is written to the damage history.')} label={L('Ret gerekçesi', 'Rejection reason')} confirm={L('Reddet', 'Reject')} danger min={5} run={(t) => act((s) => rejectUnblock(s, x.id, t), L('Engel kaldırma talebi reddedildi.', 'The request was rejected.')) as never} onClose={() => setDlg(null)} />}
       {dlg === 'liability' && <LiabilityDialog x={x} onClose={() => setDlg(null)} />}
       {dlg === 'recovery' && <RecoveryDialog x={x} onClose={() => setDlg(null)} />}
       {dlg === 'repair' && <RepairDialog x={x} onClose={() => setDlg(null)} />}

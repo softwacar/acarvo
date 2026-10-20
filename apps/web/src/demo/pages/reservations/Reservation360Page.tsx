@@ -1,18 +1,19 @@
+import { LinkedTasks, useLinkedTasks } from '../../ui/linkedTasks'
+import { isOpenTask } from '../../core/ops/tasks'
 import { Link, useNavigate, useParams } from '@tanstack/react-router'
 import { useState } from 'react'
 import { checkVehicleAvailable } from '../../core/calc/availability'
 import { customerDocChecks, evaluateDriverEligibility } from '../../core/calc/policy'
 import { fmt } from '../../core/money'
 import { assignVehicle, cancelReservation, confirmReservation, convertReservation, markNoShow } from '../../core/ops/rentals'
-import { forfeitAdvance } from '../../core/ops/finance'
-import type { Payment, Reservation } from '../../core/types'
+import type { Reservation } from '../../core/types'
 import { L } from '../../i18n'
 import { AreaF, SelectF } from '../../ui/forms'
 import { CustomerLink, PriceBreakdown, VehicleCell } from '../../ui/domain'
 import { runAction, useCan, useDb, useFmt } from '../../ui/hooks'
-import { AdvanceStatus, BackLink, btnPrimary, btnSecondary, Empty, Facts, FinanceDialog, Link2, Notice, Page, Panel, Status, Tabs, Timeline } from '../../ui/kit'
-import { CHANNEL_LABEL, METHOD_LABEL } from '../../ui/status'
-import { ApprovalRequestDialog } from '../shared/ApprovalRequestDialog'
+import { BackLink, btnPrimary, btnSecondary, Empty, Facts, FinanceDialog, Link2, Notice, Page, Panel, Status, Tabs, Timeline } from '../../ui/kit'
+import { CHANNEL_LABEL } from '../../ui/status'
+import { AdvanceLedgerCard } from '../shared/FinanceBits'
 import { PaymentDialog } from '../shared/PaymentDialog'
 
 export function Reservation360Page() {
@@ -30,16 +31,15 @@ export function Reservation360Page() {
 }
 
 type Dlg = null | 'assign' | 'cancel' | 'advance' | 'noshow'
-type AdvAct = null | { kind: 'refund' | 'forfeit'; p: Payment }
 
 function Detail({ r }: { r: Reservation }) {
   const d = useDb()
   const can = useCan()
   const f = useFmt()
   const navigate = useNavigate()
-  const [tab, setTab] = useState<'ozet' | 'kaparo' | 'gecmis'>('ozet')
+  const [tab, setTab] = useState<'ozet' | 'kaparo' | 'gorevler' | 'gecmis'>('ozet')
+  const openTasks = useLinkedTasks('reservation', r.id).filter(isOpenTask).length
   const [dlg, setDlg] = useState<Dlg>(null)
-  const [advAct, setAdvAct] = useState<AdvAct>(null)
   const [error, setError] = useState<string | null>(null)
   const channels = CHANNEL_LABEL()
   const customer = d.customers.find((c) => c.id === r.customerId)
@@ -64,6 +64,18 @@ function Detail({ r }: { r: Reservation }) {
     return { x, c, e, docs }
   })
   const vehicleOk = vehicle ? checkVehicleAvailable(d, vehicle, r.pickupAt, r.returnAt, d.clock.now, { reservationId: r.id }) : null
+  // What is still missing before a handover (O.D: pending and confirmed must read differently, with the open steps visible).
+  const advanceRequired = r.price ? Math.round((r.price.grossMinor * d.settings.payment.advanceRequiredPct) / 100) : 0
+  const advanceTaken = advances.filter((p) => p.status !== 'voided').reduce((a, p) => a + (p.tender.cur === r.currency ? p.tender.minor : 0), 0)
+  const docsMissing = driverRows.flatMap((x) => x.docs.filter((dc) => dc.state === 'missing' || dc.state === 'expired').map((dc) => (x.c?.name ?? '') + ': ' + dc.kind))
+  const todo: { key: string; label: string; text: string; ok: boolean }[] = open
+    ? [
+        { key: 'status', label: L('Durum', 'Status'), ok: r.status === 'confirmed', text: r.status === 'confirmed' ? L('Onaylı: belirli aracı tutuyor.', 'Confirmed: it holds the specific vehicle.') : L('Bekliyor: araç veya kapasite tutmaz, onay bekliyor.', 'Pending: holds no vehicle or capacity, waiting for confirmation.') },
+        { key: 'vehicle', label: L('Araç', 'Vehicle'), ok: !!r.vehicleId, text: r.vehicleId ? L('Belirli araç atanmış.', 'A specific vehicle is assigned.') : L('Atanmadı: onay ve kiralamaya dönüşüm için araç atayın.', 'Not assigned: assign a vehicle to confirm and convert.') },
+        { key: 'advance', label: L('Kaparo', 'Advance'), ok: advanceRequired === 0 || advanceTaken >= advanceRequired, text: advanceRequired === 0 ? L('Kaparo istenmiyor.', 'No advance is required.') : advanceTaken >= advanceRequired ? L('Alındı: ', 'Taken: ') + fmt(advanceTaken, r.currency) : L('İstenen ', 'Required ') + fmt(advanceRequired, r.currency) + L(' · alınan ', ' · taken ') + fmt(advanceTaken, r.currency) },
+        { key: 'docs', label: L('Belgeler', 'Documents'), ok: docsMissing.length === 0, text: docsMissing.length === 0 ? L('Eksik belge yok.', 'No missing documents.') : L('Teslimden önce tamamlanmalı: ', 'To complete before handover: ') + docsMissing.join('; ') },
+      ]
+    : []
 
   return (
     <div className="space-y-4">
@@ -114,11 +126,24 @@ function Detail({ r }: { r: Reservation }) {
         {r.status === 'confirmed' && !r.vehicleId && <Notice tone="hold" action={can('reservations:manage') ? <button type="button" className={btnSecondary} onClick={() => setDlg('assign')}>{L('Araç ata', 'Assign vehicle')}</button> : undefined}>{L('Yalnız sınıf rezervasyonu: belirli bir araç yok. Kiralamaya dönüştürmek için önce araç atanmalı.', 'Class-only reservation: no specific vehicle. Assign a vehicle before converting to a rental.')}</Notice>}
         {r.status === 'cancelled' && <Notice tone="alert">{L('İptal edildi', 'Cancelled')}: {r.cancelReason}</Notice>}
 
-        <Tabs tabs={[{ id: 'ozet', label: L('Özet', 'Overview') }, { id: 'kaparo', label: L('Kaparo', 'Advance'), count: advances.length }, { id: 'gecmis', label: L('Geçmiş', 'History'), count: r.history.length }]} value={tab} onChange={setTab} label={L('Rezervasyon bölümleri', 'Reservation sections')} />
+        <Tabs tabs={[{ id: 'ozet', label: L('Özet', 'Overview') }, { id: 'kaparo', label: L('Kaparo', 'Advance'), count: advances.length }, { id: 'gorevler', label: L('Görevler', 'Tasks'), count: openTasks || undefined }, { id: 'gecmis', label: L('Geçmiş', 'History'), count: r.history.length }]} value={tab} onChange={setTab} label={L('Rezervasyon bölümleri', 'Reservation sections')} />
 
         {tab === 'ozet' && (
           <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,400px)]">
             <div className="space-y-5">
+              <Panel title={L('Durum ve eksik işlemler', 'Status and missing steps')} description={L('Bekleyen ile onaylı rezervasyon farklıdır: yalnız onaylı rezervasyon belirli bir aracı tutar.', 'Pending and confirmed are different: only a confirmed reservation holds a specific vehicle.')}>
+                <ul className="space-y-2 text-[13.5px]" aria-label={L('Eksik işlemler', 'Missing steps')}>
+                  {todo.map((t) => (
+                    <li key={t.key} className="flex items-start gap-2.5">
+                      <span className={'mt-1.5 size-2 shrink-0 rounded-full ' + (t.ok ? 'bg-ok' : 'bg-hold')} aria-hidden />
+                      <span>
+                        <span className="font-medium">{t.label}</span>
+                        <span className="text-ink-2"> — {t.text}</span>
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </Panel>
               <Panel title={L('Rezervasyon', 'Reservation')}>
                 <Facts
                   rows={[
@@ -157,56 +182,27 @@ function Detail({ r }: { r: Reservation }) {
         )}
 
         {tab === 'kaparo' && (
-          <Panel title={L('Kaparo', 'Advance')} description={L("Kaparo (avans) gelir değildir; rezervasyon kiralamaya dönüşünce aktarılır, Teslim'de hesap kalemine bir kez uygulanır. Depozito ve ödeme ile karıştırılmaz.", 'An advance is not revenue; it moves to the rental when the reservation is converted and is applied to the charge once at delivery. It is not a deposit and not an ordinary payment.')} action={open && can('finance:record') ? <button type="button" className={btnPrimary} onClick={() => setDlg('advance')}>{L('Kaparo al', 'Take advance')}</button> : undefined}>
+          <Panel title={L('Kaparo', 'Advance')} description={L("Kaparo (avans) gelir değildir; rezervasyon kiralamaya dönüşünce aktarılır, Teslim'de hesap kalemine bir kez uygulanır. Depozito ve ödeme ile karıştırılmaz. İptalde politika bedeli şirket politikasından otomatik hesaplanır; kalan tutar tam veya kısmi iade edilebilir.", 'An advance is not revenue; it moves to the rental when the reservation is converted and is applied to the charge once at delivery. It is not a deposit and not an ordinary payment. On cancellation the policy fee is computed from the company policy; the rest can be refunded in full or in part.')} action={open && can('finance:record') ? <button type="button" className={btnPrimary} onClick={() => setDlg('advance')}>{L('Kaparo al', 'Take advance')}</button> : undefined}>
             {advances.length === 0 ? (
               <Empty title={L('Kaparo kaydı yok', 'No advance recorded')} />
             ) : (
-              <ul className="divide-y divide-line-soft">
-                {advances.map((p) => {
-                  const refunds = d.refunds.filter((x) => x.paymentId === p.id)
-                  const openRefund = refunds.find((x) => x.status === 'requested' || x.status === 'approved')
-                  const held = p.status === 'recorded'
-                  const closed = r.status === 'cancelled' || r.status === 'no_show'
-                  return (
-                    <li key={p.id} className="space-y-2 py-3 text-[13.5px]">
-                      <div className="flex flex-wrap items-center justify-between gap-2">
-                        <span>
-                          <span className="tnum font-medium">{p.no}</span> · {fmt(p.tender.minor, p.tender.cur)}
-                          <span className="block text-[12.5px] text-ink-2">{f.dt(p.recordedAt, p.branchId)} · {METHOD_LABEL()[p.method]}{p.tender.cur !== p.obligationCur ? ` · ${L('eşdeğer', 'equiv.')} ${fmt(p.appliedMinor, p.obligationCur)}` : ''}</span>
-                        </span>
-                        <AdvanceStatus p={p} />
-                      </div>
-                      <p className="text-[12.5px] text-ink-2">
-                        {p.advanceState === 'unapplied' && L('Rezervasyonda tutuluyor; henüz hiçbir hesap kalemine uygulanmadı.', 'Held on the reservation; not applied to any charge yet.')}
-                        {p.advanceState === 'transferred' && L("Kiralamaya aktarıldı; Teslim'de oluşan kiralama bedeline bir kez uygulanacak.", 'Moved to the rental; it is applied once to the rental charge that arises at delivery.')}
-                        {p.advanceState === 'applied' && L(`Kiralama bedeline uygulandı (${fmt(p.appliedMinor, p.obligationCur)}).`, `Applied to the rental charge (${fmt(p.appliedMinor, p.obligationCur)}).`)}
-                        {p.advanceState === 'refunded' && L('Müşteriye iade edildi; hiçbir hesap kalemine uygulanmaz.', 'Paid back to the customer; it will not be applied to any charge.')}
-                        {p.advanceState === 'forfeited' && L(`Politika bedeli olarak tutuldu: ${p.forfeitReason ?? ''}`, `Kept as a policy fee: ${p.forfeitReason ?? ''}`)}
-                      </p>
-                      <p className="flex flex-wrap gap-x-4 gap-y-1 text-[12.5px]">
-                        {rental && <Link2 type="rental" id={rental.id}>{L('Kiralama', 'Rental')} {rental.no}</Link2>}
-                        {rental && <Link to={`/kiralamalar/${rental.id}?sekme=finans` as never} className="font-medium text-blue hover:underline">{L('Kiralama finansı', 'Rental finance')}</Link>}
-                        <Link to={'/finans?sekme=kaparo' as never} className="font-medium text-blue hover:underline">{L('Finans Merkezi · Kaparo', 'Finance Center · Advances')}</Link>
-                      </p>
-                      {refunds.map((x) => (
-                        <p key={x.id} className="flex flex-wrap items-center gap-2 text-[12.5px] text-ink-2">
-                          {L('İade', 'Refund')} {x.no} <Status kind="refund" value={x.status} />
-                        </p>
-                      ))}
-                      {held && !openRefund && (
-                        <div className="flex flex-wrap gap-2">
-                          {can('approvals:request') && <button type="button" className={btnSecondary} onClick={() => setAdvAct({ kind: 'refund', p })}>{L('İade talep et', 'Request refund')}</button>}
-                          {closed && p.advanceState === 'unapplied' && can('finance:apply') && <button type="button" className={btnSecondary} onClick={() => setAdvAct({ kind: 'forfeit', p })}>{L('Politika bedeli olarak tut', 'Keep as policy fee')}</button>}
-                        </div>
-                      )}
-                      {openRefund && <p className="text-[12.5px] font-medium text-hold">{L("Açık iade talebi var: Onay Merkezi'nde ikinci yetkili karar verir.", 'A refund request is open: a second authorised person decides in the Approval Center.')}</p>}
-                    </li>
-                  )
-                })}
-              </ul>
+              <div className="space-y-4">
+                {advances.map((p) => (
+                  <div key={p.id} className="space-y-2">
+                    <AdvanceLedgerCard p={p} reservation={r} />
+                    <p className="flex flex-wrap gap-x-4 gap-y-1 text-[12.5px]">
+                      {rental && <Link2 type="rental" id={rental.id}>{L('Kiralama', 'Rental')} {rental.no}</Link2>}
+                      {rental && <Link to={`/kiralamalar/${rental.id}?sekme=finans` as never} className="font-medium text-blue hover:underline">{L('Kiralama finansı', 'Rental finance')}</Link>}
+                      <Link to={'/finans?sekme=kaparo' as never} className="font-medium text-blue hover:underline">{L('Finans · Kaparo', 'Finance · Advances')}</Link>
+                    </p>
+                  </div>
+                ))}
+              </div>
             )}
           </Panel>
         )}
+
+        {tab === 'gorevler' && <LinkedTasks type="reservation" id={r.id} defaultTitle={`${r.no}: `} />}
 
         {tab === 'gecmis' && (
           <Panel title={L('Geçmiş', 'History')}>
@@ -215,8 +211,6 @@ function Detail({ r }: { r: Reservation }) {
         )}
       </Page>
 
-      {advAct?.kind === 'refund' && <ApprovalRequestDialog type="refund" target={{ type: 'reservation', id: r.id }} paymentId={advAct.p.id} amount={advAct.p.tender} onClose={() => setAdvAct(null)} hint={L(`${advAct.p.no} kaparosu tahsil edilen tutarın tamamı kadar iade edilir.`, `Advance ${advAct.p.no} is paid back in full, in the amount that was taken.`)} />}
-      {advAct?.kind === 'forfeit' && <ForfeitDialog p={advAct.p} onClose={() => setAdvAct(null)} />}
       {dlg === 'advance' && <PaymentDialog reservationId={r.id} kind="advance" onClose={() => setDlg(null)} />}
       {dlg === 'assign' && <AssignDialog r={r} onClose={() => setDlg(null)} />}
       {dlg === 'cancel' && <CancelDialog r={r} onClose={() => setDlg(null)} />}
@@ -271,7 +265,7 @@ function CancelDialog({ r, onClose }: { r: Reservation; onClose: () => void }) {
   return (
     <FinanceDialog
       title={L('Rezervasyonu iptal et', 'Cancel reservation')}
-      description={L('İptal gerekçesi kayıt altına alınır. Alınmış kaparo otomatik iade edilmez ve gelir olmaz.', 'The reason is recorded. A taken advance is not refunded automatically and does not become revenue.')}
+      description={L('İptal gerekçesi kayıt altına alınır. Alınmış kaparo için şirket politikasına göre politika bedeli otomatik hesaplanır; kalan tutar otomatik iade edilmez ve gelir olmaz.', 'The reason is recorded. For an advance already taken, the policy fee is computed automatically from the company policy; the rest is not refunded automatically and does not become revenue.')}
       confirm={L('İptal et', 'Cancel reservation')}
       danger
       onClose={onClose}
@@ -286,31 +280,6 @@ function CancelDialog({ r, onClose }: { r: Reservation; onClose: () => void }) {
       }}
     >
       <AreaF id="cx-r" label={L('Gerekçe', 'Reason')} required value={reason} onChange={setReason} error={err} rows={3} />
-    </FinanceDialog>
-  )
-}
-
-function ForfeitDialog({ p, onClose }: { p: Payment; onClose: () => void }) {
-  const [reason, setReason] = useState('')
-  const [err, setErr] = useState<string | undefined>()
-  return (
-    <FinanceDialog
-      title={L('Kaparoyu politika bedeli olarak tut', 'Keep the advance as a policy fee')}
-      description={L('Yalnız iptal veya gelmeme sonrası, açık bir gerekçeyle. Tutar iade edilmez ve hiçbir hesap kalemine uygulanmaz; karar kayıt altına alınır.', 'Only after a cancellation or no-show, with a visible reason. The amount is not refunded and is never applied to a charge; the decision is recorded.')}
-      confirm={L('Politika bedeli olarak tut', 'Keep as policy fee')}
-      danger
-      onClose={onClose}
-      summary={[[L('Kaparo', 'Advance'), `${p.no} · ${fmt(p.tender.minor, p.tender.cur)}`]]}
-      onSubmit={() => {
-        const x = runAction((s) => forfeitAdvance(s, p.id, reason), L('Kaparo politika bedeli olarak tutuldu.', 'The advance was kept as a policy fee.'))
-        if (!x.ok) {
-          setErr(x.fields.reason)
-          return x.error
-        }
-        onClose()
-      }}
-    >
-      <AreaF id="ff-r" label={L('Gerekçe (en az 10 karakter)', 'Reason (at least 10 characters)')} required value={reason} onChange={setReason} error={err} rows={3} />
     </FinanceDialog>
   )
 }

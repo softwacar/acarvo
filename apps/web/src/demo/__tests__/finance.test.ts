@@ -2,9 +2,9 @@ import { describe, expect, it } from 'vitest'
 import { bucketNow, capacityCell, checkVehicleAvailable, readinessOf } from '../core/calc/availability'
 import { cashByCurrency, projectCorporateExposure, rentalFinance } from '../core/calc/finance'
 import { convertTenderToObligation } from '../core/calc/fx'
-import { addFxRate } from '../core/ops/control'
-import { closeSession, openSession, recordPayment, voidPayment, previewPayment, postCharge } from '../core/ops/finance'
-import { find } from '../core/ops/rentals'
+import { addFxRate, applyApproval, decideApproval, requestApproval } from '../core/ops/control'
+import { closeSession, openSession, recordPayment, verifyByAnother, voidPayment, previewPayment, postCharge } from '../core/ops/finance'
+import { confirmReservation, find } from '../core/ops/rentals'
 import { DemoError } from '../core/helpers'
 import { parseAmount } from '../core/money'
 import { buildSeed } from '../core/seed'
@@ -26,8 +26,14 @@ describe('multi-payer, multi-currency collection (spec §64.2)', () => {
     const { rental } = scenarioRental(d)
     const f0 = rentalFinance(d, rental.id)
     const owedBefore = f0.outstandingMinor
-    const pay = (method: 'cash' | 'card' | 'transfer', minor: number, cur: string, who: string) =>
-      recordPayment(d, { rentalId: rental.id, kind: 'payment', payer: { type: 'other', name: who }, method, tenderMinor: minor, tenderCur: cur, branchId: 'b-sjj', reference: method === 'card' ? 'POS-TEST' : '' })
+    // every line is recorded by the clerk and verified by somebody else before it reduces the balance
+    const pay = (method: 'cash' | 'card' | 'transfer', minor: number, cur: string, who: string) => {
+      const me = d.session.userId
+      const p = recordPayment(d, { rentalId: rental.id, kind: 'payment', payer: { type: 'other', name: who }, method, tenderMinor: minor, tenderCur: cur, branchId: 'b-sjj', reference: method === 'card' ? 'POS-TEST' : '' })
+      verifyByAnother(d, { payment: p })
+      d.session.userId = me
+      return p
+    }
     d.session.userId = 'u-ops1'
     // 1 · Person A, cash 100 EUR into the EUR drawer
     const eurBefore = cashByCurrency(d, 'b-sjj').EUR!
@@ -93,11 +99,19 @@ describe('multi-payer, multi-currency collection (spec §64.2)', () => {
     const before = rentalFinance(d, rental.id).outstandingMinor
     const p = recordPayment(d, { rentalId: rental.id, kind: 'payment', payer: { type: 'other', name: 'X' }, method: 'cash', tenderMinor: 5000, tenderCur: 'EUR', branchId: 'b-sjj' })
     const cash = cashByCurrency(d, 'b-sjj').EUR!
+    // a reversal is a level-2 action: a direct void is refused; it happens only through an approved and applied Financial Correction
     d.session.userId = 'u-owner'
-    voidPayment(d, p.id, 'Hatalı giriş')
+    expect(() => voidPayment(d, p.id, 'Hatalı giriş')).toThrow(/yüksek riskli|high-risk/)
+    d.session.userId = 'u-mgr'
+    const corr = requestApproval(d, { type: 'financial_correction', target: { type: 'payment', id: p.id }, reason: 'Hatalı giriş: yanlış kiralama', requested: null })
+    expect(corr.risk).toBe(2)
+    d.session.userId = 'u-mgr2'
+    decideApproval(d, corr.id, 'approve', 'Evrak kontrol edildi')
+    d.session.userId = 'u-owner'
+    applyApproval(d, corr.id)
     expect(rentalFinance(d, rental.id).outstandingMinor).toBe(before)
     expect(cashByCurrency(d, 'b-sjj').EUR).toBe(cash - 5000)
-    expect(() => voidPayment(d, p.id, 'Tekrar')).toThrow(/zaten iptal/)
+    expect(() => voidPayment(d, p.id, 'Tekrar')).toThrow(/yüksek riskli|high-risk/)
   })
 
   it('a shift close compares expected and counted cash per currency; a difference over the limit needs a reason', () => {
@@ -161,13 +175,21 @@ describe('one availability truth', () => {
     expect(r.ready).toBe(false) // returned yesterday: not cleaned, fuel half
   })
 
-  it('pending reservations do not count in capacity; confirmed class-only demand does', () => {
+  it('V1: pending class requests hold nothing; a class-only confirmation is refused outside the V1.5 concept preview', () => {
     const d = mkDb()
     const day = d.clock.now.slice(0, 10)
     const branch = d.branches.find((b) => b.id === 'b-mst')!
     const before = capacityCell(d, branch, 'cl-eco', day)
-    expect(before.classOnly).toBeGreaterThanOrEqual(1)
+    // the seeded Mostar class request is pending: it does not reduce capacity
+    expect(d.reservations.some((r) => r.status === 'pending' && !r.vehicleId && r.pickupBranchId === 'b-mst')).toBe(true)
+    expect(before.classOnly).toBe(0)
     expect(before.available).toBe(before.total - before.blocked - before.allocated - before.classOnly)
+    const pending = d.reservations.find((r) => r.status === 'pending' && !r.vehicleId)!
+    d.session.userId = 'u-mgr'
+    expect(() => confirmReservation(d, pending.id)).toThrow(/belirli bir araç|specific vehicle/)
+    // the concept preview keeps the V1.5 class-capacity behaviour available for inspection
+    d.session.preview = true
+    expect(() => confirmReservation(d, pending.id)).not.toThrow(/belirli bir araç/)
   })
 })
 

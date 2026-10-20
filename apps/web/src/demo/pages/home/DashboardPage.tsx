@@ -5,12 +5,13 @@ import { Plate } from '@/components/Plate'
 import { cn } from '@/lib/utils'
 import { BUCKET_ORDER, type Bucket } from '../../core/calc/availability'
 import { fmt } from '../../core/money'
-import { activeRentals, fleetBuckets, financeSummary, overdueReturns, reservationsBy, todayPickups, todayReturns, rangeOfDays, type DayItem } from '../../core/metrics'
-import { DAY, dayOf, addDaysYmd, fmtDayShort, startOfDay } from '../../core/time'
+import { inboxOf, REASON_LABEL } from '../../core/inbox'
+import { canSeeTask, isOpenTask } from '../../core/ops/tasks'
+import { activeRentals, fleetBuckets, financeSummary, overdueReturns, reservationsBy, todayPickups, todayReturns, type DayItem } from '../../core/metrics'
+import { dayOf, addDaysYmd, startOfDay } from '../../core/time'
 import { L } from '../../i18n'
-import { ChartCard, LineChart } from '../../ui/charts'
-import { useAlerts, useBranchScope, useCan, useDb, useFmt, useUrlState, entityHref } from '../../ui/hooks'
-import { BranchTag, Empty, Kpis, Notice, Page, Panel, Segmented } from '../../ui/kit'
+import { useAlerts, useBranchScope, useCan, useDb, useFmt, entityHref } from '../../ui/hooks'
+import { BranchTag, Empty, Kpis, Notice, Page, Panel } from '../../ui/kit'
 import { statusOf } from '../../ui/status'
 
 const BUCKET_COLOR: Record<Bucket, string> = { available: 'bg-ok', reserved: 'bg-blue', rented: 'bg-ink', maintenance: 'bg-hold', transfer: 'bg-ink-3', unavailable: 'bg-alert' }
@@ -53,7 +54,7 @@ export function DashboardPage() {
   const f = useFmt()
   const { active } = useBranchScope()
   const alerts = useAlerts()
-  const [days, setDays] = useUrlState('donem', '14')
+  const inbox = useMemo(() => inboxOf(d), [d])
 
   const fleet = useMemo(() => fleetBuckets(d, active), [d, active])
   const pickups = useMemo(() => todayPickups(d, active), [d, active])
@@ -62,7 +63,8 @@ export function DashboardPage() {
   const rentalsOut = useMemo(() => activeRentals(d, active), [d, active])
   const pending = reservationsBy(d, active, 'pending').length
   const confirmed = d.reservations.filter((r) => r.status === 'confirmed' && Date.parse(r.pickupAt) >= Date.parse(d.clock.now) && active.includes(r.pickupBranchId)).length
-  const waitingApprovals = d.approvals.filter((a) => a.status === 'requested' || a.status === 'approved').length
+  const waitingApprovals = can('approvals:view') ? d.approvals.filter((a) => a.status === 'requested' || a.status === 'approved').length : 0
+  const openTasks = d.tasks.filter((t) => isOpenTask(t) && canSeeTask(d, t) && (!t.branchId || active.includes(t.branchId))).length
   const tz = d.settings.company.tz
   const today = dayOf(d.clock.now, tz)
 
@@ -77,26 +79,11 @@ export function DashboardPage() {
     return items.sort((a, b) => a.at.localeCompare(b.at)).slice(0, 8)
   }, [d, active, today, tz])
 
-  const attention = alerts.filter((a) => a.kind !== 'overdue_return').slice(0, 7)
+  const mineTop = inbox.mine.slice(0, 6)
+  const warnings = alerts.filter((a) => a.severity !== 'critical').length
   const showFinance = can('finance:view') && can('reports:finance')
   const sum = useMemo(() => financeSummary(d, active), [d, active])
   const curs = useMemo(() => [...new Set([...Object.keys(sum.charged), ...Object.keys(sum.collected), ...Object.keys(sum.outstanding)])].sort(), [sum])
-
-  // trend: rentals handed over and returns per day (real records)
-  const n = Number(days)
-  const trend = useMemo(() => {
-    const pts: { x: string; ys: number[] }[] = []
-    const range = rangeOfDays(d, n)
-    for (let i = 0; i < n; i++) {
-      const ymd = addDaysYmd(dayOf(range.from, tz), i)
-      const s = Date.parse(startOfDay(ymd, tz))
-      const e = s + DAY
-      const out = d.rentals.filter((r) => r.actualPickupAt && active.includes(r.pickupBranchId) && Date.parse(r.actualPickupAt) >= s && Date.parse(r.actualPickupAt) < e).length
-      const back = d.rentals.filter((r) => r.actualReturnAt && active.includes(r.returnBranchId) && Date.parse(r.actualReturnAt) >= s && Date.parse(r.actualReturnAt) < e).length
-      pts.push({ x: fmtDayShort(s, tz), ys: [out, back] })
-    }
-    return pts
-  }, [d, n, active, tz])
 
   const branchRows = useMemo(
     () =>
@@ -119,9 +106,6 @@ export function DashboardPage() {
           {dateText} · <span className="tnum">{f.time(d.clock.now)}</span> · {L('demo zamanı', 'demo time')}
         </>
       }
-      actions={
-        <Segmented label={L('Dönem', 'Period')} value={days} onChange={setDays} options={[{ id: '7', label: L('7 gün', '7 days') }, { id: '14', label: L('14 gün', '14 days') }, { id: '30', label: L('30 gün', '30 days') }]} />
-      }
     >
       <Kpis
         items={[
@@ -131,6 +115,7 @@ export function DashboardPage() {
           { label: L('Geciken iade', 'Overdue returns'), value: overdue.length, hint: L('Planlanan iade geçti', 'Planned return passed'), to: '/kiralamalar?gecikme=1', tone: overdue.length ? 'alert' : undefined },
           { label: L('Müsait (şimdi)', 'Available (now)'), value: fleet.buckets.available, hint: L(`${fleet.total} araçtan`, `of ${fleet.total} vehicles`), to: '/araclar?durum=available', tone: 'ok' },
           { label: L('Bekleyen rezervasyon', 'Pending reservations'), value: pending, hint: L(`${confirmed} onaylı yaklaşan`, `${confirmed} confirmed upcoming`), to: '/rezervasyonlar?durum=pending', tone: pending ? 'hold' : undefined },
+          { label: L('Bana düşen işler', 'My work'), value: inbox.counts.mine, hint: L(inbox.counts.tasks + ' görev · ' + inbox.counts.approvals + ' onay', inbox.counts.tasks + ' tasks · ' + inbox.counts.approvals + ' approvals'), to: '/islerim', tone: inbox.counts.mine ? 'hold' : undefined },
         ]}
       />
 
@@ -176,20 +161,20 @@ export function DashboardPage() {
           <Panel title={L('Önümüzdeki üç gün', 'Next three days')} description={L('Teslim ve iade tarihleri, şubenin yerel saatiyle.', "Pickups and returns in the branch's local time.")} flush>
             <ItemRows items={upcoming} showTime={false} empty={L('Önümüzdeki üç gün için teslim veya iade yok.', 'No pickups or returns in the next three days.')} />
           </Panel>
-          <Panel title={L('Dikkat gerektirenler', 'Needs attention')} description={L('Komuta Merkezi ile aynı uyarı kaynağı; her satır kaynağa gider.', 'Same alert source as the Command Center; each row opens its source.')} action={<Link to={'/komuta-merkezi?sekme=uyarilar' as never} className="inline-flex items-center gap-1 text-[13px] font-medium text-blue hover:underline">{L('Tüm uyarılar', 'All alerts')} <ArrowRight size={13} /></Link>} flush>
-            {attention.length === 0 ? (
+          <Panel title={L('Bana düşen işler', 'My work')} description={L('İşlerim ile aynı kaynak; her satır kendi kaydına gider.', 'Same source as My Work; each row opens its own record.')} action={<Link to={'/islerim' as never} className="inline-flex items-center gap-1 text-[13px] font-medium text-blue hover:underline">{L('İşlerim', 'My Work')} <ArrowRight size={13} /></Link>} flush>
+            {mineTop.length === 0 ? (
               <p className="flex items-center gap-2 px-4 py-5 text-[13px] text-ink-2 sm:px-5">
-                <CheckCircle size={16} className="text-ok" /> {L('Şu an dikkat gerektiren kayıt yok.', 'Nothing needs attention right now.')}
+                <CheckCircle size={16} className="text-ok" /> {L('Şu an size düşen iş yok.', 'Nothing needs you right now.')}
               </p>
             ) : (
               <ul className="divide-y divide-line-soft">
-                {attention.map((a) => (
-                  <li key={a.id}>
-                    <Link to={entityHref(a.link.type, a.link.id) as never} className="group flex items-start gap-3 px-4 py-2.5 hover:bg-ground/60 sm:px-5">
-                      <span className={cn('mt-1.5 size-2 shrink-0 rounded-full', a.severity === 'critical' ? 'bg-alert' : a.severity === 'warning' ? 'bg-hold' : 'bg-blue')} aria-hidden />
+                {mineTop.map((i) => (
+                  <li key={i.key}>
+                    <Link to={entityHref(i.link.type, i.link.id) as never} className="group flex items-start gap-3 px-4 py-2.5 hover:bg-ground/60 sm:px-5">
+                      <span className={cn('mt-1.5 size-2 shrink-0 rounded-full', i.severity === 'critical' ? 'bg-alert' : i.severity === 'warning' ? 'bg-hold' : 'bg-blue')} aria-hidden />
                       <span className="min-w-0 flex-1">
-                        <span className="block text-[13.5px] font-medium">{a.title}</span>
-                        <span className="block truncate text-[12.5px] text-ink-2">{a.detail}</span>
+                        <span className="block text-[13.5px] font-medium">{i.title}</span>
+                        <span className="block truncate text-[12.5px] text-ink-2">{REASON_LABEL[i.reason]()} · {i.detail}</span>
                       </span>
                       <CaretRight size={14} className="mt-1 text-ink-3 transition-transform group-hover:translate-x-0.5" />
                     </Link>
@@ -197,15 +182,13 @@ export function DashboardPage() {
                 ))}
               </ul>
             )}
+            {warnings > 0 && (
+              <p className="border-t border-line-soft px-4 py-2.5 text-[12.5px] text-ink-2 sm:px-5">
+                {L(`${warnings} uyarı daha var: `, `${warnings} more warning(s): `)}
+                <Link to={'/islerim?sekme=uyarilar' as never} className="font-medium text-blue hover:underline">{L('İşlerim → Uyarılar', 'My Work → Alerts')}</Link>
+              </p>
+            )}
           </Panel>
-          <ChartCard
-            title={L('Teslim ve iade akışı', 'Handover and return flow')}
-            description={L(`Son ${n} gün · gerçek teslim/iade kayıtları`, `Last ${n} days · real handover/return records`)}
-            source={L('Kaynak: kiralama kayıtları (gerçekleşen teslim ve iade zamanları).', 'Source: rental records (actual handover and return times).')}
-            chart={<LineChart points={trend} series={[{ name: L('Teslim', 'Handovers'), color: 'var(--ac-blue)' }, { name: L('İade', 'Returns'), color: '#475467' }]} />}
-            head={[L('Gün', 'Day'), L('Teslim', 'Handovers'), L('İade', 'Returns')]}
-            rows={trend.map((p) => [p.x, p.ys[0]!, p.ys[1]!])}
-          />
         </div>
         <div className="min-w-0 space-y-5">
           <Panel title={L('Filo durumu · şimdi', 'Fleet · now')} description={L(`${fleet.total} araç`, `${fleet.total} vehicles`)} action={<Link to={'/araclar' as never} className="inline-flex items-center gap-1 text-[13px] font-medium text-blue hover:underline">{L('Araçlar', 'Vehicles')} <ArrowRight size={13} /></Link>} flush>
@@ -227,20 +210,20 @@ export function DashboardPage() {
                 </li>
               ))}
             </ul>
-            <p className="border-t border-line-soft px-4 py-2.5 text-[12px] text-ink-3 sm:px-5">{L('Şu anki uygunluk; rezervasyon, kiralama, bakım, hasar ve transfer ile aynı kuraldan gelir. İleri tarih uygunluğu Takvim ve Kapasite Planlama’dadır. Hazırlık ayrı bir durumdur.', 'Availability right now, from the same rule as reservations, rentals, maintenance, damage and transfers. Future availability is in Calendar and Capacity Planning. Readiness is a separate state.')}</p>
+            <p className="border-t border-line-soft px-4 py-2.5 text-[12px] text-ink-3 sm:px-5">{L('Şu anki uygunluk; rezervasyon, kiralama, bakım, hasar ve transfer ile aynı kuraldan gelir. İleri tarih uygunluğu Takvim’dedir. Hazırlık ayrı bir durumdur.', 'Availability right now, from the same rule as reservations, rentals, maintenance, damage and transfers. Future availability is in the Calendar. Readiness is a separate state.')}</p>
           </Panel>
 
           <Panel title={L('Bakım, hasar, transfer', 'Maintenance, damage, transfers')} flush>
             <ul className="divide-y divide-line-soft text-[13px]">
               {[
-                { l: L('Bakımda', 'In service'), v: d.maintenance.filter((m) => m.status === 'in_progress').length, to: '/bakim-servis?durum=in_progress' },
-                { l: L('Planlı bakım', 'Planned service'), v: d.maintenance.filter((m) => m.status === 'planned').length, to: '/bakim-servis?durum=planned' },
-                { l: L('Hasar engelli araç', 'Vehicles blocked by damage'), v: d.damages.filter((x) => x.blocksVehicle && x.status !== 'closed').length, to: '/hasar-kayitlari', tone: 'alert' },
-                { l: L('Açık hasar dosyası', 'Open damage files'), v: d.damages.filter((x) => x.status !== 'closed').length, to: '/hasar-kayitlari' },
-                { l: L('Yolda (transfer)', 'In transit'), v: d.transfers.filter((t) => t.status === 'in_transit').length, to: '/araclar?durum=transfer' },
-                { l: L('Onay bekleyen', 'Awaiting approval'), v: waitingApprovals, to: '/onay-merkezi', tone: waitingApprovals ? 'hold' : undefined },
-                { l: L('Açık görev', 'Open tasks'), v: d.tasks.filter((t) => t.status !== 'done' && (!t.branchId || active.includes(t.branchId))).length, to: '/gorevler?gorunum=ekip' },
-              ].map((r) => (
+                { l: L('Bakımda', 'In service'), v: d.maintenance.filter((m) => m.status === 'in_progress').length, to: '/bakim-servis?durum=in_progress', show: can('maintenance:view') },
+                { l: L('Planlı bakım', 'Planned service'), v: d.maintenance.filter((m) => m.status === 'planned').length, to: '/bakim-servis?durum=planned', show: can('maintenance:view') },
+                { l: L('Hasar engelli araç', 'Vehicles blocked by damage'), v: d.damages.filter((x) => x.blocksVehicle && x.status !== 'closed').length, to: '/hasar-ve-olaylar', tone: 'alert', show: can('damages:view') },
+                { l: L('Açık hasar dosyası', 'Open damage files'), v: d.damages.filter((x) => x.status !== 'closed').length, to: '/hasar-ve-olaylar', show: can('damages:view') },
+                { l: L('Yolda (transfer)', 'In transit'), v: d.transfers.filter((t) => t.status === 'in_transit').length, to: '/araclar?durum=transfer', show: can('vehicles:view') },
+                { l: L('Onay bekleyen', 'Awaiting approval'), v: waitingApprovals, to: '/onay-merkezi', tone: waitingApprovals ? 'hold' : undefined, show: can('approvals:view') },
+                { l: L('Açık görev', 'Open tasks'), v: openTasks, to: '/gorevler?gorunum=ekip', show: can('tasks:view') },
+              ].filter((r) => r.show).map((r) => (
                 <li key={r.l}>
                   <Link to={r.to as never} className="flex items-center gap-3 px-4 py-2.5 hover:bg-ground/60 sm:px-5">
                     <span className="min-w-0 flex-1">{r.l}</span>

@@ -2,7 +2,7 @@ import { Plus } from '@phosphor-icons/react'
 import { Link } from '@tanstack/react-router'
 import { useMemo, useState } from 'react'
 import { userName } from '../../core/helpers'
-import { bulkAssign, bulkComplete, canClaim, canSeeTask, cancelTask, claimTask, completeTask, isMyTask, isOpenTask, postponeTask, reassignTask, releaseTask, reopenTask, startTask } from '../../core/ops/tasks'
+import { recordLabel, bulkAssign, bulkComplete, canClaim, canSeeTask, cancelTask, claimTask, completeTask, isMyTask, isOpenTask, postponeTask, reassignTask, releaseTask, reopenTask, startTask } from '../../core/ops/tasks'
 import type { Task } from '../../core/types'
 import { L } from '../../i18n'
 import { DateTimeF, SelectF, userOptions } from '../../ui/forms'
@@ -152,7 +152,7 @@ function Drawer({ t, onClose }: { t: Task; onClose: () => void }) {
           [L('Şube', 'Branch'), d.branches.find((b) => b.id === t.branchId)?.name ?? L('Tüm şubeler', 'All branches')],
           [L('Havuz rolü', 'Pool role'), t.pool ? (t.poolRoleIds?.length ? t.poolRoleIds.map((r) => d.roles.find((x) => x.id === r)?.name ?? r).join(', ') : L('Her uygun rol', 'Every eligible role')) : '—'],
           [L('Açıklama', 'Description'), t.description || '—'],
-          [L('Bağlı kayıt', 'Linked record'), link ? <Link key="l" to={entityHref(link.type, link.id) as never} className="text-blue hover:underline">{LINK_LABEL()[link.type] ?? link.type} · {linkNo(d, link)}</Link> : '—'],
+          [L('Bağlı kayıt', 'Linked record'), link ? <Link key="l" to={entityHref(link.type, link.id) as never} className="text-blue hover:underline">{LINK_LABEL()[link.type] ?? link.type} · {recordLabel(d, link)}</Link> : '—'],
         ]}
       />
       {open && (
@@ -182,11 +182,6 @@ function Drawer({ t, onClose }: { t: Task; onClose: () => void }) {
       {dlg === 'postpone' && <PostponeDialog t={t} onClose={() => setDlg(null)} />}
     </RecordDrawer>
   )
-}
-
-function linkNo(d: ReturnType<typeof useDb>, link: NonNullable<Task['link']>): string {
-  const pick = { vehicle: d.vehicles.find((x) => x.id === link.id)?.plate, rental: d.rentals.find((x) => x.id === link.id)?.no, reservation: d.reservations.find((x) => x.id === link.id)?.no, customer: d.customers.find((x) => x.id === link.id)?.name, maintenance: d.maintenance.find((x) => x.id === link.id)?.no, damage: d.damages.find((x) => x.id === link.id)?.no, incident: d.incidents.find((x) => x.id === link.id)?.no, fine: d.fines.find((x) => x.id === link.id)?.no, corporate: d.corporates.find((x) => x.id === link.id)?.name } as Record<string, string | undefined>
-  return pick[link.type] ?? link.id
 }
 
 function ReassignDialog({ t, onClose }: { t: Task; onClose: () => void }) {
