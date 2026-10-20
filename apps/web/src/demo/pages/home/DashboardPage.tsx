@@ -307,6 +307,11 @@ export function DashboardPage() {
           <p className="border-t border-line-soft px-4 py-2.5 text-[12px] text-ink-3 sm:px-5">{L('Teklif gelir sayılmaz; depozito tahsilat veya gelir değildir; “uygulanan” yalnız hesap kalemlerine mahsup edilmiş tutarlardır.', 'A quote is not revenue; a deposit is neither collection nor revenue; "applied" counts only amounts allocated to charges.')}</p>
         </Panel>
       )}
+      {!d.settings.setup.done && can('settings:view') && (
+        <Notice tone="hold" action={<Link to={'/kurulum' as never} className="inline-flex h-9 items-center rounded-lg bg-blue px-3 text-[13px] font-medium text-white hover:bg-blue-ink">{L('Kurulumu sürdür', 'Continue the setup')}</Link>}>
+          {L('Kurulum tamamlanmadı. Sihirbaz şirket, şube, kullanıcı, fiyat ve politika adımlarını ve hazırlık kontrolünü içerir.', 'The setup is not finished. The wizard covers company, branches, users, prices and policies, and the readiness check.')}
+        </Notice>
+      )}
       {!showFinance && <Notice tone="blue">{L('Finans göstergeleri bu demo rolünde görünmez (yetki: Finans raporları). Rol menüsünden Sahip veya Muhasebe ile deneyin.', 'Finance figures are hidden for this demo role (permission: finance reports). Try Owner or Accounting from the role menu.')}</Notice>}
       {pending + overdue.length + pickups.length + returns.length === 0 && <Empty title={L('Bugün sakin', 'Quiet day')} />}
     </Page>

@@ -2,11 +2,14 @@ import { B } from '../../i18n'
 import { advanceLedger, allocatePayment, computeCashExpected, openSessionOf, rentalFinance } from '../calc/finance'
 import { cancellationFee } from '../calc/policy'
 import { convertTenderToObligation } from '../calc/fx'
-import { addHistory, fail, logEvent, need, nextId, nextNo, nowOf, meOf, userName } from '../helpers'
+import { addHistory, fail, hasPerm, logEvent, need, nextId, nextNo, nowOf, meOf, userName } from '../helpers'
 import { fmt } from '../money'
 import type { Charge, Cur, Db, DepositRecord, Drawer, Id, Money, Payment, PaymentMethod, PriceLine, RefundRecord, Rental } from '../types'
 
 // Finance operations. Every posted movement has an idempotency key; clicking twice never posts twice (spec §II.3).
+
+/** A variance above this many times the reason threshold is critical. */
+export const CRITICAL_VARIANCE_FACTOR = 5
 
 export const findDrawer = (d: Db, branchId: Id, cur: Cur): Drawer | undefined => d.drawers.find((x) => x.branchId === branchId && x.currency === cur)
 
@@ -426,6 +429,8 @@ export function closeSession(d: Db, drawerId: Id, countedMinor: number, variance
   const variance = countedMinor - expected
   const limit = d.settings.cash.varianceReason[dr!.currency] ?? 0
   if (Math.abs(variance) > limit && varianceReason.trim().length < 5) fail(B(`Fark ${fmt(variance, dr!.currency)}; eşiği (${fmt(limit, dr!.currency)}) aşıyor. Gerekçe yazın.`, `Variance ${fmt(variance, dr!.currency)}; it exceeds the threshold (${fmt(limit, dr!.currency)}). Enter a reason.`), { reason: B('Fark gerekçesi zorunlu', 'A variance reason is required') })
+  // A critical variance (far above the reason threshold) is not closed by a cashier alone: a person with approval authority closes it.
+  if (Math.abs(variance) > limit * CRITICAL_VARIANCE_FACTOR && limit > 0 && !hasPerm(d, 'approvals:decide')) fail(B(`Kasa farkı ${fmt(variance, dr!.currency)} kritik eşiği (${fmt(limit * CRITICAL_VARIANCE_FACTOR, dr!.currency)}) aşıyor: kasayı yalnız onay yetkisi olan kişi (Sahip/Yönetici) kapatabilir.`, `The drawer variance ${fmt(variance, dr!.currency)} exceeds the critical threshold (${fmt(limit * CRITICAL_VARIANCE_FACTOR, dr!.currency)}): only a person with approval authority (Owner/Manager) can close the drawer.`), { counted: B('Kritik fark: yönetici kapanışı gerekir', 'Critical variance: a manager must close it') }, 'CRITICAL_VARIANCE')
   s!.closedAt = nowOf(d)
   s!.closedBy = meOf(d).id
   s!.countedMinor = countedMinor

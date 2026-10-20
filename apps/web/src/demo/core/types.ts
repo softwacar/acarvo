@@ -1096,7 +1096,7 @@ export interface Tenant {
 // ---------------------------------------------------------------- the database
 
 export interface Db {
-  meta: { schema: number; anchor: string; createdAt: Iso; modified: boolean; /** Grows with every saved change; another tab adopts a newer one. */ rev: number }
+  meta: { schema: number; anchor: string; createdAt: Iso; modified: boolean; /** Grows with every saved change; another tab adopts a newer one. */ rev: number; /** Published role-preset version (demo of a preset upgrade). */ presetVersion: number }
   clock: { now: Iso }
   session: { userId: Id; branchId: Id | 'all'; lang: 'tr' | 'en'; context: 'company' | 'platform' | 'partner'; partnerId: Id; /** Advanced concept preview for V1.5 / V2 screens (never a sidebar link). */ preview: boolean }
   counters: Record<string, number>

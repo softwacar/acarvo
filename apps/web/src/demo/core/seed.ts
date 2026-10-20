@@ -859,15 +859,15 @@ function seedControl(d: Db, T: (o: number, hm?: string, z?: string) => string, a
   d.exceptions[3]!.reviewerId = 'u-mgr'
   // Expenses (manual, independent operational costs)
   as('u-acc')
-  const ex = (off: number, cat: string, vendor: string, br: string, minor: number, cur: Cur, note: string, post = true) => {
+  const ex = (off: number, cat: string, vendor: string, br: string, minor: number, cur: Cur, note: string, post = true, o: { vehicle?: Vehicle; link?: 'general' } = {}) => {
     setNow(T(off, '12:00'))
-    createExpense(d, { category: cat, vendor, branchId: br, date: T(off, '12:00').slice(0, 10), amount: { minor, cur }, note, post })
+    createExpense(d, { category: cat, vendor, branchId: br, date: T(off, '12:00').slice(0, 10), amount: { minor, cur }, note, post, vehicleId: o.vehicle?.id, link: o.link })
   }
   ex(-1, 'Yakıt', 'Petrol Demo d.o.o.', 'b-sjj', 8400, 'BAM', B('Şube araçları yakıt (örnek)', 'Branch vehicles fuel (sample)'))
-  ex(-3, 'Temizlik', B('Express Oto Yıkama', 'Express Car Wash'), 'b-sjj', 4500, 'EUR', B('Haftalık yıkama paketi', 'Weekly washing package'))
-  ex(-5, 'Yol yardım / çekici', B('Adria Çekici', 'Adria Towing'), 'b-mst', 12000, 'BAM', B('Müşteri aracı çekimi', 'Towing of a customer vehicle'))
-  ex(-8, 'Kira ve işletme', B('Havalimanı İşletme (Demo)', 'Airport Operator (Demo)'), 'b-sjj', 85000, 'EUR', B('Aylık ofis ve otopark kirası', 'Monthly office and car park rent'))
-  ex(-9, 'Sigorta primi', B('Demo Sigorta A.Ş.', 'Demo Insurance Co.'), 'b-dbv', 64000, 'EUR', B('Filo poliçesi taksiti', 'Fleet policy instalment'))
+  ex(-3, 'Temizlik', B('Express Oto Yıkama', 'Express Car Wash'), 'b-sjj', 4500, 'EUR', B('Haftalık yıkama paketi', 'Weekly washing package'), true, { vehicle: veh(7) })
+  ex(-5, 'Yol yardım / çekici', B('Adria Çekici', 'Adria Towing'), 'b-mst', 12000, 'BAM', B('Müşteri aracı çekimi', 'Towing of a customer vehicle'), true, { vehicle: veh(14) })
+  ex(-8, 'Kira ve işletme', B('Havalimanı İşletme (Demo)', 'Airport Operator (Demo)'), 'b-sjj', 85000, 'EUR', B('Aylık ofis ve otopark kirası', 'Monthly office and car park rent'), true, { link: 'general' })
+  ex(-9, 'Sigorta primi', B('Demo Sigorta A.Ş.', 'Demo Insurance Co.'), 'b-dbv', 64000, 'EUR', B('Filo poliçesi taksiti', 'Fleet policy instalment'), true, { link: 'general' })
   ex(-12, 'Diğer', B('Kırtasiye Demo', 'Stationery Demo'), 'b-mst', 3200, 'BAM', '')
   ex(-2, 'Yakıt', 'Petrol Demo d.o.o.', 'b-dbv', 6200, 'EUR', '', false)
   ex(-4, 'Temizlik', B('Express Oto Yıkama', 'Express Car Wash'), 'b-dbv', 3800, 'EUR', 'Taslak: fatura bekleniyor', false)

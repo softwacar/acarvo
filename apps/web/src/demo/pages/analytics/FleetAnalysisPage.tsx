@@ -1,3 +1,4 @@
+import { vehicleCost } from '../../core/calc/cost'
 import { useMemo } from 'react'
 import { COUNTED_VEHICLE, rangeOfDays, utilisation, type Utilisation } from '../../core/metrics'
 import { fmt, sumByCur } from '../../core/money'
@@ -46,6 +47,7 @@ export function FleetAnalysisPage() {
     { id: 'maint', header: L('Bakım saati', 'Maintenance h'), align: 'right', cell: (r) => <span className="tnum">{Math.round(r.u.maintenanceHours)}</span>, sort: (r) => r.u.maintenanceHours, csv: (r) => Math.round(r.u.maintenanceHours), hideBelow: 'lg' },
     { id: 'blk', header: L('Hasar bloğu saati', 'Damage block h'), align: 'right', cell: (r) => <span className="tnum">{Math.round(r.u.blockedHours)}</span>, sort: (r) => r.u.blockedHours, csv: (r) => Math.round(r.u.blockedHours), hideBelow: 'lg' },
     { id: 'idle', header: L('Boşta saat', 'Idle h'), align: 'right', cell: (r) => <span className="tnum">{Math.round(r.u.idleHours)}</span>, sort: (r) => r.u.idleHours, csv: (r) => Math.round(r.u.idleHours), hideBelow: 'lg' },
+    { id: 'cost', header: L('Tanımlı maliyet', 'Defined cost'), align: 'right', cell: (r) => { const t = Object.entries(vehicleCost(d, r.v.id, range.from, range.to).byCur); return t.length ? <span className="tnum whitespace-nowrap">{t.map(([c, x]) => fmt(x.total, c)).join(' · ')}</span> : <span className="text-ink-3" title={L('Tanımlı maliyet verisi yok', 'No defined cost data')}>—</span> }, csv: (r) => Object.entries(vehicleCost(d, r.v.id, range.from, range.to).byCur).map(([c, x]) => fmt(x.total, c)).join(' · '), hideBelow: 'md' },
     { id: 'rev', header: L('Kiralama geliri', 'Rental revenue'), align: 'right', cell: (r) => <span className="tnum whitespace-nowrap">{byCurText(r.revenue, fmt).replace(/\n/g, ' · ')}</span>, hideBelow: 'md' },
   ]
   return (

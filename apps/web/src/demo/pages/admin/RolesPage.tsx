@@ -1,6 +1,7 @@
 import { Plus } from '@phosphor-icons/react'
 import { useState } from 'react'
-import { saveRole } from '../../core/ops/control'
+import { presetUpgradeAvailable, publishPresetVersion, saveRole, upgradeRolePreset } from '../../core/ops/control'
+import { DemoConcept } from '../../ui/gate'
 import { ALL_PERMS, PERM_MODULES } from '../../core/permissions'
 import type { Role } from '../../core/types'
 import { L, loc } from '../../i18n'
@@ -26,7 +27,7 @@ export function RolesPage() {
     <Page
       title={L('Roller ve Yetkiler', 'Roles and Permissions')}
       description={L('Modül × eylem yetki matrisi. Sistem rolleri kopyalanarak özel role dönüştürülür; Sahip rolü değiştirilemez. Bu bir demo yetki simülasyonudur, sunucu güvenliği değildir.', 'A module × action permission matrix. System roles are copied into custom roles; the Owner role cannot be changed. This is a demo access simulation, not server security.')}
-      actions={manage ? <button type="button" className={btnPrimary} onClick={() => setDlg('new')}><Plus size={16} /> {L('Yeni rol', 'New role')}</button> : undefined}
+      actions={manage ? <button type="button" className={btnPrimary} onClick={() => setDlg('new')}><Plus size={16} /> {L('Yeni rol', 'New role')} <DemoConcept>V1.5</DemoConcept></button> : undefined}
     >
       <div className="grid items-start gap-5 lg:grid-cols-[280px_minmax(0,1fr)]">
         <nav aria-label={L('Roller', 'Roles')}>
@@ -44,6 +45,7 @@ export function RolesPage() {
         <div className="space-y-4">
           <Kpis items={[{ label: L('Rol', 'Role'), value: role.name }, { label: L('İzin', 'Permissions'), value: `${perms.length} / ${ALL_PERMS.length}` }, { label: L('Kullanıcı', 'Users'), value: d.users.filter((u) => u.roleId === role.id).length }]} />
           <p className="text-[13.5px] text-ink-2">{role.description}</p>
+          <PresetNotice role={role} manage={manage} />
           {role.system && manage && <Notice tone="blue" action={<button type="button" className={btnSecondary} onClick={() => setDlg('copy')}>{L('Kopyala', 'Copy')}</button>}>{role.id === 'role-owner' ? L('Sahip rolü değiştirilemez.', 'The Owner role cannot be changed.') : L('Sistem rolü de düzenlenebilir; yine de özel bir kopya oluşturmak sistem rolünü korur.', 'A system role can be edited; creating a custom copy still keeps the system role intact.')}</Notice>}
           {groups.map((g) => (
             <Panel key={g} title={loc(g)} flush>
@@ -91,5 +93,37 @@ function RoleDialog({ base, basePerms, onClose, onCreated }: { base: Role | null
       <TextF id="rl-n" label={L('Rol adı', 'Role name')} required value={name} onChange={setName} error={fields.name} />
       <AreaF id="rl-d" label={L('Açıklama', 'Description')} value={desc} onChange={setDesc} rows={2} />
     </FinanceDialog>
+  )
+}
+
+/** Preset version of a ready role. A new version reaches only roles nobody customized; a customized role is never overwritten. */
+function PresetNotice({ role, manage }: { role: Role; manage: boolean }) {
+  const d = useDb()
+  const [discard, setDiscard] = useState(false)
+  const [err, setErr] = useState<string | null>(null)
+  if (!role.system || role.id === 'role-owner') return null
+  const available = presetUpgradeAvailable(d, role)
+  return (
+    <div className="space-y-2" data-testid={'preset-' + role.id}>
+      <Notice
+        tone={available ? 'hold' : 'blue'}
+        action={
+          manage && available ? (
+            role.customized ? (
+              <button type="button" className={btnSecondary} onClick={() => setDiscard(true)}>{L('Özelleştirmeyi at ve yükselt', 'Discard customization and upgrade')}</button>
+            ) : (
+              <button type="button" className={btnSecondary} onClick={() => { const r = runAction((s) => upgradeRolePreset(s, role.id), L('Rol ön ayarı yükseltildi.', 'Role preset upgraded.')); setErr(r.ok ? null : r.error) }}>{L('Ön ayarı yükselt', 'Upgrade the preset')}</button>
+            )
+          ) : undefined
+        }
+      >
+        {L('Ön ayar sürümü', 'Preset version')} v{role.presetVersion ?? 1} ({L('güncel', 'current')} v{d.meta.presetVersion}) · {role.customized ? L('Bu rol özelleştirilmiş: yeni bir ön ayar izinlerinizi ezmez.', 'This role is customized: a new preset never overwrites your permissions.') : available ? L('Yeni ön ayar sürümü var.', 'A newer preset version exists.') : L('Güncel ön ayar.', 'Up to date.')}
+      </Notice>
+      {err && <p role="alert" className="text-[13px] font-medium text-alert">{err}</p>}
+      {manage && role.id === 'role-ops' && d.meta.presetVersion < 3 && (
+        <button type="button" className={btnSecondary} onClick={() => runAction((s) => publishPresetVersion(s), L('Rol ön ayarı v3 yayımlandı (demo).', 'Role preset v3 published (demo).'))}>{L('Demo: yeni ön ayar sürümünü yayımla', 'Demo: publish a new preset version')}</button>
+      )}
+      {discard && <FinanceDialog title={L('Özelleştirmeyi at', 'Discard the customization')} description={L('Bu rolün elle değiştirilmiş izinleri ön ayara döner. Bu bilerek yapılır; otomatik olmaz.', 'The hand-edited permissions of this role go back to the preset. This is done on purpose; it never happens automatically.')} confirm={L('At ve yükselt', 'Discard and upgrade')} danger onClose={() => setDiscard(false)} onSubmit={() => { const r = runAction((s) => upgradeRolePreset(s, role.id, true), L('Ön ayar yükseltildi; özelleştirme atıldı.', 'Preset upgraded; customization discarded.')); if (!r.ok) return r.error; setDiscard(false) }} />}
+    </div>
   )
 }

@@ -8,7 +8,7 @@ import { L } from '../../i18n'
 import { CheckF, DateTimeF, SelectF, TextF, branchOptions } from '../../ui/forms'
 import { runAction, useCan, useDb, useFmt, useUrlState } from '../../ui/hooks'
 import { btnPrimary, btnSmall, FinanceDialog, Notice, Page, Panel } from '../../ui/kit'
-import { ContractSection, WorkspaceSection } from './SettingsExtras'
+import { CancellationSection, ContractSection, ReadinessSection, WorkspaceSection } from './SettingsExtras'
 
 // Settings: every section edits one part of the policy and saves through one action that writes an audit entry. Changes
 // affect future transactions only; frozen price and rate snapshots never change. The exchange-rate desk exists only here.
@@ -27,6 +27,8 @@ const SECTIONS = () => [
   { id: 'esik', label: L('Onay eşikleri', 'Approval thresholds') },
   { id: 'bildirim', label: L('Bildirimler ve eşikler', 'Notifications and thresholds') },
   { id: 'sozlesme', label: L('Sözleşme şablonları', 'Contract templates') },
+  { id: 'iptal', label: L('İptal ve kaparo politikası', 'Cancellation and advance policy') },
+  { id: 'hazirlik', label: L('Operasyonel hazırlık', 'Operational readiness') },
   { id: 'gizlilik', label: L('Gizlilik', 'Privacy') },
 ]
 
@@ -50,7 +52,7 @@ export function SettingsPage() {
           </ul>
         </nav>
         <div className="min-w-0">
-          {cur.id === 'kurlar' ? <FxDesk d={d} /> : cur.id === 'calisma' ? <WorkspaceSection edit={edit} /> : cur.id === 'sozlesme' ? <ContractSection /> : <SectionForm key={cur.id} id={cur.id} title={cur.label} edit={edit} />}
+          {cur.id === 'kurlar' ? <FxDesk d={d} /> : cur.id === 'calisma' ? <WorkspaceSection edit={edit} /> : cur.id === 'sozlesme' ? <ContractSection /> : cur.id === 'iptal' ? <CancellationSection edit={edit} /> : cur.id === 'hazirlik' ? <ReadinessSection /> : <SectionForm key={cur.id} id={cur.id} title={cur.label} edit={edit} />}
         </div>
       </div>
     </Page>

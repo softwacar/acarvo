@@ -1,7 +1,7 @@
 import { Flask } from '@phosphor-icons/react'
 import { Link } from '@tanstack/react-router'
 import type { ReactNode } from 'react'
-import { type Legacy, SCOPE_LABEL } from '../core/modules'
+import { type Legacy, MATURITY, MATURITY_LABEL, SCOPE_LABEL } from '../core/modules'
 import { setConceptPreview } from '../core/ops/control'
 import { L } from '../i18n'
 import { runAction, useCan, useDb } from './hooks'
@@ -77,6 +77,23 @@ export function ModuleGate({ legacy, children }: { legacy: Legacy | undefined; c
       <ConceptBanner legacy={legacy} />
       {children}
     </>
+  )
+}
+
+/** The maturity of the screen the person is on (real / partly real / demo concept), shown once per page, never on every button. */
+export function MaturityBadge({ slug }: { slug: string }) {
+  const m = MATURITY[slug]
+  if (!m) return null
+  const t = MATURITY_LABEL[m]
+  return (
+    <span
+      title={L(t.hintTr, t.hintEn)}
+      data-testid="maturity-badge"
+      data-maturity={m}
+      className={'hidden h-6 shrink-0 items-center rounded-md border px-2 text-[11.5px] font-medium md:inline-flex ' + (m === 'real' ? 'border-ok/40 bg-ok-soft text-ok' : m === 'partial' ? 'border-blue/30 bg-blue-soft text-blue-ink' : 'border-hold/40 bg-hold-soft text-hold')}
+    >
+      {L(t.tr, t.en)}
+    </span>
   )
 }
 

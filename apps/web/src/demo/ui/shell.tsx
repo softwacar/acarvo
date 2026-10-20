@@ -11,7 +11,8 @@ import { L, setLangGlobal } from '../i18n'
 import { demoNav, navItemOf, otherScreens, visibleNav } from '../nav'
 import { DEFERRED, GATED_VIEWS, LEGACY } from '../core/modules'
 import { setConceptPreview } from '../core/ops/control'
-import { ScopeBadge } from './gate'
+import { restartSetup } from '../core/setup'
+import { MaturityBadge, ScopeBadge } from './gate'
 import { inboxOf } from '../core/inbox'
 import { SCENARIOS } from '../core/scenarios'
 import { searchAll } from '../core/search'
@@ -499,6 +500,7 @@ function PreviewSheet({ onClose }: { onClose: () => void }) {
 
 function DemoMenu({ open }: { open: (d: DemoDialog) => void }) {
   const d = useDb()
+  const can = useCan()
   const navigate = useNavigate()
   const lang = d.session.lang
   return (
@@ -524,6 +526,11 @@ function DemoMenu({ open }: { open: (d: DemoDialog) => void }) {
           >
             <Globe size={16} /> {L('Dil: Türkçe → English', 'Language: English → Türkçe')}
           </DropdownMenu.Item>
+          {can('settings:manage') && (
+            <DropdownMenu.Item className={menuItem} onSelect={() => { runAction((x) => restartSetup(x), L('Kurulum sihirbazı yeniden başlatıldı (veriler korunur).', 'The setup wizard was restarted (data is kept).')); void navigate({ to: '/kurulum' as never }) }}>
+              <Play size={16} /> {L('Kurulum sihirbazını başlat (demo)', 'Start the setup wizard (demo)')}
+            </DropdownMenu.Item>
+          )}
           <DropdownMenu.Item className={menuItem} onSelect={() => open('preview')}>
             <Flask size={16} /> {L('Gelişmiş konsept ön izlemesi', 'Advanced concept preview')}
           </DropdownMenu.Item>
@@ -597,6 +604,7 @@ function TopBar({ onMenu, open }: { onMenu: () => void; open: (d: DemoDialog) =>
         {item && detail && <span className="hidden text-line sm:inline">/</span>}
         {item && detail && <span className="truncate font-medium text-ink">{L('Ayrıntı', 'Detail')}</span>}
       </nav>
+      {item && <MaturityBadge slug={item.slug} />}
       <div className="ml-auto flex shrink-0 items-center gap-1.5 sm:gap-2">
         <button type="button" onClick={() => open('search')} aria-label={L('Ara (Ctrl K)', 'Search (Ctrl K)')} className="inline-flex h-10 items-center gap-2 rounded-lg border border-line px-2.5 sm:px-3 text-ink-3 hover:bg-ground">
           <MagnifyingGlass size={16} />

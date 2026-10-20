@@ -1,3 +1,4 @@
+import { vehicleCost } from '../../core/calc/cost'
 import { LinkedTasks, useLinkedTasks } from '../../ui/linkedTasks'
 import { isOpenTask } from '../../core/ops/tasks'
 import { CaretDown, ClipboardText, Plus } from '@phosphor-icons/react'
@@ -438,6 +439,7 @@ function Performance({ c }: { c: Ctx }) {
     collected[fi.cur] = (collected[fi.cur] ?? 0) + fi.appliedMinor
   }
   const maintCost = sumByCur(d.maintenance.filter((m) => m.vehicleId === v!.id && m.cost), (m) => m.cost)
+  const cost = vehicleCost(d, v!.id)
   const curs = [...new Set([...Object.keys(charged), ...Object.keys(maintCost)])].sort()
   const odo = d.odometer.filter((o) => o.vehicleId === v!.id).sort((a, b) => a.at.localeCompare(b.at))
   return (
@@ -453,6 +455,17 @@ function Performance({ c }: { c: Ctx }) {
           <table className="w-full text-[13px]"><thead><tr className="border-b border-line-soft text-left text-[12px] text-ink-2"><th scope="col" className="px-4 py-2 font-medium sm:px-5">{L('Para birimi', 'Currency')}</th><th scope="col" className="px-3 py-2 text-right font-medium">{L('Kayıtlı kalem', 'Posted')}</th><th scope="col" className="px-3 py-2 text-right font-medium">{L('Uygulanan tahsilat', 'Applied')}</th><th scope="col" className="px-4 py-2 text-right font-medium sm:px-5">{L('Bakım maliyeti', 'Service cost')}</th></tr></thead>
             <tbody className="divide-y divide-line-soft">{curs.map((c) => <tr key={c} className="h-11"><th scope="row" className="px-4 text-left font-semibold sm:px-5">{c}</th><td className="tnum px-3 text-right">{fmt(charged[c] ?? 0, c)}</td><td className="tnum px-3 text-right text-ok">{fmt(collected[c] ?? 0, c)}</td><td className="tnum px-4 text-right sm:px-5">{fmt(maintCost[c] ?? 0, c)}</td></tr>)}</tbody></table>
         )}
+      </Panel>
+      <Panel title={L('Araç maliyeti', 'Vehicle cost')} description={L('Yalnız tanımlı veriden: bakım ve hasar onarım maliyeti bakım kayıtlarından, araca bağlı masraflar masraf kayıtlarından. Bakım masrafı ikinci kez sayılmaz. Şube ve genel işletme masrafları araçlara dağıtılmaz; hasar tahmini toplama eklenmez.', 'From defined data only: maintenance and damage-repair cost from the maintenance records, vehicle-linked expenses from the expense records. A maintenance expense is never counted twice. Branch and general expenses are not spread over vehicles; a damage estimate is not added to the total.')} flush>
+        {Object.keys(cost.byCur).length === 0 ? (
+          <p className="px-4 py-4 text-[13px] text-ink-2 sm:px-5" data-testid="vehicle-cost-empty">{L('Bu araç için tanımlı maliyet verisi yok; tahmin yapılmadı.', 'There is no defined cost data for this vehicle; nothing was estimated.')}</p>
+        ) : (
+          <table className="w-full text-[13px]" data-testid="vehicle-cost">
+            <thead><tr className="border-b border-line-soft text-left text-[12px] text-ink-2"><th scope="col" className="px-4 py-2 font-medium sm:px-5">{L('Para birimi', 'Currency')}</th><th scope="col" className="px-3 py-2 text-right font-medium">{L('Bakım', 'Maintenance')}</th><th scope="col" className="px-3 py-2 text-right font-medium">{L('Hasar onarımı', 'Damage repair')}</th><th scope="col" className="px-3 py-2 text-right font-medium">{L('Araca bağlı masraf', 'Vehicle expenses')}</th><th scope="col" className="px-4 py-2 text-right font-medium sm:px-5">{L('Toplam', 'Total')}</th></tr></thead>
+            <tbody className="divide-y divide-line-soft">{Object.entries(cost.byCur).map(([cu, x]) => <tr key={cu} className="h-11"><th scope="row" className="px-4 text-left font-semibold sm:px-5">{cu}</th><td className="tnum px-3 text-right">{fmt(x.maintenance, cu)}</td><td className="tnum px-3 text-right">{fmt(x.damageRepair, cu)}</td><td className="tnum px-3 text-right">{fmt(x.expenses, cu)}</td><td className="tnum px-4 text-right font-semibold sm:px-5">{fmt(x.total, cu)}</td></tr>)}</tbody>
+          </table>
+        )}
+        {cost.estimates.length > 0 && <p className="border-t border-line-soft px-4 py-2.5 text-[12.5px] text-ink-2 sm:px-5">{L('Tahmini (toplama eklenmedi): ', 'Estimate only (not in the total): ')}{cost.estimates.map((x) => `${x.no} ${fmt(x.minor, x.cur)}`).join(' · ')}</p>}
       </Panel>
       <ChartCard title={L('Kilometre gelişimi', 'Odometer progress')} source={L('Kaynak: kilometre kayıtları (tek km gerçeği).', 'Source: odometer readings (the single odometer truth).')} chart={<LineChart points={odo.map((o) => ({ x: f.date(o.at).slice(0, 5), ys: [o.km] }))} series={[{ name: 'km', color: 'var(--ac-blue)' }]} format={(x) => x.toLocaleString('tr')} />} head={[L('Tarih', 'Date'), 'km', L('Kaynak', 'Source')]} rows={odo.map((o) => [f.dt(o.at), o.km.toLocaleString('tr'), o.source])} />
     </div>

@@ -13,6 +13,7 @@ import { MAINT_TYPE_LABEL, METHOD_LABEL, statusOf } from '../../ui/status'
 import { PrintButton } from '../shared/ContractSheet'
 import { GatedView } from '../../ui/gate'
 import { FleetAnalysisPage } from './FleetAnalysisPage'
+import { EndOfDay } from '../finance/EndOfDay'
 
 // Reports: eight families built from the same records as every screen. CSV is a real file generated in the browser; the
 // print view uses the browser's print dialog. Money is always grouped per currency.
@@ -34,7 +35,7 @@ interface Family {
   /** V1 families are the core reports; V1.5 / V2 families stay in the code and open under the concept preview. */
   scope: 'v1' | 'v15' | 'v2'
   /** A whole screen shown as this report family (Fleet analysis). */
-  embed?: 'fleet'
+  embed?: 'fleet' | 'endofday'
   label: () => string
   desc: () => string
   finance?: boolean
@@ -44,6 +45,15 @@ interface Family {
 const inRange = (iso: string | undefined, p: Params) => !!iso && iso >= p.from && iso < p.to
 
 const FAMILIES: Family[] = [
+  {
+    id: 'gunsonu',
+    scope: 'v1',
+    embed: 'endofday',
+    finance: true,
+    label: () => L('Gün sonu', 'End of day'),
+    desc: () => L('Tahsilat, iade, masraf, kasa farkı ve açık işler.', 'Collections, refunds, expenses, cash variance and open items.'),
+    run: () => ({ head: [], rows: [] }),
+  },
   {
     id: 'filo',
     scope: 'v1',
@@ -134,7 +144,7 @@ const FAMILIES: Family[] = [
   },
   {
     id: 'kasa',
-    scope: 'v1',
+    scope: 'v15',
     label: () => L('Kasa oturumları', 'Cash sessions'),
     desc: () => L('Oturum bazında beklenen, sayılan ve fark.', 'Expected, counted and variance per session.'),
     finance: true,
@@ -196,7 +206,11 @@ export function ReportsPage() {
     a.click()
     URL.revokeObjectURL(a.href)
   }
-  const body = family.embed === 'fleet' ? (
+  const body = family.embed === 'endofday' ? (
+    <div className="min-w-0">
+      <EndOfDay />
+    </div>
+  ) : family.embed === 'fleet' ? (
     <div className="min-w-0">
       <Embedded>
         <FleetAnalysisPage />

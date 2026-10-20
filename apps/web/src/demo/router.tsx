@@ -119,6 +119,7 @@ const ROUTES: [string, string, Loader][] = [
   ['/kullanicilar', 'users:view', () => import('./pages/admin/UsersRolesPage').then((m) => ({ default: m.UsersRolesPage }))],
   ['/islem-gecmisi', 'audit:view', () => import('./pages/records/AuditPage').then((m) => ({ default: m.AuditPage }))],
   ['/ayarlar', 'settings:view', () => import('./pages/admin/SettingsPage').then((m) => ({ default: m.SettingsPage }))],
+  ['/kurulum', 'settings:view', () => import('./pages/admin/SetupWizardPage').then((m) => ({ default: m.SetupWizardPage }))],
   // Not in the menu: the document list is reached from search and record links (documents live on their source record).
   ['/belge-merkezi', 'documents:view', () => import('./pages/records/DocumentsPage').then((m) => ({ default: m.DocumentsPage }))],
 ]

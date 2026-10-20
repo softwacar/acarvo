@@ -143,6 +143,39 @@ export const LEGACY: Legacy[] = [
   { slug: 'ayarlar', tr: 'Ayarlar', en: 'Settings', kind: 'same', to: '/ayarlar', scope: 'v1' },
 ]
 
+// ---------------------------------------------------------------- product maturity (decision document N)
+/** What a screen is today: the real application has it (real), part of it (partial), or it exists only as a working browser demo. */
+export type Maturity = 'real' | 'partial' | 'demo'
+export const MATURITY: Record<string, Maturity> = {
+  '': 'partial',
+  islerim: 'demo',
+  rezervasyonlar: 'real',
+  kiralamalar: 'real',
+  takvim: 'demo',
+  gorevler: 'demo',
+  araclar: 'real',
+  'bakim-servis': 'real',
+  'hasar-ve-olaylar': 'real',
+  musteriler: 'real',
+  'kurumsal-hesaplar': 'partial',
+  fiyatlandirma: 'real',
+  finans: 'partial',
+  masraflar: 'demo',
+  'sube-kasalari': 'demo',
+  raporlar: 'demo',
+  'onay-merkezi': 'demo',
+  subeler: 'real',
+  kullanicilar: 'partial',
+  'islem-gecmisi': 'real',
+  ayarlar: 'partial',
+  kurulum: 'demo',
+}
+export const MATURITY_LABEL: Record<Maturity, { tr: string; en: string; hintTr: string; hintEn: string }> = {
+  real: { tr: 'Gerçek sistemde mevcut', en: 'In the real system', hintTr: 'Bu ekranın karşılığı gerçek ACARVO uygulamasında çalışır; demoda aynı kurallar tarayıcıda simüle edilir.', hintEn: 'This screen exists in the real ACARVO application; the demo simulates the same rules in the browser.' },
+  partial: { tr: 'Kısmen gerçek', en: 'Partly real', hintTr: 'Bu ekranın bir kısmı gerçek uygulamada var; kalanı demo konseptidir ve gerçek backend bekler.', hintEn: 'Part of this screen exists in the real application; the rest is a demo concept waiting for the real backend.' },
+  demo: { tr: 'Demo konsepti · V1 hedefi', en: 'Demo concept · V1 target', hintTr: 'Tarayıcıda çalışan demo; gerçek backend henüz yok. Çalışan işlemler yalnız demo kaydını değiştirir.', hintEn: 'A working browser demo; the real backend does not exist yet. Working actions only change the demo record.' },
+}
+
 export const legacyOf = (slug: string) => LEGACY.find((l) => l.slug === slug)
 
 export const SCOPE_LABEL: Record<Scope, { tr: string; en: string }> = {

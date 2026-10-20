@@ -3,7 +3,8 @@ import { useState } from 'react'
 import { computeCashExpected, openSessionOf } from '../../core/calc/finance'
 import { userName } from '../../core/helpers'
 import { fmt, parseAmount } from '../../core/money'
-import { closeSession, manualCashMove, openSession } from '../../core/ops/finance'
+import { CRITICAL_VARIANCE_FACTOR, closeSession, manualCashMove, openSession } from '../../core/ops/finance'
+import { EndOfDay } from './EndOfDay'
 import type { Drawer } from '../../core/types'
 import { L } from '../../i18n'
 import { AreaF, MoneyF, SelectF, TextF, userOptions } from '../../ui/forms'
@@ -29,8 +30,10 @@ export function CashPage() {
     >
       <Kpis items={[{ label: L('Açık kasa', 'Open drawers'), value: `${open.length} / ${drawers.length}` }, { label: L('Kapalı kasa', 'Closed drawers'), value: drawers.length - open.length, tone: drawers.length - open.length ? 'hold' : undefined, hint: L('Nakit tahsilat için oturum açılmalı', 'A session must be opened to take cash') }]} />
       {drawers.some((x) => x.status === 'closed') && <Notice tone="hold">{L('Kapalı kasada nakit tahsilat, nakit depozito veya nakit iade yapılamaz; işlem kasa oturumu açılana kadar reddedilir.', 'Cash payments, cash deposits and cash refunds are refused on a closed drawer until a session is opened.')}</Notice>}
-      <Tabs tabs={[{ id: 'kasalar', label: L('Kasalar', 'Drawers') }, { id: 'oturumlar', label: L('Oturumlar', 'Sessions'), count: sessions.length }]} value={tab as 'kasalar' | 'oturumlar'} onChange={setTab} label={L('Kasa bölümleri', 'Cash sections')} />
-      {tab === 'oturumlar' ? (
+      <Tabs tabs={[{ id: 'kasalar', label: L('Kasalar', 'Drawers') }, { id: 'oturumlar', label: L('Oturumlar', 'Sessions'), count: sessions.length }, { id: 'gunsonu', label: L('Gün sonu özeti', 'End of day') }]} value={tab as 'kasalar' | 'oturumlar' | 'gunsonu'} onChange={setTab} label={L('Kasa bölümleri', 'Cash sections')} />
+      {tab === 'gunsonu' ? (
+        <EndOfDay />
+      ) : tab === 'oturumlar' ? (
         <Panel flush>
           {sessions.length === 0 ? <p className="px-5 py-5 text-[13.5px] text-ink-2">{L('Oturum yok.', 'No sessions.')}</p> : (
             <div className="overflow-x-auto"><table className="w-full min-w-[720px] text-[13.5px]">
@@ -128,6 +131,7 @@ function CloseDialog({ drawer, onClose }: { drawer: Drawer; onClose: () => void 
       onSubmit={() => { if (minor === null) { setFields({ counted: L('Sayılan tutarı girin', 'Enter the counted amount') }); return L('Sayılan tutar zorunlu.', 'The counted amount is required.') } const r = runAction((x) => closeSession(x, drawer.id, minor, reason, handover || undefined, note), L('Kasa kapandı.', 'Drawer closed.')); if (!r.ok) { setFields(r.fields); return r.error } onClose() }}>
       <MoneyF id="cl-a" label={L('Sayılan nakit', 'Counted cash')} amount={counted} onAmount={setCounted} cur={drawer.currency} onCur={() => {}} currencies={[drawer.currency]} lockCurrency required error={fields.counted} />
       {variance !== null && Math.abs(variance) > limit && <AreaF id="cl-r" label={L('Fark gerekçesi', 'Variance reason')} required value={reason} onChange={setReason} error={fields.reason} rows={2} />}
+      {variance !== null && limit > 0 && Math.abs(variance) > limit * CRITICAL_VARIANCE_FACTOR && <Notice tone="alert">{L(`Kritik fark (eşiğin ${CRITICAL_VARIANCE_FACTOR} katından fazla): kasayı yalnız onay yetkisi olan kişi (Sahip/Yönetici) kapatabilir.`, `Critical variance (more than ${CRITICAL_VARIANCE_FACTOR} times the threshold): only a person with approval authority (Owner/Manager) can close the drawer.`)}</Notice>}
       <SelectF id="cl-h" label={L('Devredilen kişi (isteğe bağlı)', 'Handed over to (optional)')} value={handover} onChange={setHandover} placeholder={L('Seçilmedi', 'Not chosen')} options={userOptions(d)} />
       <TextF id="cl-n" label={L('Devir notu', 'Handover note')} value={note} onChange={setNote} />
     </FinanceDialog>

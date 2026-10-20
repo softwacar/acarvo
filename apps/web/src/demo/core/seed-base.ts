@@ -144,7 +144,7 @@ export function defaultSettings(): Settings {
       noShowFee: { kind: 'percent_of_total', value: 50, fixed: { EUR: 10000, BAM: 20000, USD: 11000 } },
     },
     workspace: { profile: 'advanced', hidden: [], shown: [] },
-    setup: { done: false, step: 0, draft: null },
+    setup: { done: true, step: 8, draft: null },
   }
 }
 
@@ -169,13 +169,13 @@ export const ROLES = DEMO_ROLES
 
 export function emptyDb(anchor: string, nowIso: string): Db {
   return {
-    meta: { schema: DB_SCHEMA, anchor, createdAt: nowIso, modified: false, rev: 0 },
+    meta: { schema: DB_SCHEMA, anchor, createdAt: nowIso, modified: false, rev: 0, presetVersion: 2 },
     clock: { now: nowIso },
     session: { userId: 'u-owner', branchId: 'all', lang: 'tr', context: 'company', partnerId: 'pt1', preview: false },
     counters: {},
     settings: defaultSettings(),
     branches: structuredClone(BRANCHES),
-    users: structuredClone(USERS),
+    users: structuredClone(USERS).map((u) => (u.status === 'invited' && !u.invite ? { ...u, invite: { createdAt: nowIso, expiresAt: new Date(Date.parse(nowIso) + 5 * 86_400_000).toISOString(), state: 'pending' as const, note: '' } } : u)),
     roles: structuredClone(ROLES),
     classes: structuredClone(CLASSES),
     vehicles: [],

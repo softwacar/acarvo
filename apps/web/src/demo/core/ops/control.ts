@@ -3,6 +3,8 @@ import { isRateActive } from '../calc/fx'
 import { addHistory, fail, hasPerm, logEvent, meOf, need, nextId, nextNo, nowOf, notify, userName } from '../helpers'
 import { CURRENCIES, fmt } from '../money'
 import { advanceLedger } from '../calc/finance'
+import { SOURCE_CATEGORIES } from '../calc/cost'
+import { DEMO_ROLES } from '../permissions'
 import { ALWAYS_VISIBLE, NAV_V1, PROFILES, type WorkspaceSettings } from '../modules'
 import { approvalRisk, level2Blocker, STARTER_MUST_AUTHORIZE } from '../risk'
 import type { Approval, ApprovalType, Cur, Db, Expense, FxRate, Id, Iso, LinkType, Money, Role, Rule } from '../types'
@@ -266,8 +268,13 @@ export function createExpense(d: Db, input: { category: string; vendor: string; 
   if (!/^\d{4}-\d{2}-\d{2}$/.test(input.date)) fields.date = B('Tarih girin', 'Enter a date')
   if (input.amount.minor <= 0) fields.amount = B('Tutar sıfırdan büyük olmalı', 'The amount must be greater than zero')
   if (/iade|depozito|komisyon/i.test(input.category)) fields.category = B('İade, depozito ve komisyon masraf türü değildir', 'Refunds, deposits and commissions are not expense types')
+  // Maintenance cost and authority fines come from their own record; a second, independent expense would count the same money twice.
+  if (SOURCE_CATEGORIES.includes(input.category)) fields.category = B('Bu tür kaynak kayıttan gelir (bakım maliyeti Bakım & Servis’ten, ceza ödemesi ceza kaydından); ayrı bir masraf olarak girilemez, çift sayılırdı', 'This kind comes from its source record (maintenance cost from Maintenance & Service, fine payments from the fine record); it cannot be entered as a separate expense: it would be counted twice')
+  const link: Expense['link'] = input.vehicleId ? 'vehicle' : input.link === 'general' ? 'general' : 'branch'
+  if (input.link === 'vehicle' && !input.vehicleId) fields.vehicle = B('Araca bağlı masraf için araç seçin', 'Choose the vehicle for a vehicle expense')
+  if (input.vehicleId && !d.vehicles.some((v) => v.id === input.vehicleId)) fields.vehicle = B('Araç bulunamadı', 'Vehicle not found')
   if (Object.keys(fields).length) fail(B('Formda eksik veya geçersiz alanlar var.', 'The form has missing or invalid fields.'), fields)
-  const e: Expense = { id: nextId(d, 'ex'), no: nextNo(d, 'G'), category: input.category, vendor: input.vendor, branchId: input.branchId, date: input.date, amount: input.amount, status: input.post ? 'posted' : 'draft', link: input.vehicleId ? 'vehicle' : (input.link ?? 'branch'), vehicleId: input.vehicleId, note: input.note, createdBy: meOf(d).id }
+  const e: Expense = { id: nextId(d, 'ex'), no: nextNo(d, 'G'), category: input.category, vendor: input.vendor, branchId: input.branchId, date: input.date, amount: input.amount, status: input.post ? 'posted' : 'draft', link, vehicleId: input.vehicleId, note: input.note, createdBy: meOf(d).id }
   d.expenses.push(e)
   if (input.post && input.cashDrawerId) {
     const dr = d.drawers.find((x) => x.id === input.cashDrawerId)
@@ -362,15 +369,96 @@ export function updateBranch(d: Db, id: Id, patch: { name?: string; phone?: stri
   logEvent(d, { module: 'branches', type: 'BranchUpdated', sourceType: 'branch', sourceId: id, summary: B(`${b!.name} güncellendi`, `${b!.name} updated`) })
 }
 
+export const INVITE_DAYS = 7
+
+/** An invitation that was not accepted in time is expired (derived from the demo clock; nothing runs in the background). */
+export function inviteState(u: { status: string; invite?: { state: string; expiresAt: string } }, now: string): 'none' | 'pending' | 'expired' | 'cancelled' | 'accepted' {
+  if (!u.invite) return 'none'
+  if (u.invite.state === 'pending' && Date.parse(u.invite.expiresAt) < Date.parse(now)) return 'expired'
+  return u.invite.state as 'pending' | 'cancelled' | 'accepted' | 'expired'
+}
+
 export function inviteUser(d: Db, input: { name: string; email: string; roleId: Id; branchIds: Id[]; title: string }): void {
   need(d, 'users:manage', B('Kullanıcı daveti', 'Inviting a user'))
+  if (!d.roles.some((r) => r.id === input.roleId)) fail(B('Rol seçin.', 'Choose a role.'), { role: B('Rol zorunlu', 'A role is required') })
+  if (input.branchIds.some((b) => !d.branches.some((x) => x.id === b))) fail(B('Geçersiz şube kapsamı.', 'Invalid branch scope.'), { branches: B('Şube bulunamadı', 'Branch not found') })
   if (input.name.trim().length < 3) fail(B('Ad soyad girin.', 'Enter a full name.'), { name: B('Ad zorunlu', 'A name is required') })
   if (!/^\S+@\S+\.\S+$/.test(input.email)) fail(B('Geçerli bir e-posta girin.', 'Enter a valid email.'), { email: B('Geçersiz e-posta', 'Invalid email') })
   if (d.users.some((u) => u.email.toLowerCase() === input.email.toLowerCase())) fail(B('Bu e-posta zaten kayıtlı.', 'This email is already registered.'), { email: B('Mükerrer e-posta', 'Duplicate email') })
-  d.users.push({ id: nextId(d, 'u'), ...input, status: 'invited', grant: [], deny: [] })
+  d.users.push({ id: nextId(d, 'u'), ...input, status: 'invited', grant: [], deny: [], invite: { createdAt: nowOf(d), expiresAt: new Date(Date.parse(nowOf(d)) + INVITE_DAYS * 86_400_000).toISOString(), state: 'pending', note: '' } })
   // Nothing is sent: the invitation is a demo record, not an e-mail.
   logEvent(d, { module: 'users', type: 'UserInvited', sourceType: 'user', sourceId: d.users[d.users.length - 1]!.id, summary: B(`${input.email} için davet kaydı (demo; e-posta gönderilmedi)`, `Invitation record for ${input.email} (demo; no email was sent)`) })
 }
+/** New invitation for the same person (the old link is replaced; nothing is sent in the demo). */
+export function resendInvite(d: Db, id: Id): void {
+  need(d, 'users:manage', B('Davet yenileme', 'Renewing an invitation'))
+  const u = d.users.find((x) => x.id === id)
+  if (!u || u.status !== 'invited' || !u.invite) fail(B('Yalnız davet bekleyen kullanıcı için davet yenilenir.', 'Only a user waiting for an invitation can be re-invited.'))
+  u!.invite = { createdAt: nowOf(d), expiresAt: new Date(Date.parse(nowOf(d)) + INVITE_DAYS * 86_400_000).toISOString(), state: 'pending', note: '' }
+  logEvent(d, { module: 'users', type: 'UserInviteRenewed', sourceType: 'user', sourceId: id, summary: B(`${u!.email} için davet yenilendi (demo; e-posta gönderilmedi)`, `Invitation renewed for ${u!.email} (demo; no email was sent)`) })
+}
+export function cancelInvite(d: Db, id: Id): void {
+  need(d, 'users:manage', B('Davet iptali', 'Cancelling an invitation'))
+  const u = d.users.find((x) => x.id === id)
+  if (!u || u.status !== 'invited' || !u.invite) fail(B('İptal edilecek davet yok.', 'There is no invitation to cancel.'))
+  u!.invite = { ...u!.invite!, state: 'cancelled' }
+  u!.status = 'inactive'
+  logEvent(d, { module: 'users', type: 'UserInviteCancelled', sourceType: 'user', sourceId: id, summary: B(`${u!.email} için davet iptal edildi`, `Invitation for ${u!.email} cancelled`) })
+}
+/** Demo only: shows what happens when the person follows the link. No password exists in the demo; no account is created in any real system. */
+export function acceptInviteDemo(d: Db, id: Id): void {
+  need(d, 'users:manage', B('Davet kabulü (demo)', 'Accepting an invitation (demo)'))
+  const u = d.users.find((x) => x.id === id)
+  if (!u || u.status !== 'invited' || !u.invite) fail(B('Kabul edilecek davet yok.', 'There is no invitation to accept.'))
+  if (inviteState(u!, nowOf(d)) === 'expired') fail(B('Davetin süresi dolmuş: önce yenileyin.', 'The invitation has expired: renew it first.'))
+  u!.status = 'active'
+  u!.invite = { ...u!.invite!, state: 'accepted' }
+  logEvent(d, { module: 'users', type: 'UserInviteAccepted', sourceType: 'user', sourceId: id, summary: B(`${u!.name} daveti kabul etti (demo simülasyonu)`, `${u!.name} accepted the invitation (demo simulation)`) })
+}
+/** An administrator asks for a password reset. In the demo this only writes a record: there is no token, no mail and no password. */
+export function requestPasswordReset(d: Db, id: Id): void {
+  need(d, 'users:manage', B('Şifre sıfırlama', 'Password reset'))
+  const u = d.users.find((x) => x.id === id)
+  if (!u || u.status !== 'active') fail(B('Şifre sıfırlama yalnız etkin kullanıcı için istenir.', 'A password reset can be requested only for an active user.'))
+  u!.resetRequest = { at: nowOf(d), by: meOf(d).id }
+  logEvent(d, { module: 'users', type: 'PasswordResetRequested', sourceType: 'user', sourceId: id, summary: B(`${u!.name} için şifre sıfırlama istendi (demo; jeton ve e-posta yok)`, `Password reset requested for ${u!.name} (demo; no token, no email)`) })
+}
+
+/** Demo only: the person finished the reset screen. Nothing was stored (no password exists in the demo); the request record is cleared. */
+export function completePasswordResetDemo(d: Db, id: Id): void {
+  need(d, 'users:manage', B('Şifre sıfırlama (demo)', 'Password reset (demo)'))
+  const u = d.users.find((x) => x.id === id)
+  if (!u || !u.resetRequest) fail(B('Açık sıfırlama isteği yok.', 'There is no open reset request.'))
+  u!.resetRequest = undefined
+  logEvent(d, { module: 'users', type: 'PasswordResetCompletedDemo', sourceType: 'user', sourceId: id, summary: B(`${u!.name} için sıfırlama ekranı tamamlandı (demo; parola saklanmadı)`, `Reset screen completed for ${u!.name} (demo; no password stored)`) })
+}
+
+/** Role presets: a new preset version adds permissions to roles that were never customized. A customized role is never overwritten. */
+export const PRESET_UPGRADES: Record<number, Record<Id, string[]>> = { 3: { 'role-ops': ['reports:view'] } }
+export function presetUpgradeAvailable(d: Db, role: Role): boolean {
+  return role.system && role.id !== 'role-owner' && (role.presetVersion ?? 1) < d.meta.presetVersion
+}
+/** Demo: publish the next preset version so the upgrade behaviour can be seen. */
+export function publishPresetVersion(d: Db): void {
+  need(d, 'roles:manage', B('Rol ön ayarı sürümü', 'Role preset version'))
+  if (!PRESET_UPGRADES[d.meta.presetVersion + 1]) fail(B('Yayımlanacak yeni bir ön ayar sürümü yok.', 'There is no new preset version to publish.'))
+  d.meta.presetVersion += 1
+  logEvent(d, { module: 'roles', type: 'PresetPublished', sourceType: 'role', sourceId: 'presets', summary: B(`Rol ön ayarı v${d.meta.presetVersion} yayımlandı (demo). Özelleştirilmiş roller değişmez.`, `Role preset v${d.meta.presetVersion} published (demo). Customized roles do not change.`) })
+}
+export function upgradeRolePreset(d: Db, roleId: Id, discardCustomization = false): Role {
+  need(d, 'roles:manage', B('Rol ön ayarı yükseltme', 'Upgrading a role preset'))
+  const r = d.roles.find((x) => x.id === roleId)
+  if (!r || !presetUpgradeAvailable(d, r)) fail(B('Bu rol için yükseltilecek ön ayar yok.', 'There is no preset upgrade for this role.'))
+  if (r!.customized && !discardCustomization) fail(B('Bu rol özelleştirilmiş: ön ayar yükseltmesi izinlerinizi ezmez. Özelleştirmeyi bilerek atmak için onaylayın.', 'This role is customized: a preset upgrade does not overwrite your permissions. Confirm to discard the customization on purpose.'), {}, 'CUSTOMIZED')
+  const preset = DEMO_ROLES.find((x) => x.id === roleId)!
+  const adds = Object.entries(PRESET_UPGRADES).filter(([v]) => Number(v) > (r!.presetVersion ?? 1) && Number(v) <= d.meta.presetVersion).flatMap(([, m]) => m[roleId] ?? [])
+  r!.perms = r!.customized ? [...new Set([...preset.perms, ...adds])] : [...new Set([...r!.perms, ...adds])]
+  r!.presetVersion = d.meta.presetVersion
+  r!.customized = false
+  logEvent(d, { module: 'roles', type: 'RolePresetUpgraded', sourceType: 'role', sourceId: roleId, summary: B(`${r!.name}: ön ayar v${r!.presetVersion}'e yükseltildi${discardCustomization ? ' (özelleştirme atıldı)' : ''}`, `${r!.name}: preset upgraded to v${r!.presetVersion}${discardCustomization ? ' (customization discarded)' : ''}`) })
+  return r!
+}
+
 export function updateUser(d: Db, id: Id, patch: { roleId?: Id; branchIds?: Id[]; status?: 'active' | 'inactive' | 'invited'; grant?: string[]; deny?: string[]; title?: string }): void {
   need(d, 'users:manage', B('Kullanıcı düzenleme', 'Editing a user'))
   const u = d.users.find((x) => x.id === id)
@@ -389,10 +477,11 @@ export function saveRole(d: Db, input: { id?: Id; name: string; description: str
     if (r.system && r.id === 'role-owner') fail(B('Sahip rolü değiştirilemez.', 'The Owner role cannot be changed.'))
     r.name = input.name
     r.description = input.description
+    if (r.system && JSON.stringify([...r.perms].sort()) !== JSON.stringify([...input.perms].sort())) r.customized = true
     r.perms = input.perms
   } else {
     if (d.roles.some((x) => x.name.toLowerCase() === input.name.trim().toLowerCase())) fail(B('Bu adla bir rol var.', 'A role with this name already exists.'), { name: B('Mükerrer ad', 'Duplicate name') })
-    r = { id: nextId(d, 'role'), name: input.name.trim(), description: input.description, system: false, perms: input.perms }
+    r = { id: nextId(d, 'role'), name: input.name.trim(), description: input.description, system: false, presetVersion: d.meta.presetVersion, customized: true, perms: input.perms }
     d.roles.push(r)
   }
   logEvent(d, { module: 'roles', type: 'RoleSaved', sourceType: 'role', sourceId: r.id, summary: `${r.name} · ${r.perms.length} izin` })
