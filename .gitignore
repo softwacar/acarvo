@@ -54,3 +54,4 @@ demo-e2e-run*.log
 # demo snapshot builds and per-run test output
 dist-demo-*/
 test-results-*/
+playwright-report-*/
