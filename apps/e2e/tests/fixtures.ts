@@ -33,7 +33,13 @@ export async function openVehicle(page: Page, plate: string, tab?: string) {
 export const fixture = (name: string) => path.join(process.env.E2E_FIXTURES!, name)
 
 export async function expectNoHorizontalOverflow(page: Page) {
-  const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)
+  // Measure a settled layout: web fonts loaded and two frames painted. A page that is still wider than the window after
+  // that fails exactly as before (no tolerance added); only a half-loaded layout is no longer measured.
+  const overflow = await page.evaluate(async () => {
+    await document.fonts.ready
+    await new Promise<void>((r) => requestAnimationFrame(() => requestAnimationFrame(() => r())))
+    return document.documentElement.scrollWidth - window.innerWidth
+  })
   expect(overflow, 'page must not scroll sideways').toBeLessThanOrEqual(0)
 }
 
