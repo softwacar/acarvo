@@ -168,11 +168,14 @@ export function usePersistFailed(): boolean {
     () => persistFailed,
   )
 }
+let writing = 0 // durable writes that have started and not finished
 function writeNow() {
   saveTimer = null
   if (!db) return
+  writing++
   idbPut(db)
     .then(() => {
+      writing--
       setPersistFailed(false)
       try {
         localStorage.removeItem(LS_KEY) // the durable copy is current; drop the page-leave copy
@@ -182,6 +185,7 @@ function writeNow() {
       announce()
     })
     .catch(() => {
+      writing--
       try {
         localStorage.setItem(LS_KEY, JSON.stringify(db))
         setPersistFailed(false)
@@ -219,8 +223,8 @@ function scheduleSave() {
 }
 if (typeof window !== 'undefined') {
   const flush = () => {
-    if (saveTimer && persistEnabled) {
-      clearTimeout(saveTimer)
+    if ((saveTimer || writing > 0) && persistEnabled) {
+      if (saveTimer) clearTimeout(saveTimer)
       // An IndexedDB write that starts while the page is being left may not finish; a synchronous copy is kept as a safety net
       // (it is dropped as soon as the durable write has completed, and a newer copy always wins when the state is loaded).
       try {

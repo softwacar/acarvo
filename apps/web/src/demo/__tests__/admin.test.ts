@@ -4,6 +4,7 @@ import { acceptInviteDemo, cancelInvite, completePasswordResetDemo, INVITE_DAYS,
 import { closeSession, openSession } from '../core/ops/finance'
 import { readinessChecks } from '../core/readiness'
 import { buildSeed } from '../core/seed'
+import { deriveAlerts } from '../core/calc/alerts'
 import { applyDraft, draftOf, finishSetup, initialDraft, restartSetup, saveSetupDraft, SETUP_STEPS, stepErrors } from '../core/setup'
 import type { Db } from '../core/types'
 
@@ -216,5 +217,29 @@ describe('cash: a critical variance needs somebody with approval authority', () 
     as(d, 'u-owner')
     closeSession(d, dr.id, expected + limit * 6, 'Kasa farkı büyük, sayım tekrarlandı')
     expect(dr.status).toBe('closed')
+  })
+})
+
+describe('notification thresholds replace the old Rules screen (G3)', () => {
+  it('raising or lowering a threshold changes the alerts that are derived, nothing else', () => {
+    const d = mkDb()
+    const critical = (x: Db) => deriveAlerts(x).filter((a) => a.kind === 'overdue_return' && a.severity === 'critical').length
+    const total = (x: Db) => deriveAlerts(x).filter((a) => a.kind === 'overdue_return').length
+    const base = { critical: critical(d), total: total(d) }
+    expect(base.total).toBeGreaterThan(0)
+    d.settings.alertThresholds.overdueCriticalHours = 1
+    expect(critical(d)).toBe(base.total) // every overdue return is critical after one hour
+    d.settings.alertThresholds.overdueCriticalHours = 100_000
+    expect(critical(d)).toBe(0)
+    expect(total(d)).toBe(base.total) // the number of overdue returns does not depend on the threshold, only their severity
+  })
+})
+
+describe('formal approvals (B4)', () => {
+  it('the Approval Center knows exactly six types; none is added for My Work or for the damage unblock', () => {
+    const d = mkDb()
+    const types = new Set(d.approvals.map((a) => a.type))
+    const allowed = ['high_discount', 'deposit_exception', 'refund', 'financial_correction', 'corporate_credit_override', 'partner_commission_adjustment']
+    for (const t of types) expect(allowed).toContain(t)
   })
 })

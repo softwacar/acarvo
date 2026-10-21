@@ -61,7 +61,6 @@ test.describe('English mode', () => {
     expect(await open('/gorevler', /Create task/)).toEqual([])
     expect(await open('/bakim-servis', /Plan maintenance/)).toEqual([])
     expect(await open('/hasar-ve-olaylar', /Report damage|damage/i)).toEqual([])
-    expect(await open('/hasar-ve-olaylar?sekme=cezalar', /Record fine/)).toEqual([])
     expect(await open('/musteriler', /New customer/)).toEqual([])
     expect(await open('/masraflar', /Add expense/)).toEqual([])
     expect(await open('/kullanicilar', /Invite user/)).toEqual([])

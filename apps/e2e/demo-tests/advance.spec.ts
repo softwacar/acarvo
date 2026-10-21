@@ -99,9 +99,11 @@ test.describe('advance (kaparo)', () => {
     await openDemo(page, '/onay-merkezi')
     await switchUser(page, /Selma Karić/)
     await openDemo(page, '/onay-merkezi')
+    await page.getByRole('tab', { name: /Tümü/ }).click()
     await page.getByRole('row', { name: /İade/ }).first().click()
     const drawer = page.getByRole('dialog')
-    await drawer.getByRole('button', { name: /Onayla/ }).click()
+    const decide = drawer.getByRole('button', { name: /Onayla/ })
+    if (await decide.count()) await decide.click() // a refund below the threshold may already be approved when an authorizer asked for it
     await expect(drawer.getByText(/Onaylandı/).first()).toBeVisible()
     await drawer.getByRole('button', { name: /Uygula/ }).click()
     await expect(drawer.getByText(/Uygulandı/).first()).toBeVisible()

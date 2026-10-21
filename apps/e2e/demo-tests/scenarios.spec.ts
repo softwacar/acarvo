@@ -135,7 +135,7 @@ test.describe('scenario 3 · tasks and staff', () => {
     await expect(dlg).toBeHidden()
 
     // Team view shows it; the manager's own view does not (assigned to someone else)
-    await openDemo(page, '/gorevler?gorunum=ekip')
+    await openDemo(page, '/gorevler?gorunum=ekip&q=' + encodeURIComponent(title))
     await expect(page.getByText(title)).toBeVisible()
 
     // Switch to the Operations user: the task is in "mine"
