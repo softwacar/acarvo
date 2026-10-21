@@ -20,7 +20,7 @@ test.describe('advance (kaparo)', () => {
     const amount = /T-\d+ · ([0-9.,]+ EUR)/.exec((await page.locator('main').innerText()).replace(/\s+/g, ' '))![1]!
 
     // the same advance is listed in Finance → Advances and links back
-    await page.getByRole('link', { name: /Finans Merkezi · Kaparo/ }).click()
+    await page.getByRole('link', { name: /Finans · Kaparo/ }).click()
     await expect(page.getByText(amount).first()).toBeVisible()
     await page.goBack()
 
@@ -49,10 +49,10 @@ test.describe('advance (kaparo)', () => {
     await page.getByRole('tab', { name: /Kaparo/ }).click()
     await page.getByRole('button', { name: 'İade talep et' }).click()
     const dlg = page.getByRole('dialog')
-    await dlg.locator('#ap-r').fill('Müşteri seyahatini erteledi, tam iade.')
+    await dlg.locator('#ra-r').fill('Müşteri seyahatini erteledi, tam iade.')
     await dlg.getByRole('button', { name: 'Talep et' }).click()
     await expect(dlg).toBeHidden()
-    await expect(page.getByText(/Açık iade talebi var/)).toBeVisible()
+    await expect(page.getByText(/onay\/ödeme bekliyor/)).toBeVisible()
 
     // the requester cannot decide: the open request shows no decision for them; a second user approves and applies
     await openDemo(page, '/onay-merkezi')
@@ -72,5 +72,52 @@ test.describe('advance (kaparo)', () => {
     await expect(page.getByText('İade edildi').first()).toBeVisible()
     await expect(page.getByText('Tutuluyor (uygulanmadı)')).toHaveCount(0)
     await expect(page.getByRole('button', { name: 'İade talep et' })).toHaveCount(0)
+  })
+  test('policy story: 200 EUR advance, cancelled → 50 EUR fee kept, 150 EUR refundable; a partial refund of 100 leaves 50 and a second refund above that is refused', async ({ page }) => {
+    await openDemo(page, '/rezervasyonlar/rsv23?sekme=kaparo')
+    await page.getByRole('tab', { name: /Kaparo/ }).click()
+    const card = page.getByTestId('advance-T-000041')
+    await expect(card).toContainText('200,00 EUR')
+    await expect(card).toContainText('İptal edilirse otomatik hesaplanır: 50,00 EUR')
+
+    // cancelling applies the company policy once: the fee is retained, the rest stays refundable and is not paid back automatically
+    await page.getByRole('button', { name: 'İptal et' }).first().click()
+    const cancel = page.getByRole('dialog')
+    await cancel.locator('#cx-r').fill('Müşteri vazgeçti, politika uygulansın.')
+    await cancel.getByRole('button', { name: 'İptal et' }).click()
+    await expect(cancel).toBeHidden()
+    await expect(card).toContainText('İade edilebilir: 150,00 EUR')
+    await expect(card).not.toContainText('Gerçek iade 100')
+
+    // partial refund of 100 EUR: asked by one person, approved and applied by another
+    await card.getByRole('button', { name: 'İade talep et' }).click()
+    const ask = page.getByRole('dialog')
+    await ask.getByLabel(/İade tutarı/).fill('100')
+    await ask.locator('#ra-r').fill('Kısmi iade: müşteri 100 EUR geri istedi.')
+    await ask.getByRole('button', { name: 'Talep et' }).click()
+    await expect(ask).toBeHidden()
+    await openDemo(page, '/onay-merkezi')
+    await switchUser(page, /Selma Karić/)
+    await openDemo(page, '/onay-merkezi')
+    await page.getByRole('row', { name: /İade/ }).first().click()
+    const drawer = page.getByRole('dialog')
+    await drawer.getByRole('button', { name: /Onayla/ }).click()
+    await expect(drawer.getByText(/Onaylandı/).first()).toBeVisible()
+    await drawer.getByRole('button', { name: /Uygula/ }).click()
+    await expect(drawer.getByText(/Uygulandı/).first()).toBeVisible()
+    await page.keyboard.press('Escape')
+
+    // 50 EUR remain; asking for 100 again is refused (no double refund)
+    await openDemo(page, '/rezervasyonlar/rsv23?sekme=kaparo')
+    await page.getByRole('tab', { name: /Kaparo/ }).click()
+    const after = page.getByTestId('advance-T-000041')
+    await expect(after).toContainText('İade edilebilir: 50,00 EUR')
+    await after.getByRole('button', { name: 'İade talep et' }).click()
+    const again = page.getByRole('dialog')
+    await again.getByLabel(/İade tutarı/).fill('100')
+    await again.locator('#ra-r').fill('İkinci iade denemesi, fazla tutar.')
+    await again.getByRole('button', { name: 'Talep et' }).click()
+    await expect(again).toBeVisible() // refused: the dialog stays open with the reason
+    await expect(again.getByText(/en fazla|aşamaz|iade edilebilir/i).first()).toBeVisible()
   })
 })

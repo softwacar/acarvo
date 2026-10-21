@@ -9,7 +9,7 @@ export const MENU_ROUTES = [
   '/raporlar', '/onay-merkezi',
   '/subeler', '/kullanicilar', '/islem-gecmisi', '/ayarlar',
 ]
-export const ROUTES = [...MENU_ROUTES, '/belge-merkezi']
+export const ROUTES = [...MENU_ROUTES, '/belge-merkezi', '/kurulum']
 
 /** The 36 legacy links of the old menu: every address keeps working and lands where decision document I.3 says (path + search). */
 export const LEGACY_ROUTES: { from: string; to: string }[] = [

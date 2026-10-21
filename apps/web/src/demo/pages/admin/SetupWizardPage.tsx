@@ -5,7 +5,7 @@ import { CURRENCIES } from '../../core/money'
 import { PROFILES, profileLinks, type Profile } from '../../core/modules'
 import { readinessChecks, READY_LABEL } from '../../core/readiness'
 import { CHECK_STEP, draftOf, finishSetup, initialDraft, previewOf, restartSetup, saveSetupDraft, type SetupDraft, SETUP_STEPS, type SetupStep, stepErrors } from '../../core/setup'
-import { L, loc } from '../../i18n'
+import { getLang, L, loc, localize } from '../../i18n'
 import { CheckF, SelectF, TextF } from '../../ui/forms'
 import { runAction, useCan, useDb } from '../../ui/hooks'
 import { btnPrimary, btnSecondary, btnSmall, Notice, Page, Panel, Pill } from '../../ui/kit'
@@ -42,6 +42,7 @@ export function SetupWizardPage() {
   const [done, setDone] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const first = useRef(true)
+  const latest = useRef<{ step: number; draft: SetupDraft }>({ step: 0, draft: undefined as unknown as SetupDraft })
   const current = SETUP_STEPS[step]!
   // The typed inputs are kept in the demo state (debounced), so a reload, a language switch or a step back loses nothing.
   useEffect(() => {
@@ -49,16 +50,24 @@ export function SetupWizardPage() {
       first.current = false
       return
     }
+    latest.current = { step, draft }
     const t = setTimeout(() => runAction((s) => saveSetupDraft(s, step, draft)), 300)
     return () => clearTimeout(t)
   }, [draft, step])
-  const errors = useMemo(() => stepErrors(d, draft, current), [d, draft, current])
-  const allErrors = useMemo(() => Object.fromEntries(SETUP_STEPS.map((s) => [s, stepErrors(d, draft, s)])) as Record<SetupStep, Record<string, string>>, [d, draft])
+  // Leaving the page (reload, close) must not lose the last typed value or the step the person is on.
+  useEffect(() => {
+    const flush = () => runAction((s) => saveSetupDraft(s, latest.current.step, latest.current.draft))
+    window.addEventListener('pagehide', flush)
+    return () => window.removeEventListener('pagehide', flush)
+  }, [])
+  const errors = useMemo(() => localize(stepErrors(d, draft, current)), [d, draft, current, getLang()])
+  const allErrors = useMemo(() => Object.fromEntries(SETUP_STEPS.map((s) => [s, localize(stepErrors(d, draft, s))])) as Record<SetupStep, Record<string, string>>, [d, draft, getLang()])
   const preview = useMemo(() => previewOf(d, draft), [d, draft])
   const checks = useMemo(() => readinessChecks(preview), [preview])
   const missing = checks.filter((c) => c.state === 'missing')
   const set = <K extends keyof SetupDraft>(k: K, v: SetupDraft[K]) => setDraft((x) => ({ ...x, [k]: v }))
   const go = (n: number) => {
+    runAction((x) => saveSetupDraft(x, n, draft)) // the step is saved at once, the typed values with it
     setStep(n)
     setShowErrors(false)
     setError(null)

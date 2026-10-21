@@ -26,14 +26,16 @@ test.describe('scenario 5 · split payment (500 EUR)', () => {
     let dlg = await addPayment(page, { method: 'cash', amount: '100', cur: 'EUR' })
     await dlg.getByRole('button', { name: 'Ödemeyi kaydet' }).click()
     await expect(dlg).toBeHidden()
-    expect(await kpiValue(page, 'Kalan')).toBe('400,00 EUR')
+    // a recorded payment waits for a second person: the balance does not drop yet
+    expect(await kpiValue(page, 'Kalan')).toBe('500,00 EUR')
+    await expect(page.getByText('100,00 EUR doğrulama bekliyor')).toBeVisible()
 
     // 2 · 200 BAM by card = 100 EUR
     dlg = await addPayment(page, { method: 'card', amount: '200', cur: 'BAM', ref: 'POS-S5-0001' })
     await expect(dlg.getByText(/100,00 EUR/).first()).toBeVisible()
     await dlg.getByRole('button', { name: 'Ödemeyi kaydet' }).click()
     await expect(dlg).toBeHidden()
-    expect(await kpiValue(page, 'Kalan')).toBe('300,00 EUR')
+    await expect(page.getByText('200,00 EUR doğrulama bekliyor')).toBeVisible()
 
     // 3 · 100 USD without a rate: Awaiting Rate, nothing stored
     dlg = await addPayment(page, { method: 'cash', amount: '100', cur: 'USD' })
@@ -41,7 +43,7 @@ test.describe('scenario 5 · split payment (500 EUR)', () => {
     await dlg.getByRole('button', { name: 'Ödemeyi kaydet' }).click()
     await expect(dlg.getByRole('alert')).toBeVisible()
     await dlg.getByRole('button', { name: 'Vazgeç' }).click()
-    expect(await kpiValue(page, 'Kalan')).toBe('300,00 EUR')
+    await expect(page.getByText('200,00 EUR doğrulama bekliyor')).toBeVisible()
 
     // Define 1 EUR = 1.25 USD in Settings → exchange rates
     await openDemo(page, '/ayarlar?bolum=kurlar')
@@ -57,18 +59,32 @@ test.describe('scenario 5 · split payment (500 EUR)', () => {
 
     // 4 · 100 USD now applies as 80 EUR
     await openDemo(page, rentalUrl) // full reload: the earlier payments and the new rate come back from the browser store
-    expect(await kpiValue(page, 'Kalan')).toBe('300,00 EUR')
+    await expect(page.getByText('200,00 EUR doğrulama bekliyor')).toBeVisible()
     dlg = await addPayment(page, { method: 'cash', amount: '100', cur: 'USD' })
     await expect(dlg.getByText(/80,00 EUR/).first()).toBeVisible()
     await dlg.getByRole('button', { name: 'Ödemeyi kaydet' }).click()
     await expect(dlg).toBeHidden()
-    expect(await kpiValue(page, 'Kalan')).toBe('220,00 EUR')
+    await expect(page.getByText('280,00 EUR doğrulama bekliyor')).toBeVisible()
 
     // 5 · the rest by bank transfer
     dlg = await addPayment(page, { method: 'transfer', amount: '220', cur: 'EUR', ref: 'EFT-S5-0001' })
     await dlg.getByRole('button', { name: 'Ödemeyi kaydet' }).click()
     await expect(dlg).toBeHidden()
-    expect(await kpiValue(page, 'Kalan')).toBe('0,00 EUR')
+    await expect(page.getByText('500,00 EUR doğrulama bekliyor')).toBeVisible()
+    expect(await kpiValue(page, 'Kalan')).toBe('500,00 EUR')
+
+    // another person verifies the four recorded payments: the balance falls 500 → 400 → 300 → 220 → 0 (the failed USD attempt left nothing behind)
+    await switchUser(page, /Emina Hadžić/)
+    await openDemo(page, rentalUrl)
+    const left: string[] = []
+    for (let i = 0; i < 4; i++) {
+      await page.getByRole('button', { name: 'Doğrula' }).first().click()
+      await expect(page.getByText('Doğrulandı.').first()).toBeVisible()
+      left.push(await kpiValue(page, 'Kalan'))
+    }
+    const num = (x: string) => Number(x.replace(' EUR', '').replace(/\./g, '').replace(',', '.'))
+    expect(left.map(num).every((v, i, all) => i === 0 || v < all[i - 1]!)).toBe(true) // every verification lowers the balance
+    expect(left.at(-1)).toBe('0,00 EUR')
     expect(w.apiRequests).toEqual([])
     expect(w.errors).toEqual([])
   })
@@ -89,12 +105,13 @@ test.describe('scenario 1 · daily operations', () => {
     await expect(page).toHaveURL(/gecikme=1/)
     await expect(page.getByRole('link', { name: /^K-\d+/ })).toHaveCount(homeOverdue)
 
-    // Command Center reads the same count
-    await openDemo(page, '/komuta-merkezi')
+    // My Work (Alerts tab) lists one "iade gecikti" alert per overdue rental
+    await openDemo(page, '/islerim?sekme=uyarilar')
     const cc = (await page.locator('main').innerText()).replace(/\s+/g, ' ')
-    expect(Number(/Geciken iade (\d+)/.exec(cc)?.[1])).toBe(homeOverdue)
+    expect((cc.match(/· iade gecikti \(/g) ?? []).length).toBe(homeOverdue)
 
     // An overdue row opens the rental and says it is still with the customer
+    await openDemo(page, '/kiralamalar?gecikme=1')
     await page.getByRole('link', { name: /^K-\d+/ }).first().click()
     await expect(page).toHaveURL(/\/kiralamalar\/rn\d+/)
     await expect(page.getByText('Teslim edildi').first()).toBeVisible()
@@ -123,8 +140,8 @@ test.describe('scenario 3 · tasks and staff', () => {
 
     // Switch to the Operations user: the task is in "mine"
     await switchUser(page, /Haris Mehić/)
-    await openDemo(page, '/komuta-merkezi?sekme=devir')
-    const openBefore = await countAfter(page, 'Açık görev')
+    await openDemo(page, '/islerim')
+    const openBefore = await countAfter(page, 'Bana atanan görev')
     expect(openBefore).toBeGreaterThan(0)
     await openDemo(page, '/gorevler')
     await expect(page.getByText(title)).toBeVisible()
@@ -137,8 +154,8 @@ test.describe('scenario 3 · tasks and staff', () => {
     // It left the open list; the Command Center count dropped by one
     await openDemo(page, '/gorevler')
     await expect(page.getByText(title)).toHaveCount(0)
-    await openDemo(page, '/komuta-merkezi?sekme=devir')
-    const openAfter = await countAfter(page, 'Açık görev')
+    await openDemo(page, '/islerim')
+    const openAfter = await countAfter(page, 'Bana atanan görev')
     expect(openAfter).toBe(openBefore - 1)
   })
 })
@@ -227,7 +244,7 @@ test.describe('scenario 2 · reservation to handover', () => {
 
     // price preview is shown before saving and the reservation is confirmed on save
     await expect(page.getByRole('complementary', { name: 'Özet' })).toContainText(/EUR|BAM/)
-    await page.getByRole('button', { name: 'Rezervasyonu kaydet' }).click()
+    await page.getByRole('button', { name: 'Bekleyen Kaydet' }).click()
     await expect(page).toHaveURL(/\/rezervasyonlar\/rsv\d+/)
     await expect(page.getByText('Bekliyor').first()).toBeVisible() // saved as pending: it holds no vehicle yet
     await page.getByRole('button', { name: 'Onayla', exact: true }).click()
@@ -356,7 +373,7 @@ test.describe('scenario 4 · fleet analysis', () => {
   test('period and branch filters change the rows and the numbers, a vehicle opens Vehicle 360, Back keeps the filters', async ({ page }) => {
     await openDemo(page, '/')
     await runScenario(page, 4)
-    await expect(page).toHaveURL(/filo-analizi/)
+    await expect(page).toHaveURL(/raporlar\?rapor=filo/)
     const rowsOf = () => page.getByRole('row').filter({ hasText: /%[0-9]+/ })
     await expect.poll(() => rowsOf().count()).toBeGreaterThan(5)
     const total = await rowsOf().count()

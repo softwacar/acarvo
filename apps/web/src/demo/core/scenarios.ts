@@ -98,7 +98,7 @@ export const SCENARIOS: Scenario[] = [
     steps: () => [L('Dönemi ve şubeyi seçin.', 'Pick the period and branch.'), L('Bir araca tıklayın.', 'Click a vehicle.'), L('Geri dönün: filtreler URL\'de korunur.', 'Go back: filters are kept in the URL.')],
     prepare: (d) => {
       d.session.userId = 'u-owner'
-      return { path: '/filo-analizi' }
+      return { path: '/raporlar?rapor=filo' }
     },
   },
   {
@@ -133,7 +133,11 @@ export const SCENARIOS: Scenario[] = [
     title: () => L('7 · Müşteriden ticari talebe', '7 · Customer to lead and quote'),
     summary: () => L('Talep → versiyonlu teklif → kabul → rezervasyon; bağlantılar korunur.', 'Lead → versioned quote → accepted → reservation; links are kept.'),
     steps: () => [L('Talep Merkezi\'nde bir talep açın.', 'Open a lead in the Lead Center.'), L('Teklif hazırlayın, revize edin: eski sürüm korunur.', 'Prepare and revise a quote: the old version is kept.'), L('Teklifi kabul edin: rezervasyon oluşur.', 'Accept the quote: a reservation is created.')],
-    prepare: () => ({ path: '/talep-merkezi' }),
+    prepare: (d) => {
+      d.session.userId = 'u-owner'
+      d.session.preview = true // the Lead Center is a V1.5 screen: it opens only under the concept preview
+      return { path: '/talep-merkezi' }
+    },
   },
   {
     id: 's8',

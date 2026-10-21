@@ -81,13 +81,27 @@ if (channel)
 
 // ------------------------------------------------------------------ persistence
 
+// One connection is kept open: a write started while the page is being left must not first wait for a new connection.
+let idbConn: Promise<IDBDatabase> | null = null
 function openIdb(): Promise<IDBDatabase> {
-  return new Promise((resolve, reject) => {
+  if (idbConn) return idbConn
+  idbConn = new Promise((resolve, reject) => {
     const req = indexedDB.open(IDB_NAME, 1)
     req.onupgradeneeded = () => req.result.createObjectStore(IDB_STORE)
-    req.onsuccess = () => resolve(req.result)
-    req.onerror = () => reject(req.error)
+    req.onsuccess = () => {
+      req.result.onclose = () => (idbConn = null)
+      req.result.onversionchange = () => {
+        req.result.close()
+        idbConn = null
+      }
+      resolve(req.result)
+    }
+    req.onerror = () => {
+      idbConn = null
+      reject(req.error)
+    }
   })
+  return idbConn
 }
 async function idbGet(): Promise<Db | null> {
   const d = await openIdb()
@@ -116,17 +130,25 @@ async function idbClear(): Promise<void> {
   })
 }
 
-async function readSaved(): Promise<Db | null> {
+function lsGet(): Db | null {
   try {
-    return await idbGet()
+    const raw = localStorage.getItem(LS_KEY)
+    return raw ? (JSON.parse(raw) as Db) : null
   } catch {
-    try {
-      const raw = localStorage.getItem(LS_KEY)
-      return raw ? (JSON.parse(raw) as Db) : null
-    } catch {
-      return null
-    }
+    return null
   }
+}
+/** The newer of the two copies wins: the page-leave copy in localStorage can be newer than a write that did not finish. */
+async function readSaved(): Promise<Db | null> {
+  let fromIdb: Db | null = null
+  try {
+    fromIdb = await idbGet()
+  } catch {
+    return lsGet()
+  }
+  const fromLs = lsGet()
+  if (fromLs && fromLs.meta?.schema === DB_SCHEMA && (!fromIdb || (fromIdb.meta?.rev ?? 0) < (fromLs.meta?.rev ?? 0))) return fromLs
+  return fromIdb
 }
 // Saving can fail (private window, blocked site data, full storage). The demo keeps working in memory for this tab and
 // says so, so nobody mistakes the demo state for something durable.
@@ -152,6 +174,11 @@ function writeNow() {
   idbPut(db)
     .then(() => {
       setPersistFailed(false)
+      try {
+        localStorage.removeItem(LS_KEY) // the durable copy is current; drop the page-leave copy
+      } catch {
+        // ignore
+      }
       announce()
     })
     .catch(() => {
@@ -164,8 +191,29 @@ function writeNow() {
     })
 }
 // A short debounce keeps rapid edits to one write; leaving the page flushes immediately so the last action is not lost.
+// Who is acting (user, branch, language, context) is saved at once and synchronously: the full state is written a few tens of
+// milliseconds later, and a page that is left right after a switch must still come back as the person who was chosen.
+const SESSION_KEY = 'acarvo-demo-session-v1'
+function saveSession() {
+  try {
+    if (db) localStorage.setItem(SESSION_KEY, JSON.stringify({ rev: db.meta.rev, session: db.session }))
+  } catch {
+    // best effort only
+  }
+}
+function savedSession(saved: Db): Db['session'] {
+  try {
+    const raw = localStorage.getItem(SESSION_KEY)
+    const x = raw ? (JSON.parse(raw) as { rev: number; session: Db['session'] }) : null
+    if (x && x.rev >= saved.meta.rev && saved.users.some((u) => u.id === x.session.userId)) return { ...saved.session, ...x.session }
+  } catch {
+    // fall back to the saved state
+  }
+  return saved.session
+}
 function scheduleSave() {
   if (!persistEnabled) return
+  saveSession()
   if (saveTimer) clearTimeout(saveTimer)
   saveTimer = setTimeout(writeNow, 40)
 }
@@ -173,6 +221,13 @@ if (typeof window !== 'undefined') {
   const flush = () => {
     if (saveTimer && persistEnabled) {
       clearTimeout(saveTimer)
+      // An IndexedDB write that starts while the page is being left may not finish; a synchronous copy is kept as a safety net
+      // (it is dropped as soon as the durable write has completed, and a newer copy always wins when the state is loaded).
+      try {
+        if (db) localStorage.setItem(LS_KEY, JSON.stringify(db))
+      } catch {
+        // too large or blocked: the durable write below is then the only copy
+      }
       writeNow()
     }
   }
@@ -186,7 +241,7 @@ export async function loadDemo(opts: { persist?: boolean } = {}): Promise<{ migr
   let migratedFrom: number | null = null
   const saved = persistEnabled ? await readSaved() : null
   version++
-  if (saved && saved.meta?.schema === DB_SCHEMA) db = saved
+  if (saved && saved.meta?.schema === DB_SCHEMA) db = { ...saved, session: savedSession(saved) }
   else {
     if (saved) migratedFrom = saved.meta?.schema ?? 0
     db = buildSeed(new Date())

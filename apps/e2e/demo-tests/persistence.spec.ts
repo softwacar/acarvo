@@ -82,7 +82,7 @@ test.describe('persistence', () => {
     await page.locator('#bk-note').fill('Müşteri çocuk koltuğu istiyor')
     await page.getByRole('button', { name: 'Demo', exact: true }).click()
     await page.getByRole('menuitem', { name: /Dil:/ }).click()
-    await expect(page.getByRole('button', { name: 'Save reservation' })).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Save as Pending' })).toBeVisible()
     await expect(page.locator('#bk-note')).toHaveValue('Müşteri çocuk koltuğu istiyor')
   })
 

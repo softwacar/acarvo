@@ -8,7 +8,7 @@ import { requestApproval } from '../../core/ops/control'
 import { settleAdvance, verifyDeposit, verifyPayment } from '../../core/ops/finance'
 import { RISK_LABEL, type RiskLevel } from '../../core/risk'
 import type { DepositRecord, Payment, Reservation } from '../../core/types'
-import { L } from '../../i18n'
+import { L, loc } from '../../i18n'
 import { AreaF, MoneyF } from '../../ui/forms'
 import { runAction, useCan, useDb, useFmt, useMe } from '../../ui/hooks'
 import { btnPrimary, btnSecondary, btnSmall, FinanceDialog, Link2, Pill, Status } from '../../ui/kit'
@@ -134,7 +134,7 @@ export function AdvanceLedgerCard({ p, reservation }: { p: Payment; reservation?
       {adv && (
         <ul className="divide-y divide-line-soft rounded-md bg-ground/60 px-3" aria-label={L('Kaparo defteri', 'Advance ledger')}>
           <LedgerRow label={L('Kaparo', 'Advance')} value={fmt(l.tenderMinor, l.cur)} />
-          <LedgerRow label={L('Politika bedeli', 'Policy fee')} value={fmt(l.retainedMinor, l.cur)} note={p.policyFeeRule ?? (preview ? L(`İptal edilirse otomatik hesaplanır: ${fmt(preview.feeMinor, preview.cur)} (${preview.rule})`, `Computed automatically if cancelled: ${fmt(preview.feeMinor, preview.cur)} (${preview.rule})`) : undefined)} />
+          <LedgerRow label={L('Politika bedeli', 'Policy fee')} value={fmt(l.retainedMinor, l.cur)} note={p.policyFeeRule ?? (preview ? L(`İptal edilirse otomatik hesaplanır: ${fmt(preview.feeMinor, preview.cur)} (${loc(preview.rule)})`, `Computed automatically if cancelled: ${fmt(preview.feeMinor, preview.cur)} (${loc(preview.rule)})`) : undefined)} />
           <LedgerRow label={L('Müşteri alacağı', 'Customer receivable')} value={fmt(l.receivableMinor, l.cur)} note={l.receivableMinor > 0 ? L('Bedel kaparoyu aşıyor; fark müşteriden alınacak (burada tahsil edilmez).', 'The fee exceeds the advance; the difference is owed by the customer (not collected here).') : undefined} />
           <LedgerRow label={L('Gerçek iade', 'Real refund')} value={fmt(l.refundedMinor, l.cur)} note={l.pendingRefundMinor > 0 ? L(`${fmt(l.pendingRefundMinor, l.cur)} onay/ödeme bekliyor`, `${fmt(l.pendingRefundMinor, l.cur)} awaiting approval / payout`) : undefined} />
           <LedgerRow label={L('Kalan kullanılabilir kaparo', 'Remaining usable advance')} value={fmt(l.remainingMinor, l.cur)} strong note={l.remainingMinor > 0 ? L(`İade edilebilir: ${fmt(l.refundableMinor, l.cur)}`, `Refundable: ${fmt(l.refundableMinor, l.cur)}`) : undefined} />

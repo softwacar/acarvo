@@ -1,4 +1,4 @@
-import { B } from '../../i18n'
+import { B, loc } from '../../i18n'
 import { L } from '../../i18n'
 import { dayOf, DAY } from '../time'
 import type { Cur, Customer, Db, Id, Iso, Money } from '../types'
@@ -122,5 +122,5 @@ export function cancellationFee(d: Db, r: { currency: string; pickupAt: string; 
     return { kind: 'free', feeMinor: 0, cur: r.currency, hoursBefore, rule: B(`Teslime ${pol.freeHoursBefore} saatten fazla var: ücretsiz iptal.`, `More than ${pol.freeHoursBefore} hours before pickup: free cancellation.`) }
   const feeMinor = rule.kind === 'percent_of_total' ? Math.round((gross * rule.value) / 100) : rule.kind === 'first_day' ? Math.round(gross / days) : (rule.fixed[r.currency] ?? 0)
   const ruleText = rule.kind === 'percent_of_total' ? B(`Toplamın %${rule.value}'i`, `${rule.value}% of the total`) : rule.kind === 'first_day' ? B('Bir günlük bedel', 'One day of the rental') : B('Sabit bedel', 'Fixed fee')
-  return { kind: kind === 'no_show' ? 'no_show' : 'late', feeMinor, cur: r.currency, hoursBefore, rule: kind === 'no_show' ? B(`Gelmedi: ${ruleText}`, `No-show: ${ruleText}`) : B(`Teslime ${Math.max(0, hoursBefore)} saat kala iptal (ücretsiz süre ${pol.freeHoursBefore} saat): ${ruleText}`, `Cancelled ${Math.max(0, hoursBefore)} h before pickup (free period ${pol.freeHoursBefore} h): ${ruleText}`) }
+  return { kind: kind === 'no_show' ? 'no_show' : 'late', feeMinor, cur: r.currency, hoursBefore, rule: kind === 'no_show' ? B(`Gelmedi: ${loc(ruleText, 'tr')}`, `No-show: ${loc(ruleText, 'en')}`) : B(`Teslime ${Math.max(0, hoursBefore)} saat kala iptal (ücretsiz süre ${pol.freeHoursBefore} saat): ${loc(ruleText, 'tr')}`, `Cancelled ${Math.max(0, hoursBefore)} h before pickup (free period ${pol.freeHoursBefore} h): ${loc(ruleText, 'en')}`) }
 }

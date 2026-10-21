@@ -47,7 +47,7 @@ test.describe('partner portal', () => {
 
   test('the partner portal never offers company screens, and leaving it returns to the company panel', async ({ page }) => {
     await openDemo(page, '/partner')
-    await expect(page.getByRole('link', { name: 'Finans Merkezi' })).toHaveCount(0)
+    await expect(page.getByRole('link', { name: 'Finans', exact: true })).toHaveCount(0)
     await page.getByRole('link', { name: 'Şirket paneline dön' }).or(page.getByRole('button', { name: 'Şirket paneline dön' })).first().click()
     await expect(page).toHaveURL(/localhost:\d+\/$/)
   })

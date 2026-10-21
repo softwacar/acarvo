@@ -7,7 +7,7 @@ test.describe('demo flows', () => {
   test('a new reservation is saved, persists across a reload and the reset removes it', async ({ page }) => {
     const w = watch(page)
     await openDemo(page, '/rezervasyonlar/yeni?musteri=c3')
-    await page.getByRole('button', { name: 'Rezervasyonu kaydet' }).click()
+    await page.getByRole('button', { name: 'Bekleyen Kaydet' }).click()
     await expect(page).toHaveURL(/\/rezervasyonlar\/rsv\d+/)
     await expect(page.getByText('Bekliyor').first()).toBeVisible()
     const url = page.url()
@@ -58,13 +58,16 @@ test.describe('demo flows', () => {
     await expect(page.getByText('Düğme pasif: eksik kontroller')).toBeVisible()
   })
 
-  test('the Command Center, Home and the notification bell read one alert source', async ({ page }) => {
-    await openDemo(page, '/komuta-merkezi?sekme=uyarilar')
+  test('My Work (Alerts tab) and the old Command Center and Risks addresses read one alert source', async ({ page }) => {
+    await openDemo(page, '/islerim?sekme=uyarilar')
     const tab = await page.getByRole('tab', { name: /Uyarılar/ }).textContent()
     const count = Number(/(\d+)/.exec(tab ?? '')?.[1] ?? '0')
     expect(count).toBeGreaterThan(0)
     await openDemo(page, '/riskler-ve-istisnalar')
-    const risks = await page.getByRole('tab', { name: /Riskler/ }).textContent()
-    expect(Number(/(\d+)/.exec(risks ?? '')?.[1] ?? '-1')).toBe(count)
+    await expect(page).toHaveURL(/\/islerim\?sekme=uyarilar/)
+    const again = await page.getByRole('tab', { name: /Uyarılar/ }).textContent()
+    expect(Number(/(\d+)/.exec(again ?? '')?.[1] ?? '-1')).toBe(count)
+    await openDemo(page, '/komuta-merkezi?sekme=uyarilar')
+    await expect(page).toHaveURL(/\/islerim/)
   })
 })

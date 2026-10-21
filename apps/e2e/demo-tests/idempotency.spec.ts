@@ -14,7 +14,10 @@ test.describe('double click', () => {
     await dlg.locator('#pay-amount').fill('10')
     await dlg.getByRole('button', { name: 'Ödemeyi kaydet' }).dblclick()
     await expect(dlg).toBeHidden()
-    expect(await kpiValue(page, 'Kalan')).toBe('490,00 EUR')
+    // a recorded payment is not applied yet: the balance drops only after a second person verifies it, and it was recorded once
+    expect(await kpiValue(page, 'Kalan')).toBe('500,00 EUR')
+    await expect(page.getByText('10,00 EUR doğrulama bekliyor')).toBeVisible()
+    await expect(page.getByText('Kaydedildi · doğrulama bekliyor')).toHaveCount(1)
   })
 
   test('a double-clicked cash movement is recorded once', async ({ page }) => {
@@ -35,7 +38,7 @@ test.describe('double click', () => {
 
   test('a double-clicked reservation is saved once', async ({ page }) => {
     await openDemo(page, '/rezervasyonlar/yeni?musteri=c3')
-    await page.getByRole('button', { name: 'Rezervasyonu kaydet' }).dblclick()
+    await page.getByRole('button', { name: 'Bekleyen Kaydet' }).dblclick()
     await expect(page).toHaveURL(/\/rezervasyonlar\/rsv\d+/)
     const no = (await page.locator('h1').first().innerText()).trim()
     const n = Number(no.replace(/\D/g, ''))
