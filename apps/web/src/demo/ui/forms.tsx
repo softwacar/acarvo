@@ -75,7 +75,7 @@ export function DateF({ id, label, value, onChange, error, hint, required }: { i
 export function MoneyF({ id, label, amount, onAmount, cur, onCur, currencies, error, hint, required, lockCurrency }: { id: string; label: string; amount: string; onAmount: (v: string) => void; cur: Cur; onCur: (c: Cur) => void; currencies: Cur[]; error?: string; hint?: ReactNode; required?: boolean; lockCurrency?: boolean }) {
   const invalid = amount.trim() !== '' && parseAmount(amount, cur) === null
   return (
-    <Field id={id} label={label} error={error ?? (invalid ? L('Geçerli bir tutar girin', 'Enter a valid amount') : undefined)} hint={hint} required={required}>
+    <Field id={id} label={label} error={error ?? (invalid ? L('Geçerli bir tutar girin (binlik ayracı yok, örn. 1250,50)', 'Enter a valid amount (no thousands separator, e.g. 1250.50)') : undefined)} hint={hint} required={required}>
       <div className="flex gap-2">
         <Input {...describe(id, error ?? (invalid ? 'x' : undefined), !!hint)} inputMode="decimal" value={amount} onChange={(e) => onAmount(e.target.value)} className="tnum min-w-0 flex-1" />
         <Select aria-label={L('Para birimi', 'Currency')} value={cur} disabled={lockCurrency} onChange={(e) => onCur(e.target.value)} className="w-[96px] shrink-0">

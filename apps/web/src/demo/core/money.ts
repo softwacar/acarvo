@@ -1,3 +1,4 @@
+import { parseAmount as sharedParseAmount } from '@acarvo/shared'
 import { getLang, locale } from '../i18n'
 import type { Cur, Money } from './types'
 
@@ -37,7 +38,7 @@ export const roundHalf = (x: number) => (x < 0 ? -Math.round(-x) : Math.round(x)
 /** "1.250,50 EUR": always with the ISO code. */
 export function fmt(minor: number, cur: Cur): string {
   const e = exponent(cur)
-  const sign = minor < 0 ? '-' : ''
+  const sign = minor < 0 ? '−' : '' // a true minus sign, as the real application prints it
   const abs = Math.abs(minor)
   const n = new Intl.NumberFormat(locale(), { minimumFractionDigits: e, maximumFractionDigits: e }).format(abs / 10 ** e)
   return `${sign}${n} ${cur}`
@@ -52,34 +53,11 @@ export function toInput(minor: number, cur: Cur): string {
 }
 
 /**
- * Parses an amount typed by a person ("1.234,50", "1,234.50", "1234.5") into minor units; null when it is not a valid
- * amount. A single separator is the decimal separator; with both, the last one is the decimal separator.
+ * Parses an amount typed by a person into minor units; null when it is not a valid amount. This is the rule of the real
+ * application (@acarvo/shared): a plain decimal with one separator ("1250,50" or "1250.50"); no thousands separators, at most the
+ * currency's decimals, at most 12 whole digits. The demo used to accept "1.234,50" too, which the real form refuses.
  */
-export function parseAmount(text: string, cur: Cur): number | null {
-  const t = text.trim().replace(/\s/g, '')
-  if (!t || !/^[0-9.,]+$/.test(t)) return null
-  const e = exponent(cur)
-  const seps = t.match(/[.,]/g) ?? []
-  let intPart = t
-  let frac = ''
-  if (seps.length) {
-    const lastDot = t.lastIndexOf('.')
-    const lastComma = t.lastIndexOf(',')
-    const pos = Math.max(lastDot, lastComma)
-    const sameKind = seps.every((s) => s === seps[0])
-    if (seps.length > 1 && sameKind) {
-      // "1.234.567": thousands separators only.
-      intPart = t.replace(/[.,]/g, '')
-    } else {
-      intPart = t.slice(0, pos).replace(/[.,]/g, '')
-      frac = t.slice(pos + 1)
-    }
-  }
-  if (frac.length > e) return null
-  if (!/^\d*$/.test(intPart) || !/^\d*$/.test(frac)) return null
-  const minor = Number(intPart || '0') * 10 ** e + Number((frac + '0'.repeat(e)).slice(0, e) || '0')
-  return Number.isFinite(minor) ? minor : null
-}
+export const parseAmount = (text: string, cur: Cur): number | null => sharedParseAmount(text, cur)
 
 /** Sums by currency; never adds two currencies together. */
 export function sumByCur<T>(items: T[], pick: (x: T) => Money | null | undefined): Record<Cur, number> {

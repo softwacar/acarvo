@@ -147,3 +147,27 @@ export function priceQuote(db: Db, input: QuoteInput, now: Iso, snapshotId: Id):
   const revision = db.priceRevisions[db.priceRevisions.length - 1]
   return { id: snapshotId, cur, days, lines, netMinor, taxLines, taxMinor, grossMinor, revisionId: revision?.id ?? 'rev-0', computedAt: now, blockers }
 }
+
+/**
+ * The parts of a demo price that the real pricing engine (@acarvo/shared pe-1) does not apply or calculates differently
+ * (golden vectors in __tests__/golden.test.ts). Everything else in a demo price equals the real engine's result for the same input.
+ */
+export function demoOnlyPriceParts(price: Pick<PriceSnapshot, 'lines'> | null): { kind: string; tr: string; en: string }[] {
+  const table: Record<string, { tr: string; en: string }> = {
+    tier: { tr: 'süre kademesi (demoda yüzde indirim; gerçek motor gün kademe fiyatı kullanır)', en: 'length tier (a percentage in the demo; the real engine uses per-day tier prices)' },
+    corporate: { tr: 'kurumsal anlaşma indirimi', en: 'corporate agreement discount' },
+    insurance: { tr: 'sigorta paketi', en: 'insurance package' },
+    oneway: { tr: 'tek yön ücreti', en: 'one-way fee' },
+    young_driver: { tr: 'genç sürücü ücreti', en: 'young-driver fee' },
+  }
+  const seen = new Set<string>()
+  const out: { kind: string; tr: string; en: string }[] = []
+  for (const l of price?.lines ?? []) {
+    const t = table[l.kind]
+    if (t && !seen.has(l.kind)) {
+      seen.add(l.kind)
+      out.push({ kind: l.kind, ...t })
+    }
+  }
+  return out
+}

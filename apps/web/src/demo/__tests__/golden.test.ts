@@ -1,6 +1,6 @@
 import { billableDays, calculateQuote, currencyExponent, divRound, formatMoney, minorToDecimal, parseAmount as sharedParseAmount, type EngineInput } from '@acarvo/shared'
 import { describe, expect, it } from 'vitest'
-import { calculateRentalDuration, priceQuote } from '../core/calc/pricing'
+import { calculateRentalDuration, demoOnlyPriceParts, priceQuote } from '../core/calc/pricing'
 import { fmt, parseAmount as demoParseAmount, roundHalf, toInput, exponent } from '../core/money'
 import { buildSeed } from '../core/seed'
 import type { Db, Settings } from '../core/types'
@@ -31,11 +31,11 @@ describe('money: amounts parse and print the same where both accept them', () =>
       expect(demoParseAmount(text, cur)).toBe(want)
       expect(sharedParseAmount(text, cur)).toBe(want)
     })
-  it('DIFFERENCE (documented): the demo input accepts thousands separators; the shared parser is strict, so a real form must send a plain decimal', () => {
-    expect(demoParseAmount('1.234,50', 'EUR')).toBe(123450)
-    expect(demoParseAmount('1,234.50', 'EUR')).toBe(123450)
-    expect(sharedParseAmount('1.234,50', 'EUR')).toBeNull()
-    expect(sharedParseAmount('1,234.50', 'EUR')).toBeNull()
+  it('ALIGNED: thousands separators are refused in both, so a demo form teaches the rule of the real form', () => {
+    for (const t of ['1.234,50', '1,234.50', '1.234.567']) {
+      expect(demoParseAmount(t, 'EUR'), t).toBeNull()
+      expect(sharedParseAmount(t, 'EUR'), t).toBeNull()
+    }
   })
   it('minor units and exponents agree for the currencies the demo lists', () => {
     for (const c of ['EUR', 'USD', 'BAM', 'GBP', 'CHF', 'TRY', 'RSD', 'JPY', 'KWD']) expect(exponent(c), c).toBe(currencyExponent(c))
@@ -43,11 +43,9 @@ describe('money: amounts parse and print the same where both accept them', () =>
     expect(toInput(500, 'JPY')).toBe(minorToDecimal(500, 'JPY'))
     expect(toInput(1234, 'KWD').replace(',', '.')).toBe(minorToDecimal(1234, 'KWD'))
   })
-  it('display agrees for positive amounts (with the ISO code); DIFFERENCE: the demo prints a minus sign, shared a true minus', () => {
-    expect(fmt(123450, 'EUR')).toBe(formatMoney(123450, 'EUR', 'tr-TR'))
-    expect(fmt(5, 'EUR')).toBe(formatMoney(5, 'EUR', 'tr-TR'))
-    expect(fmt(-123450, 'EUR').startsWith('-')).toBe(true)
-    expect(formatMoney(-123450, 'EUR', 'tr-TR').startsWith('−')).toBe(true)
+  it('display agrees, negative amounts included (a true minus sign, the ISO code always shown)', () => {
+    for (const [m, cur] of [[123450, 'EUR'], [5, 'EUR'], [-123450, 'EUR'], [-5, 'BAM'], [0, 'USD'], [1234, 'KWD'], [500, 'JPY']] as const)
+      expect(fmt(m, cur), `${m} ${cur}`).toBe(formatMoney(m, cur, 'tr-TR'))
   })
   it('rounding is half away from zero in both', () => {
     for (const [a, b] of [[5, 2], [-5, 2], [7, 2], [-7, 2], [1, 3], [2, 3]] as const) expect(roundHalf(a / b), `${a}/${b}`).toBe(Number(divRound(BigInt(a), BigInt(b))))
@@ -143,5 +141,28 @@ describe('pricing: the demo pipeline and the shared engine (pe-1) agree on the c
     const real = sharedQuote({ days: 8, daily: 10000, tax: null }, '2026-11-02T08:00:00Z', '2026-11-10T08:00:00Z', d.classes[0]!.id)
     expect(real.tier).toBe('7-29') // real: its own tier price row, falling back to the 1–6 day price when no row exists
     expect(real.notApplied).toEqual(expect.arrayContaining(['insurance_package', 'one_way', 'corporate_agreement']))
+  })
+})
+
+describe('demo price parts that the real engine lacks are named (never shown as real)', () => {
+  const quote = (days: number, extra: Partial<Parameters<typeof priceQuote>[1]> = {}) => {
+    const d = mkDb()
+    const cls = d.classes[0]!
+    const from = '2026-11-02T08:00:00Z'
+    const to = new Date(Date.parse(from) + days * 86_400_000).toISOString()
+    return priceQuote(d, { classId: cls.id, from, to, pickupBranchId: 'b-sjj', returnBranchId: 'b-sjj', currency: 'EUR', extras: [], ...extra }, d.clock.now, 'q')
+  }
+  it('a short plain rental has no demo-only part, so its number is the real number', () => {
+    expect(demoOnlyPriceParts(quote(2))).toEqual([])
+  })
+  it('a long rental carries a percentage tier: named as demo-only', () => {
+    expect(demoOnlyPriceParts(quote(10)).map((p) => p.kind)).toContain('tier')
+  })
+  it('insurance, a different return branch and a young driver are named as demo-only', () => {
+    const d = mkDb()
+    const ins = d.insurance[0]
+    const parts = demoOnlyPriceParts(quote(3, { insuranceId: ins?.id, returnBranchId: 'b-mst', youngDriver: true })).map((p) => p.kind)
+    if (ins) expect(parts).toContain('insurance')
+    expect(parts).toEqual(expect.arrayContaining(['oneway', 'young_driver']))
   })
 })

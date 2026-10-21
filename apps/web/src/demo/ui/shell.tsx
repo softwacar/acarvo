@@ -16,7 +16,7 @@ import { MaturityBadge, ScopeBadge } from './gate'
 import { inboxOf } from '../core/inbox'
 import { SCENARIOS } from '../core/scenarios'
 import { searchAll } from '../core/search'
-import { commit, resetDemo, usePersistFailed } from '../core/store'
+import { canViewLink, commit, resetDemo, usePersistFailed } from '../core/store'
 import { markNotificationsRead, setBranchFilter, setClock, setLanguage, switchUser } from '../core/ops/control'
 import { DAY, HOUR, zonedIso, dayOf, addDaysYmd } from '../core/time'
 import { entityHref, runAction, useAlerts, useCan, useDb, useFmt, useMe } from './hooks'
@@ -199,8 +199,10 @@ function Notifications() {
   const alerts = useAlerts()
   const f = useFmt()
   const myLate = inboxOf(d).mine.filter((i) => i.kind === 'task' && i.overdue && i.reason === 'assigned').slice(0, 3)
-  const stored = d.notifications.filter((n) => !n.userId || n.userId === me.id).slice(0, 8)
-  const unread = stored.filter((n) => !n.read).length
+  // a notification about a record the person may not open is not shown (its text could carry what the record says)
+  const mine = d.notifications.filter((n) => (!n.userId || n.userId === me.id) && canViewLink(d, n.link)).sort((x, y) => y.at.localeCompare(x.at) || y.id.localeCompare(x.id))
+  const stored = mine.slice(0, 8) // the newest first
+  const unread = mine.filter((n) => !n.read).length
   const crit = alerts.filter((a) => a.severity === 'critical' && a.kind !== 'task_overdue').length
   const count = unread + crit + myLate.length
   return (

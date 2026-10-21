@@ -137,11 +137,14 @@ describe('multi-payer, multi-currency collection (spec §64.2)', () => {
 
 describe('money parsing', () => {
   it('parses typed amounts into minor units', () => {
-    expect(parseAmount('1.234,50', 'EUR')).toBe(123450)
-    expect(parseAmount('1,234.50', 'EUR')).toBe(123450)
+    expect(parseAmount('1234,50', 'EUR')).toBe(123450)
+    expect(parseAmount('1234.50', 'EUR')).toBe(123450)
+    // the rule of the real application: no thousands separators
+    expect(parseAmount('1.234,50', 'EUR')).toBeNull()
+    expect(parseAmount('1,234.50', 'EUR')).toBeNull()
     expect(parseAmount('100', 'EUR')).toBe(10000)
     expect(parseAmount('12,5', 'EUR')).toBe(1250)
-    expect(parseAmount('1.234.567', 'EUR')).toBe(123456700)
+    expect(parseAmount('1.234.567', 'EUR')).toBeNull()
     expect(parseAmount('12,345', 'EUR')).toBeNull()
     expect(parseAmount('abc', 'EUR')).toBeNull()
     expect(parseAmount('1000', 'JPY')).toBe(1000)

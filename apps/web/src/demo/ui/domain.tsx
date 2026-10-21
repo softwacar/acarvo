@@ -1,3 +1,4 @@
+import { demoOnlyPriceParts } from '../core/calc/pricing'
 import { CheckCircle, WarningCircle, XCircle } from '@phosphor-icons/react'
 import { Link } from '@tanstack/react-router'
 import { useMemo } from 'react'
@@ -37,6 +38,7 @@ export function CustomerLink({ c, className }: { c?: Customer; className?: strin
 
 export function PriceBreakdown({ price, compact }: { price: PriceSnapshot | null; compact?: boolean }) {
   if (!price) return <p className="text-[13px] text-ink-2">{L('Fiyat hesaplanmadı.', 'Price not calculated.')}</p>
+  const demoOnly = demoOnlyPriceParts(price)
   return (
     <div className="space-y-3">
       {price.blockers.length > 0 && (
@@ -48,6 +50,14 @@ export function PriceBreakdown({ price, compact }: { price: PriceSnapshot | null
             ))}
           </ul>
         </Notice>
+      )}
+      {demoOnly.length > 0 && (
+        <div data-testid="demo-price-note">
+          <Notice tone="hold">
+            {L('Demo hesabı: ', 'Demo calculation: ')}{demoOnly.map((p) => L(p.tr, p.en)).join('; ')}
+            {L(' gerçek fiyat motorunda (pe-1) henüz uygulanmıyor veya farklı hesaplanıyor; bu tutar gerçek sistemde aynı çıkmaz.', ' is not applied or is calculated differently by the real pricing engine (pe-1); the real system will not show the same amount.')}
+          </Notice>
+        </div>
       )}
       {price.lines.length > 0 && (
         <div className="overflow-x-auto">

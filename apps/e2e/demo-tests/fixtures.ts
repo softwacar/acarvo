@@ -148,3 +148,41 @@ export async function deliverAtDesk(page: Page) {
   await page.getByRole('button', { name: 'Teslimi tamamla' }).click()
   await expect(page.getByText('Teslim edildi').first()).toBeVisible()
 }
+
+// ---- Turkish-text detector (shared by the English coverage specs)
+
+export const TR_CHARS = /[çğıİöşüÇĞÖŞÜ]/
+const TR_WORDS = /(?<![\p{L}])(ve|için|yok|bir|ile|değil|veya|kadar|olarak|henüz|zaten|önce|sonra|Tümü|Hepsi|Durum|Kaydet|Vazgeç|Ekle|Sil|Düzenle|Kapat|Yeni|Müşteri|Araç|Kiralama|Rezervasyon|Şube|Tutar|Tarih|Teslim|İade|Bakım|Hasar|Görev|Kasa|Ödeme|Onay|Talep|Belge|Fiyat|Sigorta|Depozito|Masraf)(?![\p{L}])/u
+const DATA = /(Müller|Örnek|Deneme|Fiktiv|Šehović|Hadžić|Kovač|Karić|Babić|Mehić|Matić|Pašić|Begić|Demić|Kovačić|Primjerović|Novak|Petrović|Horvat|Boğaz|Hodžić|Sarajevo|Mostar|Dubrovnik|Bosanski|Türkçe)/
+
+export async function turkishLines(page: Page): Promise<string[]> {
+  const lines = await page.evaluate(() => {
+    const out = new Set<string>()
+    const w = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT)
+    let n: Node | null
+    while ((n = w.nextNode())) {
+      const el = n.parentElement
+      if (!el || ['SCRIPT', 'STYLE'].includes(el.tagName)) continue
+      const t = (n.textContent ?? '').replace(/\s+/g, ' ').trim()
+      if (t.length > 1) out.add(t)
+    }
+    for (const el of document.querySelectorAll('[aria-label],[title],[placeholder]')) for (const a of ['aria-label', 'title', 'placeholder']) { const v = el.getAttribute(a); if (v) out.add(`[${a}] ${v}`) }
+    for (const o of document.querySelectorAll('option')) out.add(`[option] ${o.textContent}`)
+    return [...out]
+  })
+  return lines.filter((l) => (TR_CHARS.test(l) || TR_WORDS.test(l)) && !DATA.test(l))
+}
+
+/** The screens of the old 36-link menu that no longer have their own menu entry: the address a person (or an old bookmark) uses. */
+export const FORMER_SCREENS = [
+  '/komuta-merkezi', '/filo-asistani', '/olay-merkezi', '/hasar-kayitlari', '/ceza-modulu', '/talep-merkezi', '/partnerler', '/arac-tedarikcileri',
+  '/kurallar', '/gelir-kontrolu', '/riskler-ve-istisnalar', '/kapasite-planlama', '/filo-analizi', '/firsatlar', '/sozlesmeler', '/roller-ve-yetkiler',
+]
+
+/** Turns the advanced concept preview on from the Demo menu (Owner), so the V1.5 / V2 screens open under their banner. */
+export async function enablePreview(page: Page) {
+  await page.getByRole('button', { name: 'Demo', exact: true }).click()
+  await page.getByRole('menuitem', { name: /Gelişmiş konsept ön izlemesi/ }).click()
+  await page.getByRole('button', { name: 'Ön izlemeyi aç' }).click()
+  await page.keyboard.press('Escape')
+}

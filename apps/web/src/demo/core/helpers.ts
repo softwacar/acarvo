@@ -72,3 +72,31 @@ export function notify(d: Db, userId: Id | undefined, text: string, link?: { typ
 export const userName = (d: Db, id: Id | 'system' | undefined) => (id === 'system' ? 'Sistem' : (d.users.find((u) => u.id === id)?.name ?? '—'))
 export const branchOf = (d: Db, id: Id | undefined) => d.branches.find((b) => b.id === id)
 export const tzOf = (d: Db, branchId?: Id) => branchOf(d, branchId)?.tz ?? d.settings.company.tz
+
+/** The view permission that opens the record a link points to. A person without it must not learn what the record says. */
+const LINK_PERM: Partial<Record<LinkType, string>> = {
+  vehicle: 'vehicles:view',
+  rental: 'rentals:view',
+  reservation: 'reservations:view',
+  customer: 'customers:view',
+  corporate: 'corporate:view',
+  maintenance: 'maintenance:view',
+  damage: 'damages:view',
+  incident: 'incidents:view',
+  fine: 'fines:view',
+  payment: 'finance:view',
+  approval: 'approvals:view',
+  contract: 'contracts:view',
+  lead: 'leads:view',
+  quote: 'leads:view',
+  partner: 'partners:view',
+  supplier: 'suppliers:view',
+  expense: 'expenses:view',
+  document: 'documents:view',
+}
+/** True when the acting person may open the linked record (or the notification has no link). */
+export function canViewLink(d: Db, link?: { type: LinkType; id: Id } | null): boolean {
+  if (!link) return true
+  const perm = LINK_PERM[link.type]
+  return !perm || hasPerm(d, perm)
+}
