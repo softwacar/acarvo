@@ -135,26 +135,80 @@ Eşitlik kanıtlanmayan yerde demo kodu **birleştirilmedi**; backend hesaplamas
 
 | Küme | Başlangıç | Şimdi |
 |---|---|---|
-| Demo birim (vitest) | 68 | **{{UNIT}}** (11 dosya: nav 15, tasks 20, advance 14, stages 11, admin 14, golden 37, domain 16, finance 11, rules 8, scenarios 21, persistence 2) |
-| Demo tarayıcı (Playwright, tarayıcıda yerel) | 301 / 302 | **{{E2E}}** |
-| Gerçek API (`acarvo_test`) | 534 | **{{API}}** |
-| Gerçek tarayıcı (`acarvo_test`) | 134 geçti / 36 atlandı | **{{REAL}}** |
+| Demo birim (vitest) | 68 | **171** (11 dosya: nav 15, tasks 20, advance 14, stages 11, admin 16, golden 37, domain 16, finance 11, rules 8, scenarios 21, persistence 2) |
+| Demo tarayıcı (Playwright, tarayıcıda yerel) | 301 / 302 | **247 (hepsi geçti)** |
+| Gerçek API (`acarvo_test`) | 534 | **534 (hepsi geçti)** |
+| Gerçek tarayıcı (`acarvo_test`) | 134 geçti / 36 atlandı | **134 geçti / 36 atlandı (değişmedi)** |
 | TypeScript (api, shared, web, e2e) | temiz | temiz |
 | Üretim derlemesi (web) | temiz | temiz |
 
-**Tarayıcı test sayısı neden değişti:** eski set her menü ekranını (38 rota × [axe + 4 genişlik]) ve 38 İngilizce ekranı ayrı ayrı koşuyordu. Menü 21 ekrana indi; eski 36 adres artık `nav.spec.ts` içinde yönlendirme testleridir (36 test + kayıt sorgusunun korunması). Hiçbir test sessizce silinmedi: değişen davranışa göre uyarlandı (aşağıda).
+**Tarayıcı test sayısı neden değişti:** eski set her menü ekranını (38 rota × [axe + 4 genişlik]) ve 38 İngilizce ekranı ayrı ayrı koşuyordu. Menü 21 ekrana indi; eski 36 adres artık `nav.spec.ts` içinde yönlendirme testleridir (36 test + kayıt sorgusunun korunması). Son tam koşu: 247 test, 7,8 dk, 0 hata. Hiçbir test sessizce silinmedi: değişen davranışa göre uyarlandı (aşağıda).
 
 **Eski testlerde uyarlanan davranışlar:** "Rezervasyonu kaydet" → "Bekleyen Kaydet"; ödeme kaydı artık bakiyeyi düşürmez (iki kişili doğrulama sonrası düşer; senaryo 5 dört ödemeyi ikinci kullanıcıyla doğrular, bakiye 500 → … → 0); Komuta Merkezi / Riskler → İşlerim; Talep Merkezi senaryosu (7) ön izleme kapısıyla; Filo analizi → Raporlar; kaparo bağlantısı "Finans · Kaparo".
 
 **Yeni tarayıcı testleri:** `nav.spec` (21 menü, 36 yönlendirme, ertelenen, ön izleme, profil), `tasks.spec` (havuz, çakışma/iki sekme, bağlı görev, toplu, şube kapsamı, rol), `product.spec` (Sade 16, İşlerim sayaç eşitliği, iki rezervasyon eylemi, davet, kurulum sihirbazı + EN doğrulama, kaparo, Dikkat, gün sonu, Masraflar), `advance.spec` (kısmi iade 200/50/150, ikinci iade reddi), `a11y-responsive.spec` (24 rota × axe + 1440/1024/768/390 yatay taşma), `isolation.spec` (demoda `/api` isteği yok).
 
-**Gerçek uygulama gerilemesi:** backend dosyası değişmedi (bkz. J); TypeScript, derleme, API testleri ve gerçek tarayıcı testleri yalnız `acarvo_test` ile koşuldu.
+**Gerçek uygulama gerilemesi:** backend dosyası değişmedi (bkz. J); TypeScript (4 çalışma alanı), üretim derlemesi, API testleri (38 dosya, 534 test) ve gerçek tarayıcı testleri (170 test: 134 geçti, 36 atlandı; başlangıçla aynı) yalnız `acarvo_test` ile koşuldu.
+
+**Bulunan ve düzeltilen gerçek hatalar (testler sayesinde):** (1) yenilemede oturumun (seçilen kullanıcı) geri dönmesi; (2) "kaydet + hemen yenile" durumunda yarım kalan IndexedDB yazımı veriyi kaybettirebiliyordu (senkron yedek kopya + açık bağlantı); (3) kurulum sihirbazında adım ve girdiler yenilemede kaybolabiliyordu; (4) iptal kuralı metni ve sihirbaz doğrulama iletileri çift dilli işaretlerle sızıyordu.
+
+**Testlerin saat duyarlılığı:** demo tohumu gerçek saate (bugün 10:00) göre kurulur; testler şube yerel saatine göre yazıldı ve geceyarısı çevresinde koşan tek bir uzun koşuda yük altında zaman aşımı gördü; kayıt yarışı düzeltildikten sonra tam koşu temiz geçti.
 
 ## I. 47 maddelik kabul matrisi
 
 Durum: **✔** tamam (testli) · **◐** kısmen · **○** yapılmadı. "Frontend demo tamam, gerçek backend bekliyor" ibaresi simüle edilen kurallar içindir.
 
-{{MATRIX}}
+Dosya yolları `apps/web/src/demo/` altındadır; birim testler `__tests__/`, tarayıcı testleri `apps/e2e/demo-tests/` altındadır.
+
+| # | Önceki durum | Yapılan | Ana dosyalar | Test | Sonuç | Sınır |
+|---|---|---|---|---|---|---|
+| **A1** | 36 bağlantı, 7 grup | 6 grup, 21 bağlantı; Operasyon rolü ≈12 bağlantı, Görevler ve İşlerim her zaman | core/modules.ts, nav.ts, ui/shell.tsx | nav.test (15), nav.spec | ✔ | — |
+| **A2** | 36 ayrı ekran | 36 eski adres: 19 aynı, 10 yönlendirme, 6 ertelenen, 1 kayıt ekranı; sorgu korunur | core/modules.ts (`LEGACY`), router.tsx | nav.test, nav.spec (36 + kayıt sorgusu) | ✔ | — |
+| **A3** | Profil yok | Sade 16 / Standart 20 / Gelişmiş 21 (yalnız görünürlük); gizli ekranlar kullanıcı menüsünde | core/modules.ts, pages/admin/SettingsExtras.tsx, ui/shell.tsx | nav.test, product.spec | ✔ | Standart'ın 20 olması bir karar (K.5) |
+| **A4** | — | Ertelenen 6 modül menüde yok; doğrudan adres "etkin değil" + hedef sürüm; ön izleme kapısı | ui/gate.tsx, router.tsx | nav.spec (6 adres + ön izleme) | ◐ | Aramada görünmemesi kodla sağlandı; ayrı test yok |
+| **A5** | "Yetkiniz yok" vardı | Yetkisiz adreste ForbiddenState, veri yok | ui/gate.tsx, router.tsx | nav.spec (Operasyon), contexts.spec | ✔ | — |
+| **A6** | Kısmen | Sekme/görünüm/filtre URL'de (`sekme`, `gorunum`, `rapor`, `kayit`); Geri filtreleri korur | ui/hooks (`useUrlState`) | scenarios.spec (4: filtre + Geri), persistence.spec | ◐ | Tüm ekranlar için tek test yok |
+| **A7** | Ayrı çizelgeler | Takvim ve Araç Müsaitliği aynı `DayAxis`/`HoldBars` bileşenleri; Kapasite V1.5 | ui/domain.tsx | scenarios.spec (3) | ◐ | Kapasite görünümü bu bileşenleri kullanmıyor |
+| **B1** | Komuta Merkezi (çok sekme) | İşlerim: Bana Düşenler + Uyarılar; V1.5 sekmeleri ön izlemede; tür etiketi | core/inbox.ts, pages/work/InboxPage.tsx | tasks.test (inbox), flows.spec, nav.spec | ✔ | — |
+| **B2** | — | Her satır kaynağına gider (görev, onay, uyarı) | pages/work/InboxPage.tsx | scenarios.spec (1) | ✔ | — |
+| **B3** | Ayrı sayılar | Ana Ekran sayacı ve İşlerim aynı `inboxOf` fonksiyonundan | core/inbox.ts, pages/home/DashboardPage.tsx | product.spec (Sahip + Operasyon) | ✔ | — |
+| **B4** | 6 tür | 6 resmî tür korundu; İşlerim yeni tür eklemiyor; hasar bloğu kaldırma ayrı iki aşamalı akış | core/types.ts, core/ops/fleet.ts | admin.test (tür listesi) | ◐ | UI'da "tam 6 seçenek" için ayrı e2e yok |
+| **B5** | — | Sayaç yetki ve şube kapsamına göre; finans bölümü yetkiye bağlı | core/inbox.ts, DashboardPage.tsx | flows.spec (Operasyon finans raporu görmez), tasks.test | ◐ | Yetkisiz rolde finans sayacı için ayrı e2e yok |
+| **C1** | Havuz yok | Havuz; şube + rol filtresi | core/ops/tasks.ts | tasks.test, tasks.spec (şube kapsamı) | ✔ | — |
+| **C2** | — | `claimTask` sürüm ile; CONFLICT/FORBIDDEN (409 uyumlu) | core/ops/tasks.ts | tasks.test, tasks.spec (iki sekme) | ✔ | ≈40 ms kayıt öncesi pencere; gerçek karar sunucuda |
+| **C3** | Yalnız araç | Araç, kiralama, rezervasyon, müşteri, bakım, hasar kayıtlarında bağlı görev + rozet/sayı | ui/linkedTasks.tsx, pages/shared/FleetDialogs.tsx | tasks.spec (araç) | ◐ | e2e yalnız araç; diğer 5 kayıt türü kodda |
+| **C4** | — | Görev tamamlamak bağlı kaydı kapatmaz | core/ops/tasks.ts | tasks.test | ✔ | — |
+| **C5** | Geçmiş yok | Atama/devir/erteleme/iptal/yeniden açma geçmişi ("A → B") | core/ops/tasks.ts, TasksPage.tsx | tasks.test | ✔ | — |
+| **C6** | — | 6 bildirim olayı: atama, havuza düşme, devir, tamamlama, yeniden açma, gecikme (uygulama içi) | core/ops/tasks.ts, ui/shell.tsx | tasks.test | ◐ | E‑posta/SMS yok; zil için dar e2e |
+| **C7** | — | Çoklu seçim; ata/tamamla; atlananlar nedenle raporlanır | core/ops/tasks.ts, TasksPage.tsx | tasks.test, tasks.spec | ✔ | — |
+| **C8** | — | Görevler her profilde, gizlenemez | core/modules.ts | nav.test, product.spec (Sade 16) | ✔ | — |
+| **D1** | Tek eylem | Bekleyen Kaydet + Kontrol Et ve Onayla; bekleyen araç tutmaz | pages/shared/BookingWorkspace.tsx, core/ops/rentals.ts | domain.test, product.spec, scenarios.spec (2) | ✔ | — |
+| **D2** | — | "Bu kayıt henüz belirli bir aracı ayırmaz" | BookingWorkspace.tsx | product.spec | ✔ | — |
+| **D3** | — | Hızlı müşteri ekleme + özet panel; uçtan uca rezervasyon → teslim | BookingWorkspace.tsx | scenarios.spec (2), product.spec | ◐ | Hızlı müşteri akışı yalnız açma/kapama testli |
+| **D4** | 7 adım vardı | Pasif düğme nedenini yazar | pages/rentals/Rental360Page.tsx | flows.spec | ✔ | Doğrulanmamış depozito uyarısı ayrıca test edilmedi |
+| **D5** | Ayrı ekran | Sözleşmeler Kiralamalar altında görünüm | pages/records/ContractsPage.tsx, pages/rentals/RentalsPage.tsx | nav.spec (yönlendirme) | ✔ | — |
+| **E1** | Tek aşama | Kaydedildi → Doğrulandı → Uygulandı; Mutabakat ayrı iz | core/ops/finance.ts, core/calc/finance.ts, shared/FinanceBits.tsx | stages.test, scenarios.spec (5), idempotency.spec | ✔ | Gerçek backend bekliyor |
+| **E2** | Sahte dört göz riski | Risk 0–3; Seviye 2 bağımsız onay; kendi kaydını doğrulama yok | core/risk.ts, core/ops/control.ts | stages.test, admin.test | ✔ | M.3(c) V1.5 adayı |
+| **E3** | Tam kayıp | Kaparo defteri: 200 → 50 bedel → 150 iade edilebilir; kısmi iade | core/ops/finance.ts, calc/policy.ts | advance.test, advance.spec | ✔ | — |
+| **E4** | Tek iade | Aynı kaparo iki kez iade edilemez (defter sınırı) | core/ops/control.ts | advance.test, advance.spec | ✔ | — |
+| **E5** | — | Para birimi başına satır; karışık toplam yok | pages/finance/*, calc/finance.ts | finance.test, product.spec | ✔ | — |
+| **E6** | Masrafta bağ yok | 4 bağ türü; kaynak (bakım/ceza) masrafı elle eklenmez/düzenlenmez | core/ops/control.ts, pages/finance/ExpensesPage.tsx | stages.test, product.spec | ✔ | — |
+| **E7** | — | Araç maliyeti: ayna masraf çift sayılmaz | core/calc/cost.ts | stages.test | ✔ | — |
+| **E8** | Basit kapanış | Para birimi açık; eşik üstü gerekçe; kritik fark yalnız yetkiliyle | core/ops/finance.ts, pages/finance/EndOfDay.tsx | admin.test, scenarios.spec (8), product.spec | ✔ | — |
+| **E9** | Gelir Kontrolü ayrı | Finans → Dikkat; eski adres yönlendirir | pages/finance/FinanceAttention.tsx | nav.spec, product.spec | ✔ | Uydurma kayıp tutarı yok |
+| **F1** | Geniş roller | 4 rol; Muhasebe araç/fiyat/ceza yok | core/permissions.ts, core/seed-base.ts | nav.test | ✔ | — |
+| **F2** | — | Davet ve şifre sıfırlama yalnız demo kaydı | core/ops/control.ts, pages/admin/UsersPage.tsx | admin.test, product.spec | ✔ | E‑posta/hesap yok |
+| **F3** | — | Rol ön ayarı sürümü; özelleştirilmiş rol ezilmez | core/ops/control.ts, pages/admin/RolesPage.tsx | admin.test | ✔ | — |
+| **G1** | Yok | 9 adımlı sihirbaz, geri/ileri, kalıcı girdi, hazırlık kontrolü | core/setup.ts, pages/admin/SetupWizardPage.tsx | admin.test, product.spec (+EN) | ✔ | Gerçek tenant/davet/DB yok |
+| **G2** | Gelir Kontrolü ekranında | Teknik değişmezler Ayarlar → Operasyonel hazırlık | pages/admin/SettingsExtras.tsx, core/readiness.ts | admin.test (hazırlık) | ✔ | — |
+| **G3** | Kurallar ekranı | Bildirim eşikleri Ayarlar'da; eşik değişince uyarı değişir | core/calc/alerts.ts, SettingsExtras.tsx | admin.test | ✔ | — |
+| **H1** | — | Arayüzde "Fiyat teklifi" yok | tüm sayfalar | kaynak taraması (grep) | ✔ | Otomatik test yok |
+| **H2** | — | Her menü ekranında tek sayfa rozeti | core/modules.ts, ui/gate.tsx | product.spec | ✔ | — |
+| **H3** | `L()` çalışma zamanı | TR+EN yeni ekranlarda; İngilizce taramada Türkçe metin yok | i18n.ts, tüm sayfalar | english.spec (24 rota + kayıt/diyalog) | ◐ | Anahtar tabanlı katalog ve "eksik anahtar derlemeyi bozar" **yok** |
+| **I1** | 301 test | Eski testler uyarlandı, yeniler eklendi | apps/e2e/demo-tests | tüm demo set | ✔ | Sayı değişimi H bölümünde açıklandı |
+| **I2** | axe vardı | Yeni rotalarda axe: ciddi/kritik ihlal yok | a11y-responsive.spec | a11y-responsive.spec | ✔ | — |
+| **I3** | Yok | Demo ↔ shared altın vektörler | __tests__/golden.test.ts | golden.test (37) | ✔ | 4 fark adlandırıldı (G) |
+| **I4** | Vardı | 24 rota × 1440/1024/768/390 yatay taşma yok | a11y-responsive.spec | a11y-responsive.spec | ◐ | Ekran görüntüsü incelemesi yapılmadı (Prompt 3) |
 
 ## J. Güvenlik kontrolleri
 
