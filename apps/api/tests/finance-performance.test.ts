@@ -59,7 +59,7 @@ beforeAll(async () => {
     [u1],
   )
   await q(`insert into finance_events (company_id, finance_id, entity_type, entity_id, kind, to_status, amount_minor, currency, actor_user_id) select company_id, finance_id, 'payment', id, 'payment_recorded', 'recorded', amount_minor, currency, created_by from finance_payments`)
-  await asOwner(null, 'analyze rental_finances, finance_charges, finance_payments, finance_deposits, finance_deposit_refunds, finance_events')
+  await asOwner(null, 'analyze rentals, rental_finances, finance_charges, finance_payments, finance_deposits, finance_deposit_refunds, finance_events')
   app = await makeApp()
   adnan = new Client(app)
   expect((await adnan.login(EMAILS.adnan)).statusCode).toBe(200)

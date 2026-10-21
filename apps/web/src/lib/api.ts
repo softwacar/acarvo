@@ -34,6 +34,8 @@ async function toError(res: Response) {
 
 /** JSON request to the API. Mutations carry the CSRF token; an expired token is renewed once. */
 export async function api<T>(path: string, init: { method?: 'GET' | 'POST' | 'PUT' | 'DELETE'; body?: unknown } = {}): Promise<T> {
+  // Demo mode (vite --mode demo) never talks to the real API: fail closed, before any request is built.
+  if (import.meta.env.MODE === 'demo') throw new ApiRequestError(0, 'DEMO_NO_API', 'Demo modunda gerçek API kullanılmaz.')
   const method = init.method ?? 'GET'
   const send = async (retry: boolean): Promise<Response> => {
     const headers: Record<string, string> = {}

@@ -1,0 +1,3047 @@
+{
+"Bu işlem": [
+"helpers.ts:31"
+],
+"${what} için yetkiniz yok (${perm}). Demo rolünü değiştirerek deneyebilirsiniz.": [
+"helpers.ts:32"
+],
+"Onaylı rezervasyon": [
+"metrics.ts:46"
+],
+"Sınıf rezervasyonu: araç atanmadı": [
+"metrics.ts:46"
+],
+"Hazır kiralama: teslim masası": [
+"metrics.ts:47"
+],
+"İade bekleniyor": [
+"metrics.ts:53"
+],
+"ABD Doları": [
+"money.ts:15"
+],
+"İngiliz Sterlini": [
+"money.ts:17"
+],
+"İsviçre Frangı": [
+"money.ts:18"
+],
+"Türk Lirası": [
+"money.ts:19"
+],
+"Sırp Dinarı": [
+"money.ts:20"
+],
+"Makedon Dinarı": [
+"money.ts:21"
+],
+"Çek Kronu": [
+"money.ts:24"
+],
+"Kuveyt Dinarı": [
+"money.ts:27"
+],
+"Görüntüle": [
+"permissions.ts:13"
+],
+"Yönet": [
+"permissions.ts:14"
+],
+"Filo Asistanı": [
+"permissions.ts:19"
+],
+"Oluştur / düzenle / iptal": [
+"permissions.ts:20"
+],
+"Hazırla / uzat / değiştir": [
+"permissions.ts:21"
+],
+"Teslim ve iade": [
+"permissions.ts:21"
+],
+"Görevler": [
+"permissions.ts:23",
+"search.ts:31"
+],
+"Oluştur / ata": [
+"permissions.ts:23"
+],
+"Araçlar": [
+"permissions.ts:24",
+"search.ts:23"
+],
+"Ekle / düzenle / hazırlık": [
+"permissions.ts:24"
+],
+"Bakım & Servis": [
+"permissions.ts:25"
+],
+"Hasar Kayıtları": [
+"permissions.ts:27"
+],
+"Engel kaldır": [
+"permissions.ts:27"
+],
+"Ceza Modülü": [
+"permissions.ts:28"
+],
+"Müşteriler": [
+"permissions.ts:29",
+"search.ts:24"
+],
+"Müşteri & Ticari": [
+"permissions.ts:29",
+"permissions.ts:30",
+"permissions.ts:31",
+"permissions.ts:32",
+"permissions.ts:33",
+"permissions.ts:34"
+],
+"Araç Tedarikçileri": [
+"permissions.ts:33"
+],
+"Fiyatlandırma": [
+"permissions.ts:34"
+],
+"Gelir Kontrolü": [
+"permissions.ts:37"
+],
+"Riskler ve İstisnalar": [
+"permissions.ts:38"
+],
+"İstisna incele": [
+"permissions.ts:38"
+],
+"Fırsatlar": [
+"permissions.ts:41"
+],
+"Finans raporları": [
+"permissions.ts:42"
+],
+"Dışa aktar": [
+"permissions.ts:42"
+],
+"Şube Kasaları": [
+"permissions.ts:45"
+],
+"Oturum aç / hareket": [
+"permissions.ts:45"
+],
+"Sözleşmeler": [
+"permissions.ts:46"
+],
+"Kayıtlar": [
+"permissions.ts:46",
+"permissions.ts:47",
+"permissions.ts:48"
+],
+"İşlem Geçmişi": [
+"permissions.ts:48"
+],
+"Şubeler": [
+"permissions.ts:49"
+],
+"Yönetim": [
+"permissions.ts:49",
+"permissions.ts:50",
+"permissions.ts:51",
+"permissions.ts:52"
+],
+"Kullanıcılar": [
+"permissions.ts:50"
+],
+"Roller ve Yetkiler": [
+"permissions.ts:51"
+],
+"Döviz kurları": [
+"permissions.ts:52"
+],
+"Şirket sahibi: tüm ekranlar ve tüm işlemler.": [
+"permissions.ts:61"
+],
+"Yönetici": [
+"permissions.ts:64"
+],
+"Operasyon ve finans yönetimi. Kullanıcı, rol, ayar ve döviz kuru yönetimi yok.": [
+"permissions.ts:65"
+],
+"Finans, masraf, kasa ve finansal raporlar. Operasyon kayıtlarını yönetmez.": [
+"permissions.ts:72"
+],
+"Resepsiyon ve şube operasyonu. Finans raporu, onay kararı ve ayar yok.": [
+"permissions.ts:79"
+],
+"Özel rol örneği: yalnız filo, bakım ve hasar.": [
+"permissions.ts:86"
+],
+"Senaryo için SJJ şubesinde uygun araç bulunamadı.": [
+"scenarios.ts:30"
+],
+"Demo senaryosu: çoklu tahsilat (500 EUR)": [
+"scenarios.ts:52"
+],
+"${r.no}: 500 EUR bakiye, USD kuru yok.": [
+"scenarios.ts:109"
+],
+"Bakım": [
+"search.ts:30",
+"availability.ts:26"
+],
+"Minibüs": [
+"seed-base.ts:13"
+],
+"Sarajevo Havalimanı": [
+"seed-base.ts:17"
+],
+"Dubrovnik Havalimanı": [
+"seed-base.ts:19"
+],
+"Şirket sahibi": [
+"seed-base.ts:23"
+],
+"Operasyon müdürü": [
+"seed-base.ts:24"
+],
+"Bölge yöneticisi": [
+"seed-base.ts:25"
+],
+"Ayrıldı": [
+"seed-base.ts:31"
+],
+"Yılbaşı ${year}/${year + 1}": [
+"seed-base.ts:48"
+],
+"Kurumsal Altın": [
+"seed-base.ts:53"
+],
+"Kurumsal Gümüş": [
+"seed-base.ts:54"
+],
+"Çocuk koltuğu": [
+"seed-base.ts:59"
+],
+"Kış lastiği / zincir takımı": [
+"seed-base.ts:60"
+],
+"Araç hasarı (muafiyet hariç). Cam, lastik ve alt takım hariçtir.": [
+"seed-base.ts:65"
+],
+"Araç hasarı, cam ve lastik; muafiyet düşük. Depozito indirimi uygulanır.": [
+"seed-base.ts:66"
+],
+"Örnek KDV %17": [
+"seed-base.ts:70"
+],
+"Demo oranı: gerçek vergi uyumu için profesyonel doğrulama gerekir.": [
+"seed-base.ts:70",
+"seed-base.ts:71"
+],
+"Örnek KDV %25": [
+"seed-base.ts:71"
+],
+"1. Taraflar ve araç": [
+"seed-base.ts:77"
+],
+"Bu belge, kiracı ile kiralayan şirket arasındaki araç kiralama koşullarının demo (örnek) özetidir. Hukuki metin değildir.": [
+"seed-base.ts:77"
+],
+"2. Kullanım ve sürücüler": [
+"seed-base.ts:78"
+],
+"Araç yalnız sözleşmede adı geçen sürücüler tarafından kullanılabilir. Ek sürücü ücreti sözleşme fiyatına yansıtılır.": [
+"seed-base.ts:78"
+],
+"3. Sigorta ve muafiyet": [
+"seed-base.ts:79"
+],
+"Seçilen sigorta paketinin kapsamı ve muafiyeti kiralama anındaki sürüme göre sabitlenir.": [
+"seed-base.ts:79"
+],
+"Depozito gelir değildir; iade koşulları teslim ve iade kayıtlarına göre değerlendirilir.": [
+"seed-base.ts:80"
+],
+"5. Teslim ve iade": [
+"seed-base.ts:81"
+],
+"Araç teslim edildiği yakıt ve durumla iade edilir. Farklar demo ücret politikasına göre hesaplanır.": [
+"seed-base.ts:81"
+],
+"Kiralama Sözleşmesi (örnek şablon)": [
+"seed-base.ts:92"
+],
+"Adriatic Demo Rent d.o.o. (kurgusal şirket)": [
+"seed-base.ts:106"
+],
+"Geciken iade uyarısı": [
+"seed-base.ts:126"
+],
+"Bugünkü teslim hatırlatması": [
+"seed-base.ts:127"
+],
+"Belge süresi yaklaşıyor": [
+"seed-base.ts:128"
+],
+"Periyodik bakım yaklaşıyor": [
+"seed-base.ts:129"
+],
+"Kasa farkı": [
+"seed-base.ts:131"
+],
+"İşletmenin elle belirlediği kur (örnek).": [
+"seed-base.ts:141"
+],
+"İade için aynı işletme kuru (örnek).": [
+"seed-base.ts:142"
+],
+"Boğaz Filo (Demo)": [
+"seed-base.ts:151"
+],
+"Eski Kiracı (Demo)": [
+"seed-base.ts:152"
+],
+"Test Kullanıcı": [
+"seed-base.ts:152"
+],
+"İlk fiyat tarifesi (demo)": [
+"seed-base.ts:179"
+],
+"Express Oto Yıkama": [
+"seed-base.ts:198",
+"seed.ts:823",
+"seed.ts:829"
+],
+"Adria Çekici": [
+"seed-base.ts:199",
+"seed.ts:824"
+],
+"Hans Müller-Demo": [
+"seed-data.ts:21"
+],
+"Mehmet Örnek": [
+"seed-data.ts:28"
+],
+"${name2} (örnek belge, gerçek kişi verisi değil)": [
+"seed-data.ts:77"
+],
+"Sürücü belgesi": [
+"seed-data.ts:82",
+"seed-data.ts:87",
+"policy.ts:6"
+],
+"Kimlik kartı": [
+"seed-data.ts:86",
+"policy.ts:6"
+],
+"Sadık müşteri. Otomatik vitesi tercih ediyor.": [
+"seed-data.ts:91"
+],
+"Hafta sonu için rezervasyon sordu; fiyat bilgisi verildi (telefonla).": [
+"seed-data.ts:92"
+],
+"Önceki kiralamada geç iade": [
+"seed-data.ts:94"
+],
+"Son iki kiralamada iade 5 saatten fazla gecikti: teslimde iletişim bilgileri tekrar doğrulanır.": [
+"seed-data.ts:94"
+],
+"Sürücü belgesi yenileme sürecinde; yeni belge gelmeden kiralama yapılamaz.": [
+"seed-data.ts:96"
+],
+"Teslimde alındı": [
+"seed.ts:122"
+],
+"Müşteri araç arızası sonrası aracı yetkili serviste bıraktı; normal iade yapılamadı.": [
+"seed.ts:220"
+],
+"Yıkama bekliyor": [
+"seed.ts:247"
+],
+"Gümüş": [
+"seed.ts:271",
+"seed.ts:282"
+],
+"Kırmızı": [
+"seed.ts:272",
+"seed.ts:285"
+],
+"Sarı": [
+"seed.ts:279"
+],
+"Şube anahtar dolabı": [
+"seed.ts:322",
+"commercial.ts:456",
+"fleet.ts:63"
+],
+"Filoya giriş": [
+"seed.ts:327",
+"fleet.ts:67"
+],
+"Tedarikçi": [
+"seed.ts:365",
+"commercial.ts:373",
+"commercial.ts:437",
+"commercial.ts:471"
+],
+"${kind} · ${v.plate} (örnek belge)": [
+"seed.ts:377"
+],
+"SJJ · EUR kasası": [
+"seed.ts:403"
+],
+"SJJ · BAM kasası": [
+"seed.ts:404"
+],
+"SJJ · USD kasası": [
+"seed.ts:405"
+],
+"MST · BAM kasası": [
+"seed.ts:406"
+],
+"MST · EUR kasası": [
+"seed.ts:407"
+],
+"DBV · EUR kasası": [
+"seed.ts:408"
+],
+"Vardiya sorunsuz kapandı": [
+"seed.ts:412"
+],
+"Para üstü hatası (2,00 EUR eksik)": [
+"seed.ts:413"
+],
+"Fark yöneticiye bildirildi": [
+"seed.ts:413"
+],
+"30 gün vadeli, günlük bedel": [
+"seed.ts:436"
+],
+"Aylık mutabakat": [
+"seed.ts:437"
+],
+"Haftalık mutabakat": [
+"seed.ts:438"
+],
+"Yaz sezonu talep artışı": [
+"seed.ts:444"
+],
+"Teslim alındı, hasar yok": [
+"seed.ts:448"
+],
+"İade edildi": [
+"seed.ts:450"
+],
+"Kurumsal etkinlik dönemi": [
+"seed.ts:457"
+],
+"Düğün transferi talebi (teklif bekleniyor)": [
+"seed.ts:464"
+],
+"Premium sınıf kapasitesi": [
+"seed.ts:470"
+],
+"Teslim alındı, hasarsız": [
+"seed.ts:475"
+],
+"Müşteri uçuşunu iptal etti": [
+"seed.ts:514"
+],
+"Fiyat uygun bulunmadı": [
+"seed.ts:517"
+],
+"SUV müsait olursa arayın": [
+"seed.ts:525"
+],
+"Premium sınıf bekliyor": [
+"seed.ts:526"
+],
+"60.000 km periyodik bakım": [
+"seed.ts:535"
+],
+"Mevsimlik lastik değişimi": [
+"seed.ts:539"
+],
+"Yaz lastiği takımı": [
+"seed.ts:548"
+],
+"20.000 km bakımı": [
+"seed.ts:554"
+],
+"Ön tampon ve far": [
+"seed.ts:566"
+],
+"Park halinde çarpma: ön tampon kırık, sol far çatlak.": [
+"seed.ts:566"
+],
+"Sağ arka kapı": [
+"seed.ts:572"
+],
+"İade kontrolünde sağ arka kapıda çizik ve göçük bulundu.": [
+"seed.ts:572"
+],
+"Ön tampon": [
+"seed.ts:580"
+],
+"Park sensörü çevresinde küçük çizik.": [
+"seed.ts:580"
+],
+"Kapatıldı": [
+"seed.ts:584",
+"fleet.ts:232",
+"fleet.ts:328",
+"fleet.ts:413"
+],
+"Şirket üstlendi; kapatıldı.": [
+"seed.ts:584"
+],
+"Müşteri yolda akü arızası bildirdi": [
+"seed.ts:593"
+],
+"Kiracı otobanda aracın çalışmadığını bildirdi; çekici yönlendirildi.": [
+"seed.ts:593"
+],
+"Müşteri telefon notu": [
+"seed.ts:594"
+],
+"Servis ile görüşüldü": [
+"seed.ts:596"
+],
+"Park halindeki araç hasar gördü": [
+"seed.ts:599"
+],
+"Havalimanı otoparkında bir araç ön tampondan hasar aldı.": [
+"seed.ts:599"
+],
+"Temizlik şikayeti": [
+"seed.ts:602"
+],
+"Müşteri aracın iç temizliğinden memnun kalmadı.": [
+"seed.ts:602"
+],
+"Müşteriye özür ve bir sonraki kiralamada hizmet indirimi önerildi.": [
+"seed.ts:604"
+],
+"Fren uyarı lambası yandı": [
+"seed.ts:607"
+],
+"Teslim öncesi kontrolde fren uyarı lambası yandı; araç servise yönlendirildi.": [
+"seed.ts:607"
+],
+"Fren balataları değiştirildi, test sürüşü tamam.": [
+"seed.ts:609"
+],
+"Servis faturası kontrol edildi.": [
+"seed.ts:611"
+],
+"Anahtar kaybı şüphesi": [
+"seed.ts:614"
+],
+"Şube anahtar dolabında bir yedek anahtar eksik görünüyor.": [
+"seed.ts:614"
+],
+"Hız ihlali": [
+"seed.ts:619",
+"seed.ts:634"
+],
+"Kırmızı ışık": [
+"seed.ts:631"
+],
+"Dubrovnik Polis Müdürlüğü (kurgusal)": [
+"seed.ts:631",
+"seed.ts:634"
+],
+"Şerit ihlali": [
+"seed.ts:637"
+],
+"Gecikmiş iade için müşteriyi arayın": [
+"seed.ts:645"
+],
+"K-… kiralaması planlanan iadeyi geçti. Müşteriyle iletişime geçip yeni iade zamanını not edin.": [
+"seed.ts:645"
+],
+"Duster aracı yıkatın": [
+"seed.ts:646"
+],
+"Bugün 15:30 teslim öncesi araç temizliği.": [
+"seed.ts:646"
+],
+"Mostar şubesi: sınıf rezervasyonuna araç atayın": [
+"seed.ts:647"
+],
+"Bugün 18:00 teslim edilecek Ekonomi sınıfı rezervasyona belirli araç atanmalı.": [
+"seed.ts:647"
+],
+"Sağ arka kapı onarımı için servis teklifi alın": [
+"seed.ts:648"
+],
+"Hasar dosyası bağlı onarım için iki servisten teklif alın.": [
+"seed.ts:648"
+],
+"Havalimanı otopark kartlarını yenileyin": [
+"seed.ts:650"
+],
+"Yıllık otopark erişim kartı yenileme.": [
+"seed.ts:650"
+],
+"Araç sigorta poliçelerini kontrol edin": [
+"seed.ts:651"
+],
+"Süresi yaklaşan poliçelerin listesini çıkarıp yenileme teklifi isteyin.": [
+"seed.ts:651"
+],
+"DBV: Corolla sigorta belgesi süresi doldu": [
+"seed.ts:655"
+],
+"Reservasyon +2 gün: poliçe yenilenmeden teslim yapılamaz.": [
+"seed.ts:655"
+],
+"Sportage hasar engeli ve yarınki rezervasyon": [
+"seed.ts:656"
+],
+"Araç hasar engelinde; yarınki rezervasyon için alternatif araç bulun.": [
+"seed.ts:656"
+],
+"Haftalık kasa sayımı": [
+"seed.ts:657"
+],
+"Tüm şubelerde nakit kasası sayımı.": [
+"seed.ts:657"
+],
+"Müşteri sözleşme kopyalarını arşivleyin": [
+"seed.ts:658"
+],
+"Geçen haftanın kapanan kiralamaları.": [
+"seed.ts:658"
+],
+"Yeni sezon fiyat listesi toplantısı": [
+"seed.ts:663"
+],
+"Yaz sezonu tarifelerini gözden geçirin.": [
+"seed.ts:663"
+],
+"Lastik değişimi planı (MST)": [
+"seed.ts:664"
+],
+"Vito için lastik değişimi yarın.": [
+"seed.ts:664"
+],
+"Geçen haftaki şikayet takibi": [
+"seed.ts:665"
+],
+"Temizlik şikayeti müşterisini arayın.": [
+"seed.ts:665"
+],
+"Dubrovnik: transfer aracı yakıt kontrolü": [
+"seed.ts:666"
+],
+"Gelen araç yakıt seviyesini kayda geçirin.": [
+"seed.ts:666"
+],
+"MST şube talebi (yoğunluk)": [
+"seed.ts:671"
+],
+"Resepsiyon Müdürü": [
+"seed.ts:681"
+],
+"Satış": [
+"seed.ts:683"
+],
+"Hesap Yöneticisi": [
+"seed.ts:684"
+],
+"Aile tatili, 5 kişi": [
+"seed.ts:706"
+],
+"Düğün konukları": [
+"seed.ts:707"
+],
+"Eda Örnek-Talep": [
+"seed.ts:712"
+],
+"İlk teklif": [
+"seed.ts:719"
+],
+"Tam koruma ile revize teklif (v2)": [
+"seed.ts:722"
+],
+"Grup indirimi için onay gerekebilir": [
+"seed.ts:732"
+],
+"Sadık müşteri, geçen yıl 6 kiralama: %18 indirim talep ediliyor.": [
+"seed.ts:764"
+],
+"Kurumsal bağlantılı müşteri; depozito yarıya indirilsin.": [
+"seed.ts:768"
+],
+"Ödeme yanlış kiralamaya girilmiş; ters kayıt istiyorum.": [
+"seed.ts:771"
+],
+"Una Tours kredi limiti dolmak üzere; etkinlik kiralaması için ek pay.": [
+"seed.ts:777"
+],
+"Yıllık anlaşma yenileme sürecinde.": [
+"seed.ts:780"
+],
+"Sözleşmedeki özel kampanya oranı uygulanmamış; düzeltme.": [
+"seed.ts:786"
+],
+"Kampanya bu sözleşme dönemine uygulanmıyor.": [
+"seed.ts:789"
+],
+"Uzun süreli rezervasyon için %20 indirim talebi.": [
+"seed.ts:792"
+],
+"İade 24 saatten fazla gecikti": [
+"seed.ts:798"
+],
+"Kiralama iadesi 24 saatten fazla gecikti: kayıp/çalıntı değerlendirmesi için yetkiliye bildirin.": [
+"seed.ts:798"
+],
+"Rezervasyon 24 saattir onaysız": [
+"seed.ts:799"
+],
+"Pending rezervasyon 24 saati geçti: onaylayın veya iptal edin.": [
+"seed.ts:799"
+],
+"Periyodik bakım 500 km aşıldı": [
+"seed.ts:800"
+],
+"Aracın periyodik bakımı gecikti.": [
+"seed.ts:800"
+],
+"Araç belgesi 15 günden az": [
+"seed.ts:801"
+],
+"Araç belgesinin süresi dolmak üzere.": [
+"seed.ts:801"
+],
+"Büyük açık bakiye (taslak)": [
+"seed.ts:802"
+],
+"Yüksek açık bakiye.": [
+"seed.ts:802"
+],
+"Eski kasa farkı kuralı": [
+"seed.ts:803"
+],
+"Kasa farkı.": [
+"seed.ts:803"
+],
+"Servis sonrası iadesiz kapanan kiralama: depozito çözümü incelensin": [
+"seed.ts:808"
+],
+"Hasar engeli altındaki araç için yarınki rezervasyon alternatifi": [
+"seed.ts:809"
+],
+"Süresi dolmuş sigorta ile planlı kiralama": [
+"seed.ts:810"
+],
+"Eski gecikme istisnası (örnek)": [
+"seed.ts:812"
+],
+"Müşteri iletişimi tamamlandı; ek işlem yok.": [
+"seed.ts:814"
+],
+"Yakıt": [
+"seed.ts:822",
+"seed.ts:828",
+"control.ts:225",
+"rentals.ts:583"
+],
+"Şube araçları yakıt (örnek)": [
+"seed.ts:822"
+],
+"Haftalık yıkama paketi": [
+"seed.ts:823"
+],
+"Yol yardım / çekici": [
+"seed.ts:824",
+"control.ts:225"
+],
+"Müşteri aracı çekimi": [
+"seed.ts:824"
+],
+"Kira ve işletme": [
+"seed.ts:825",
+"control.ts:225"
+],
+"Havalimanı İşletme (Demo)": [
+"seed.ts:825"
+],
+"Aylık ofis ve otopark kirası": [
+"seed.ts:825"
+],
+"Demo Sigorta A.Ş.": [
+"seed.ts:826"
+],
+"Filo poliçesi taksiti": [
+"seed.ts:826"
+],
+"Diğer": [
+"seed.ts:827",
+"control.ts:225"
+],
+"Kırtasiye Demo": [
+"seed.ts:827"
+],
+"Kasa sayıldı; USD kasasında 20 USD bozuk para notu.": [
+"seed.ts:832"
+],
+"Yedek para girişi (örnek)": [
+"seed.ts:834"
+],
+"${d} gün": [
+"time.ts:104"
+],
+"${cust(r.customerId)} · planlanan iade geçti (${h} saat). Araç hâlâ müşteride.": [
+"alerts.ts:43"
+],
+"araç hazır değil (${ready.items.filter((i) => !i.ok && i.severity === 'blocker').map((i) => i.label).join(', ')})": [
+"alerts.ts:55"
+],
+"${cu.name}: ${DOC_LABEL[chk.kind] ?? chk.kind} ${chk.state === 'missing' ? 'eksik' : 'geçersiz'}": [
+"alerts.ts:60"
+],
+"sözleşme imzasız": [
+"alerts.ts:63"
+],
+"depozito alınmadı": [
+"alerts.ts:64"
+],
+"${r.no} · teslim hazırlığı eksik (${v.plate})": [
+"alerts.ts:65"
+],
+"${r.no} · araç atanmadı": [
+"alerts.ts:71"
+],
+"${cust(r.customerId)} · yalnız sınıf rezervasyonu (${d.classes.find((c) => c.id === r.classId)?.name}); teslimden önce belirli araç atanmalı.": [
+"alerts.ts:71"
+],
+"${r.no} · araç çakışması (${v.plate})": [
+"alerts.ts:77"
+],
+"${cust(r.customerId)} · ${holds.map((h) => h.label).join(', ')} ile çakışıyor. Alternatif araç atayın.": [
+"alerts.ts:77"
+],
+"${v.plate} · ${DOC_LABEL[doc.kind] ?? doc.kind} süresi doldu": [
+"alerts.ts:88"
+],
+"${-left} gün önce doldu (${doc.validUntil}). Araç teslim hazırlığında engel sayılır.": [
+"alerts.ts:88"
+],
+"${v.plate} · ${DOC_LABEL[doc.kind] ?? doc.kind} ${left} gün içinde bitiyor": [
+"alerts.ts:89"
+],
+"Geçerlilik: ${doc.validUntil}": [
+"alerts.ts:89"
+],
+"${v.plate} · periyodik bakım gecikti": [
+"alerts.ts:94"
+],
+"${over.toLocaleString('tr')} km gecikmiş. Bakım planlayın.": [
+"alerts.ts:94"
+],
+"${v.plate} · periyodik bakım yaklaşıyor": [
+"alerts.ts:95"
+],
+"${(-over).toLocaleString('tr')} km kaldı.": [
+"alerts.ts:95"
+],
+"${m.no} · bakım planlanan bitişi geçti (${v.plate})": [
+"alerts.ts:102"
+],
+"Araç serviste uygunluk dışı kalmaya devam ediyor.": [
+"alerts.ts:102"
+],
+"${m.no} · planlı bakım başlamadı (${v.plate})": [
+"alerts.ts:103"
+],
+"Planlanan başlangıç geçti; servise alın veya iptal edin.": [
+"alerts.ts:103"
+],
+"${dm.no} · araç hasar engelinde (${v?.plate})": [
+"alerts.ts:110"
+],
+"${dm.description.slice(0, 90)} Engeli kaldırmak ikinci bir yetkili ister.": [
+"alerts.ts:110"
+],
+"Açık yüksek önemli olay. Olayı çözmek hasar/ceza kaydını otomatik kapatmaz.": [
+"alerts.ts:113"
+],
+"${a.no} · ${a.status === 'requested' ? 'karar bekliyor' : 'onaylandı, uygulanmadı'}": [
+"alerts.ts:117"
+],
+"${t.no} · görev gecikti: ${t.title}": [
+"alerts.ts:119"
+],
+"Son tarih geçti. Görevi tamamlamak bağlı kaydı değiştirmez.": [
+"alerts.ts:119"
+],
+"Ödeme planı vadesi geçti · ${p.payerName}": [
+"alerts.ts:121"
+],
+"${(p.amount.minor / 100).toFixed(2)} ${p.amount.cur} beklenen; plan satırı tahsilat sayılmaz.": [
+"alerts.ts:121"
+],
+"${f.no} · ceza vadesi yaklaşıyor (${f.authorityRef})": [
+"alerts.ts:122"
+],
+"Yasal vade: ${f.dueDate}. Otoriteye ödeme ve müşteri tahsilatı ayrı işlemlerdir.": [
+"alerts.ts:122"
+],
+"${dr.name} · son vardiyada kasa farkı": [
+"alerts.ts:125"
+],
+"${r.no} · açık bakiye (${(f.outstandingMinor / 100).toFixed(2)} ${f.cur})": [
+"alerts.ts:135"
+],
+"${cust(r.customerId)} · iade alındı, finans kapanışı bekliyor.": [
+"alerts.ts:135"
+],
+"${e.no} · dış araç teslim alınmadı": [
+"alerts.ts:140"
+],
+"Anlaşma penceresi başlıyor; araç Received + Ready olmadan teslim edilemez.": [
+"alerts.ts:140"
+],
+"Dış araç anlaşması": [
+"availability.ts:29"
+],
+"Hizmet dışı": [
+"availability.ts:30",
+"availability.ts:40"
+],
+"Filodan çıkarıldı": [
+"availability.ts:40"
+],
+"Araç hizmet dışı işaretli": [
+"availability.ts:40"
+],
+"Araç müşteride": [
+"availability.ts:49"
+],
+"Teslime hazırlanıyor": [
+"availability.ts:49"
+],
+"Onaylı, araç atanmış": [
+"availability.ts:53"
+],
+"Bakım ${m.no}": [
+"availability.ts:60"
+],
+"Planlı bakım": [
+"availability.ts:60"
+],
+"Araç hasar nedeniyle kullanılamaz": [
+"availability.ts:64"
+],
+"Planlı": [
+"availability.ts:68"
+],
+"Dış araç anlaşma penceresi dışında": [
+"availability.ts:73"
+],
+"Bu dönem için onaylı tedarik anlaşması yok": [
+"availability.ts:73"
+],
+"Temizlik / hazırlık": [
+"availability.ts:159"
+],
+"Araç temiz ve hazırlandı": [
+"availability.ts:159"
+],
+"Temizlik ve hazırlık kontrolü yapılmadı": [
+"availability.ts:159"
+],
+"Yakıt seviyesi": [
+"availability.ts:160"
+],
+"Yakıt yeterli": [
+"availability.ts:160"
+],
+"Yakıt yarıdan az: teslimden önce ikmal edin": [
+"availability.ts:160"
+],
+"Açık hasar engeli": [
+"availability.ts:162"
+],
+"${dmg.no} nedeniyle araç kullanılamaz": [
+"availability.ts:162"
+],
+"Engel yok": [
+"availability.ts:162"
+],
+"Serviste değil": [
+"availability.ts:164"
+],
+"Araç belgeleri (ruhsat, sigorta, muayene)": [
+"availability.ts:167"
+],
+"Süresi dolmuş: ${expired.map((d) => d.kind).join(', ')}": [
+"availability.ts:167"
+],
+"Belgeler geçerli": [
+"availability.ts:167"
+],
+"Periyodik bakım": [
+"availability.ts:170"
+],
+"${(kmSince - v.service.intervalKm).toLocaleString('tr')} km gecikmiş": [
+"availability.ts:170"
+],
+"Diş derinliği ${v.tire.treadMm} mm": [
+"availability.ts:174"
+],
+"Sezona uygun lastik değil": [
+"availability.ts:174"
+],
+"Anahtar kaydı yok": [
+"availability.ts:175"
+],
+"Dış araç teslim alındı mı?": [
+"availability.ts:178"
+],
+"Tedarikçiden teslim alındı": [
+"availability.ts:178"
+],
+"Anlaşma onaylı ama araç fiziksel olarak teslim alınmadı": [
+"availability.ts:178"
+],
+"Geçerli anlaşma penceresi yok": [
+"availability.ts:178"
+],
+"${opts.tender}/${opts.obligation} için aynı kapsamda birden fazla geçerli kur var. Ayarlar → Döviz Kurları'nda düzeltin.": [
+"fx.ts:33"
+],
+"${opts.tender} → ${opts.obligation} için işletme kuru tanımlı değil (Kur Bekleniyor). Ayarlar → Döviz Kurları'ndan tanımlayın.": [
+"fx.ts:37"
+],
+"Sigorta poliçesi": [
+"policy.ts:6"
+],
+"Sözleşme": [
+"policy.ts:6",
+"rentals.ts:389"
+],
+"Sürücü yaşı ${age}; en az ${p.minAge} olmalı.": [
+"policy.ts:51"
+],
+"Ehliyet ${licenseYears} yıllık; en az ${p.minLicenseYears} yıl gerekli.": [
+"policy.ts:52"
+],
+"Sürücü belgesi ${c.license.validUntil} tarihinde bitiyor; kiralama süresini kapsamıyor.": [
+"policy.ts:53"
+],
+"${DOC_LABEL[x.kind] ?? x.kind}: ${x.state === 'missing' ? 'eksik' : 'süresi dolmuş veya kiralama bitmeden dolacak'}.": [
+"policy.ts:56"
+],
+"Bu sınıf için ${cur} depozito satırı tanımlı değil (Ayarlar → Depozito).": [
+"policy.ts:69"
+],
+"İade zamanı teslim zamanından sonra olmalı.": [
+"pricing.ts:49",
+"rentals.ts:90"
+],
+"${cls?.name ?? 'Sınıf'} için ${cur} fiyat satırı tanımlı değil. Fiyatlandırma'da ${cur} satırı ekleyin (fiyatlarda kur dönüşümü yapılmaz).": [
+"pricing.ts:59"
+],
+"${cls?.name ?? 'Sınıf'} · günlük baz tarife${corpRate ? ' (kurumsal anlaşma)' : ''}": [
+"pricing.ts:61"
+],
+"Sezon farkı · ${[...seasonNames].join(', ')}": [
+"pricing.ts:76"
+],
+"Süre kademesi (${tier.fromDays}+ gün) %${tier.discountPct}": [
+"pricing.ts:80"
+],
+"Kurumsal anlaşma · ${agreement!.name} %${agreement!.discountPct}": [
+"pricing.ts:84"
+],
+"Onaylı indirim %${input.approvedDiscountPct} (Onay Merkezi)": [
+"pricing.ts:89"
+],
+"\"${def.name}\" için ${cur} fiyat satırı yok.": [
+"pricing.ts:98"
+],
+" · günlük": [
+"pricing.ts:102"
+],
+"Sigorta paketi bulunamadı.": [
+"pricing.ts:107"
+],
+"\"${pkg.name}\" için ${cur} günlük fiyat satırı yok (sigorta fiyatı kur ile hesaplanmaz).": [
+"pricing.ts:108"
+],
+"${pkg.name} (${pkg.code}) · günlük": [
+"pricing.ts:109"
+],
+"Ek sürücü ücreti için ${cur} satırı yok.": [
+"pricing.ts:114"
+],
+"Ek sürücü · günlük": [
+"pricing.ts:115"
+],
+"Genç sürücü ücreti için ${cur} satırı yok.": [
+"pricing.ts:119"
+],
+"Genç sürücü ücreti": [
+"pricing.ts:120"
+],
+"Tek yön ücreti için ${cur} satırı yok.": [
+"pricing.ts:124"
+],
+"Farklı şubede iade (tek yön) ücreti": [
+"pricing.ts:125"
+],
+"Aynı telefon": [
+"commercial.ts:32"
+],
+"Aynı e-posta": [
+"commercial.ts:33"
+],
+"Aynı ad ve doğum tarihi": [
+"commercial.ts:34"
+],
+"Müşteri kaydı": [
+"commercial.ts:40"
+],
+"Ad soyad girin": [
+"commercial.ts:42"
+],
+"Geçerli bir telefon girin": [
+"commercial.ts:43"
+],
+"Geçerli bir e-posta girin": [
+"commercial.ts:44"
+],
+"Doğum tarihini girin": [
+"commercial.ts:45"
+],
+"Formda eksik veya geçersiz alanlar var.": [
+"commercial.ts:46",
+"control.ts:234",
+"fleet.ts:43"
+],
+"Benzer kayıt var: ${dups.map((x) => ": [
+"commercial.ts:48"
+],
+").join(', ')}. Yine de oluşturmak için \"mükerrer uyarısını gördüm\" işaretleyin.": [
+"commercial.ts:48"
+],
+"Müşteri düzenleme": [
+"commercial.ts:76"
+],
+"Müşteri bulunamadı.": [
+"commercial.ts:78",
+"commercial.ts:86",
+"commercial.ts:94",
+"commercial.ts:111",
+"commercial.ts:119",
+"commercial.ts:126",
+"commercial.ts:136",
+"commercial.ts:166"
+],
+"${c!.no} güncellendi": [
+"commercial.ts:80"
+],
+"Not yazın.": [
+"commercial.ts:87"
+],
+"Not zorunlu": [
+"commercial.ts:87",
+"fleet.ts:324"
+],
+"İletişim kaydı": [
+"commercial.ts:92"
+],
+"İletişim özetini yazın.": [
+"commercial.ts:95"
+],
+"Özet zorunlu": [
+"commercial.ts:95"
+],
+"${c!.no} iletişim kaydı (elle)": [
+"commercial.ts:98"
+],
+"Kayıt bulunamadı.": [
+"commercial.ts:103",
+"commercial.ts:312",
+"commercial.ts:318"
+],
+"Kısıtlama": [
+"commercial.ts:109",
+"commercial.ts:117"
+],
+"Kısıtlama adı ve en az 10 karakterlik açık gerekçe gerekir (gizli hüküm yasak).": [
+"commercial.ts:112"
+],
+"Açık gerekçe zorunlu": [
+"commercial.ts:112"
+],
+"${c!.no} kısıtlama: ${label}": [
+"commercial.ts:114"
+],
+"Geçerlilik tarihi girin.": [
+"commercial.ts:127"
+],
+"Tarih zorunlu": [
+"commercial.ts:127"
+],
+"${kind} v${version} (örnek belge)": [
+"commercial.ts:129"
+],
+"${c!.no} · ${kind} v${version} (demo, dosya içermez)": [
+"commercial.ts:130"
+],
+"Kişisel veri talebi": [
+"commercial.ts:134",
+"commercial.ts:141"
+],
+"${c!.no} kişisel veri talebi: ${kind}": [
+"commercial.ts:138"
+],
+"Talep bulunamadı.": [
+"commercial.ts:144",
+"commercial.ts:233",
+"commercial.ts:244",
+"commercial.ts:257"
+],
+"Müşteri birleştirme": [
+"commercial.ts:162"
+],
+"Aynı kaydı birleştiremezsiniz.": [
+"commercial.ts:163"
+],
+"${drop!.no} → ${keep!.no} birleştirildi (demo; ${drop!.no} arşivlendi, silinmedi)": [
+"commercial.ts:177"
+],
+"Kurumsal hesap bulunamadı.": [
+"commercial.ts:185"
+],
+"${c!.name} · ${cur} limit ${minor === null ? 'kaldırıldı (tanımsız)' : fmt(minor, cur)}": [
+"commercial.ts:191"
+],
+"Şirket adı girin.": [
+"commercial.ts:196"
+],
+"Ad zorunlu": [
+"commercial.ts:196",
+"commercial.ts:222",
+"commercial.ts:330",
+"commercial.ts:374",
+"commercial.ts:504",
+"control.ts:180",
+"control.ts:332",
+"control.ts:351",
+"fleet.ts:336"
+],
+"Vergi numarası girin.": [
+"commercial.ts:197"
+],
+"Vergi no zorunlu": [
+"commercial.ts:197"
+],
+"Bu vergi numarası başka bir kurumsal hesapta kayıtlı (mükerrer uyarısı).": [
+"commercial.ts:198"
+],
+"Mükerrer vergi no": [
+"commercial.ts:198"
+],
+"${input.name} oluşturuldu": [
+"commercial.ts:200"
+],
+"Talep kaydı": [
+"commercial.ts:221"
+],
+"Ad soyad girin.": [
+"commercial.ts:222",
+"commercial.ts:504",
+"control.ts:332"
+],
+"Bitiş başlangıçtan sonra olmalı.": [
+"commercial.ts:223",
+"commercial.ts:505"
+],
+"Tarih aralığı geçersiz": [
+"commercial.ts:223",
+"commercial.ts:505"
+],
+"Kayıp nedenini yazın.": [
+"commercial.ts:234"
+],
+"Neden zorunlu": [
+"commercial.ts:234",
+"commercial.ts:381"
+],
+"Dönüştürme yalnız kabul edilmiş tekliften yapılır.": [
+"commercial.ts:235"
+],
+"Hatırlatma": [
+"commercial.ts:242"
+],
+"Hatırlatma metni yazın.": [
+"commercial.ts:245"
+],
+"Metin zorunlu": [
+"commercial.ts:245"
+],
+"Teklif hazırlama": [
+"commercial.ts:255"
+],
+"Teklif fiyatı hesaplanamadı: ${snap.blockers[0]}": [
+"commercial.ts:259"
+],
+"Teklif kabulü": [
+"commercial.ts:280",
+"commercial.ts:397"
+],
+"Teklif bulunamadı.": [
+"commercial.ts:282"
+],
+"Yalnız gönderilmiş (güncel) teklif kabul edilir.": [
+"commercial.ts:283"
+],
+"Teklifin geçerlilik süresi dolmuş.": [
+"commercial.ts:284"
+],
+"Talepten oluşturuldu; doğum tarihi ve ehliyet bilgileri teslimden önce tamamlanmalı (örnek değerlerle açıldı).": [
+"commercial.ts:291"
+],
+"Tarih aralığı geçersiz.": [
+"commercial.ts:306",
+"commercial.ts:380"
+],
+"Partner kaydı": [
+"commercial.ts:329"
+],
+"Partner adı girin.": [
+"commercial.ts:330"
+],
+"Komisyon oranı 0–50 arasında olmalı.": [
+"commercial.ts:331",
+"commercial.ts:341"
+],
+"Geçersiz oran": [
+"commercial.ts:331",
+"commercial.ts:341"
+],
+"Komisyon koşulu": [
+"commercial.ts:338"
+],
+"Partner bulunamadı.": [
+"commercial.ts:340",
+"commercial.ts:349",
+"commercial.ts:358"
+],
+"${p!.name} komisyon sürümü ${p!.commission.version}: %${pct} · ${trigger}": [
+"commercial.ts:344"
+],
+"Portal erişimi": [
+"commercial.ts:347"
+],
+"${p!.name} portal erişimi ${on ? 'açıldı' : 'kapatıldı'} (demo; gerçek davet gönderilmez)": [
+"commercial.ts:351"
+],
+"Komisyon ödemesi": [
+"commercial.ts:356"
+],
+"Ödeme referansı girin.": [
+"commercial.ts:359",
+"commercial.ts:491"
+],
+"Referans zorunlu": [
+"commercial.ts:359",
+"commercial.ts:491",
+"fleet.ts:277",
+"fleet.ts:346"
+],
+"Ödenecek (ödenmemiş) komisyon seçin.": [
+"commercial.ts:362"
+],
+"Tek ödemede yalnız aynı para birimindeki komisyonlar toplanır.": [
+"commercial.ts:364"
+],
+"${p!.name} komisyon ödemesi ${fmt(amount.minor, cur)} (kayıt)": [
+"commercial.ts:367"
+],
+"Tedarikçi adı girin.": [
+"commercial.ts:374"
+],
+"Neden yazın.": [
+"commercial.ts:381"
+],
+"Talep teklife açık değil.": [
+"commercial.ts:390"
+],
+"Günlük bedel girin.": [
+"commercial.ts:391"
+],
+"Teklif kabul edilemez.": [
+"commercial.ts:400"
+],
+"Plaka girin.": [
+"commercial.ts:402"
+],
+"Plaka zorunlu": [
+"commercial.ts:402"
+],
+"Bu dış araç ${clash.no} anlaşmasıyla çakışıyor: aynı araç iki anlaşmada olamaz.": [
+"commercial.ts:409"
+],
+"Tedarikçiden teslim alınmadı": [
+"commercial.ts:434"
+],
+"${eng.no} onaylandı (araç henüz teslim alınmadı)": [
+"commercial.ts:440"
+],
+"Yalnız onaylı anlaşma teslim alınır.": [
+"commercial.ts:446"
+],
+"Teslim alma kanıtı için en az 4 fotoğraf gerekir.": [
+"commercial.ts:447"
+],
+"En az 4 fotoğraf": [
+"commercial.ts:447",
+"commercial.ts:464",
+"rentals.ts:569"
+],
+"${e!.no} araç teslim alındı": [
+"commercial.ts:458"
+],
+"Tedarikçiye iade": [
+"commercial.ts:461"
+],
+"Yalnız teslim alınmış araç iade edilir.": [
+"commercial.ts:463"
+],
+"İade kanıtı için en az 4 fotoğraf gerekir.": [
+"commercial.ts:464",
+"rentals.ts:569"
+],
+"${e!.no} tedarikçiye iade edildi": [
+"commercial.ts:473"
+],
+"Tedarikçi mutabakatı": [
+"commercial.ts:477"
+],
+"Mutabakat iade edilmiş anlaşma için yapılır.": [
+"commercial.ts:479"
+],
+"Bu anlaşma için mutabakat zaten var.": [
+"commercial.ts:480"
+],
+"${e!.no} tedarikçi borcu ${fmt(payable.minor, payable.cur)}": [
+"commercial.ts:485"
+],
+"Tedarikçi ödemesi": [
+"commercial.ts:488"
+],
+"Mutabakat ödemeye açık değil.": [
+"commercial.ts:490"
+],
+"Tedarikçi ödemesi kaydedildi (${reference})": [
+"commercial.ts:495"
+],
+"Bu partner için portal erişimi kapalı.": [
+"commercial.ts:503"
+],
+"${l.no} · ${p!.name} portalından gönderildi": [
+"commercial.ts:509"
+],
+"Yüksek İndirim": [
+"control.ts:14"
+],
+"Hedef kaydın fiyatına onaylı indirim satırı uygulanır (yeni fiyat sürümü; eskisi geçmişte kalır).": [
+"control.ts:14"
+],
+"Depozito İstisnası": [
+"control.ts:15"
+],
+"Teslim öncesi kiralamanın gerekli depozitosu istenen tutara indirilir.": [
+"control.ts:15"
+],
+"İade": [
+"control.ts:16"
+],
+"İade tamamlanır; nakit iade ise şube kasasından çıkar.": [
+"control.ts:16"
+],
+"Finansal Düzeltme": [
+"control.ts:17"
+],
+"Seçilen ödeme ters kaydedilir (silinmez; geçmiş korunur).": [
+"control.ts:17"
+],
+"Kurumsal Kredi İstisnası": [
+"control.ts:18"
+],
+"Kurumsal hesaba, para biriminde ek limit payı tanımlanır.": [
+"control.ts:18"
+],
+"Partner Komisyon Düzeltmesi": [
+"control.ts:19"
+],
+"Doğmuş komisyon tutarı istenen tutara düzeltilir (ödenmişse ödeme değişmez).": [
+"control.ts:19"
+],
+"Gerekçeyi en az 10 karakterle yazın": [
+"control.ts:35"
+],
+"Bu onay türü için uygun olmayan hedef": [
+"control.ts:36"
+],
+"Tutar girin": [
+"control.ts:37"
+],
+"İndirim yüzdesi 1–50 arasında olmalı": [
+"control.ts:38"
+],
+"Talep formunda eksik veya geçersiz alanlar var.": [
+"control.ts:39"
+],
+"Bu hedef için açık bir ${approvalLabel(input.type)} talebi var (${exists.no}).": [
+"control.ts:41"
+],
+"Hedef kayıt bulunamadı.": [
+"control.ts:45",
+"control.ts:50"
+],
+"Hedef bulunamadı": [
+"control.ts:45",
+"control.ts:50"
+],
+"Teslim edilmiş kiralamada fiyat indirimi yapılamaz: Finansal Düzeltme kullanın.": [
+"control.ts:46"
+],
+"İade, kaydın para biriminde (${src!.currency}) olmalı; kur dönüşümü yapılmaz.": [
+"control.ts:51"
+],
+"Onay kararı": [
+"control.ts:66"
+],
+"Onay bulunamadı.": [
+"control.ts:68",
+"control.ts:91"
+],
+"Bu talep için karar zaten verilmiş.": [
+"control.ts:69"
+],
+"Kendi talebinizi onaylayamaz veya reddedemezsiniz (dört göz). Rolü/kullanıcıyı değiştirerek ikinci kişi olarak deneyin.": [
+"control.ts:71"
+],
+"Ret gerekçesini yazın.": [
+"control.ts:72"
+],
+"Ret gerekçesi zorunlu": [
+"control.ts:72"
+],
+"Onaylandı": [
+"control.ts:77",
+"rentals.ts:166"
+],
+"Onaylandı (henüz uygulanmadı).": [
+"control.ts:77"
+],
+"${a!.no} ${decision === 'approve' ? 'onaylandı (uygulanmadı)' : 'reddedildi'}": [
+"control.ts:78"
+],
+"${a!.no} ${decision === 'approve' ? 'onaylandı' : 'reddedildi'}": [
+"control.ts:79"
+],
+"Onayı uygulama": [
+"control.ts:89"
+],
+"Bu onay zaten uygulanmış (tek seferlik).": [
+"control.ts:92"
+],
+"Yalnız onaylanmış talep uygulanır. Approved ve Applied farklı adımlardır.": [
+"control.ts:93"
+],
+"Talebi açan kişi uygulayamaz.": [
+"control.ts:94"
+],
+"Hedef rezervasyon artık indirim alamaz.": [
+"control.ts:101"
+],
+"Onaylı indirim": [
+"control.ts:105",
+"control.ts:112"
+],
+"%${pct} indirim uygulandı (${a!.no}): ${old ? fmt(old.grossMinor, old.cur) : '—'} → ${fmt(r.price.grossMinor, r.price.cur)}.": [
+"control.ts:105",
+"control.ts:112"
+],
+"Teslim edilmiş kiralamada indirim uygulanamaz.": [
+"control.ts:108"
+],
+"Teslim sonrası depozito istisnası uygulanamaz.": [
+"control.ts:118"
+],
+"Depozito istisnası": [
+"control.ts:124"
+],
+"${fmt(before.minor, before.cur)} → ${fmt(a!.requested!.minor, a!.requested!.cur)} (${a!.no} uygulandı).": [
+"control.ts:124"
+],
+"Bağlı iade kaydı bulunamadı.": [
+"control.ts:129"
+],
+"Finansal düzeltme ${a!.no}: ${a!.reason}": [
+"control.ts:136",
+"control.ts:140"
+],
+"Düzeltilecek ödeme/kalem bulunamadı.": [
+"control.ts:139"
+],
+"Komisyon kaydı bulunamadı.": [
+"control.ts:151"
+],
+"Uygulandı": [
+"control.ts:161"
+],
+"${a!.no} uygulandı · ${approvalLabel(a!.type)}": [
+"control.ts:162"
+],
+"Bekleyen rezervasyon yaşı": [
+"control.ts:170"
+],
+"Kiralama açık bakiyesi": [
+"control.ts:171"
+],
+"Periyodik bakım aşımı": [
+"control.ts:172"
+],
+"Müşteri belgesi kalan gün": [
+"control.ts:173"
+],
+"gün": [
+"control.ts:173",
+"control.ts:174"
+],
+"Araç belgesi kalan gün": [
+"control.ts:174"
+],
+"Kasa farkı (mutlak)": [
+"control.ts:175"
+],
+"Kural düzenleme": [
+"control.ts:179"
+],
+"Kural adı yazın.": [
+"control.ts:180"
+],
+"En az bir koşul ekleyin.": [
+"control.ts:181"
+],
+"Koşul gerekli": [
+"control.ts:181"
+],
+"Kural yalnız güvenli bildirim/inceleme alanlarını kullanabilir (vergi, kur, fiyat, depozito politikaları buradan değiştirilemez).": [
+"control.ts:182"
+],
+"Uyarı mesajını yazın.": [
+"control.ts:183"
+],
+"Mesaj zorunlu": [
+"control.ts:183"
+],
+"v${r.version}: ${r.conditions.length} koşul · ${r.status}": [
+"control.ts:186"
+],
+"Kural bulunamadı.": [
+"control.ts:198"
+],
+"İstisna kaydı": [
+"control.ts:207"
+],
+"İstisna başlığını yazın.": [
+"control.ts:208"
+],
+"Başlık zorunlu": [
+"control.ts:208",
+"fleet.ts:308",
+"fleet.ts:432"
+],
+"İstisna incelemesi": [
+"control.ts:212"
+],
+"İstisna bulunamadı.": [
+"control.ts:214"
+],
+"Karar gerekçesini yazın.": [
+"control.ts:215"
+],
+"Gerekçe zorunlu": [
+"control.ts:215",
+"control.ts:259",
+"finance.ts:181",
+"finance.ts:265",
+"finance.ts:318",
+"fleet.ts:94",
+"fleet.ts:125",
+"fleet.ts:186",
+"rentals.ts:190",
+"rentals.ts:334",
+"rentals.ts:470",
+"rentals.ts:642",
+"rentals.ts:654",
+"rentals.ts:677",
+"rentals.ts:702"
+],
+"Bakım ve servis": [
+"control.ts:225",
+"fleet.ts:177"
+],
+"Personel dışı genel gider": [
+"control.ts:225"
+],
+"Ceza (otorite ödemesi)": [
+"control.ts:225",
+"fleet.ts:392"
+],
+"Masraf kaydı": [
+"control.ts:228",
+"control.ts:248"
+],
+"Tedarikçi / alıcı yazın": [
+"control.ts:230"
+],
+"Tarih girin": [
+"control.ts:231"
+],
+"Tutar sıfırdan büyük olmalı": [
+"control.ts:232"
+],
+"İade, depozito ve komisyon masraf türü değildir": [
+"control.ts:233"
+],
+"Kasa kapalı; nakit masraf çıkışı yapılamaz.": [
+"control.ts:240"
+],
+"Kasa para birimi masraf para biriminden farklı.": [
+"control.ts:241"
+],
+"Yalnız taslak masraf kaydedilir.": [
+"control.ts:250"
+],
+"Masraf iptal edilemez.": [
+"control.ts:257"
+],
+"Kaynağa bağlı masraf buradan iptal edilmez: kaynak kaydı (bakım, ceza) düzeltilir.": [
+"control.ts:258"
+],
+"İptal gerekçesi yazın.": [
+"control.ts:259",
+"finance.ts:181",
+"fleet.ts:186",
+"rentals.ts:190",
+"rentals.ts:334"
+],
+"Döviz kuru tanımlama": [
+"control.ts:280"
+],
+"Geçersiz para birimi": [
+"control.ts:282",
+"control.ts:283"
+],
+"Aynı para birimi için kur tanımlanamaz": [
+"control.ts:284"
+],
+"Kur sıfırdan büyük, sonlu bir sayı olmalı": [
+"control.ts:285"
+],
+"Bitiş, başlangıçtan sonra olmalı": [
+"control.ts:286",
+"fleet.ts:124"
+],
+"Açıklama yazın": [
+"control.ts:287"
+],
+"Kur formunda eksik veya geçersiz alanlar var.": [
+"control.ts:288"
+],
+"Aynı kapsamda bu çift için geçerli bir kur zaten var (1 ${clash.base} = ${clash.rate} ${clash.quote}). Önce onu sonlandırın: iki eş geçerli kur yapılandırma hatasıdır.": [
+"control.ts:291"
+],
+"Çakışan kur": [
+"control.ts:291"
+],
+"Kur: 1 ${r.base} = ${r.rate} ${r.quote} (${r.purpose}${r.scope === 'company' ? '' : ', şube'}) — yeni işlemlerde kullanılır, eski tahsilatlar değişmez": [
+"control.ts:294"
+],
+"Kur sonlandırma": [
+"control.ts:298"
+],
+"Bu kur şu an geçerli değil.": [
+"control.ts:300"
+],
+"Kur sonlandırıldı: 1 ${r!.base} = ${r!.rate} ${r!.quote}": [
+"control.ts:302"
+],
+"Fiyat düzenleme": [
+"control.ts:308"
+],
+"Fiyat revizyonu: ${summary}. Mevcut teklif/rezervasyon/kiralama fiyatları değişmez.": [
+"control.ts:311"
+],
+"Ayar düzenleme": [
+"control.ts:314"
+],
+"Ayar: ${summary}. Gelecekteki işlemleri etkiler; geçmiş snapshot'lar değişmez.": [
+"control.ts:316"
+],
+"Şube düzenleme": [
+"control.ts:322"
+],
+"Şube bulunamadı.": [
+"control.ts:324"
+],
+"Aktif kiralaması olan şube pasif yapılamaz.": [
+"control.ts:325"
+],
+"${b!.name} güncellendi": [
+"control.ts:327"
+],
+"Kullanıcı daveti": [
+"control.ts:331"
+],
+"Geçerli bir e-posta girin.": [
+"control.ts:333"
+],
+"Geçersiz e-posta": [
+"control.ts:333"
+],
+"Bu e-posta zaten kayıtlı.": [
+"control.ts:334"
+],
+"Mükerrer e-posta": [
+"control.ts:334"
+],
+"${input.email} için davet kaydı (demo; e-posta gönderilmedi)": [
+"control.ts:337"
+],
+"Kullanıcı düzenleme": [
+"control.ts:340"
+],
+"Kullanıcı bulunamadı.": [
+"control.ts:342"
+],
+"Son aktif Sahip kullanıcı pasifleştirilemez veya rolü değiştirilemez.": [
+"control.ts:344"
+],
+"${u!.name} güncellendi": [
+"control.ts:346"
+],
+"Rol düzenleme": [
+"control.ts:350"
+],
+"Rol adı yazın.": [
+"control.ts:351"
+],
+"Sahip rolü değiştirilemez.": [
+"control.ts:354"
+],
+"Bu adla bir rol var.": [
+"control.ts:359"
+],
+"Mükerrer ad": [
+"control.ts:359"
+],
+"Bu kullanıcı etkin değil.": [
+"control.ts:371"
+],
+"Şirket bulunamadı.": [
+"control.ts:394",
+"control.ts:400"
+],
+"Demo şirketi askıya alınamaz: bu demo onun üzerinde çalışır.": [
+"control.ts:395"
+],
+"Kiralama bulunamadı.": [
+"finance.ts:18",
+"finance.ts:197",
+"rentals.ts:332",
+"rentals.ts:354",
+"rentals.ts:502",
+"rentals.ts:564",
+"rentals.ts:600",
+"rentals.ts:629",
+"rentals.ts:651",
+"rentals.ts:675",
+"rentals.ts:700"
+],
+"Kalem bulunamadı.": [
+"finance.ts:42"
+],
+"Bu kaleme ödeme uygulanmış. Önce ödemeyi iptal edin (ters kayıt).": [
+"finance.ts:45"
+],
+"Tahsilat kaydı": [
+"finance.ts:78"
+],
+"Tutar sıfırdan büyük olmalı.": [
+"finance.ts:79",
+"finance.ts:310"
+],
+"Tutarı girin": [
+"finance.ts:79"
+],
+"Tahsilat bir kiralamaya veya rezervasyona bağlı olmalı.": [
+"finance.ts:82"
+],
+"Şube seçin.": [
+"finance.ts:84"
+],
+"Şube seçin": [
+"finance.ts:84"
+],
+"${branch!.name} şubesi ${input.tenderCur} tahsilat kabul etmiyor.": [
+"finance.ts:86"
+],
+"Bu şubede kabul edilmiyor": [
+"finance.ts:86"
+],
+"Kur çakışması": [
+"finance.ts:89"
+],
+"${branch!.name} şubesinde ${input.tenderCur} nakit kasası tanımlı değil (Şube Kasaları).": [
+"finance.ts:95"
+],
+"${branch!.name} ${input.tenderCur} kasası kapalı. Nakit tahsilat için önce Şube Kasaları'ndan kasa oturumu açın.": [
+"finance.ts:97"
+],
+"Kasa kapalı": [
+"finance.ts:97"
+],
+"Müşteri tahsilatı (nakit)": [
+"finance.ts:135"
+],
+"${p.note ? p.note + ' · ' : ''}Fazla ${fmt(leftoverMinor, p.obligationCur)} uygulanmadı (iade adayı).": [
+"finance.ts:151"
+],
+"${p.no} → ${allocations.length} kaleme uygulandı": [
+"finance.ts:156"
+],
+"Ödeme iptali": [
+"finance.ts:177"
+],
+"Ödeme bulunamadı.": [
+"finance.ts:179"
+],
+"Bu ödeme zaten iptal edilmiş.": [
+"finance.ts:180"
+],
+"Ödeme iptali ${p!.no}": [
+"finance.ts:187"
+],
+"Depozito tutarı sıfır.": [
+"finance.ts:199"
+],
+"Bu depozito yöntemi şirket politikasında kapalı.": [
+"finance.ts:200"
+],
+"Bu kiralama için zaten tutulan bir depozito var.": [
+"finance.ts:201"
+],
+"${amount.cur} nakit kasası kapalı veya tanımsız. Depozito için önce Şube Kasaları'ndan kasa açın.": [
+"finance.ts:206"
+],
+"${fmt(amount.minor, amount.cur)} tutuldu (${method}). Gelir değildir.": [
+"finance.ts:215"
+],
+"Depozito çözme": [
+"finance.ts:220"
+],
+"Depozito bulunamadı.": [
+"finance.ts:222"
+],
+"Bu depozito zaten çözülmüş.": [
+"finance.ts:223"
+],
+"Mahsup edilecek açık bakiye yok.": [
+"finance.ts:227"
+],
+"Depozito yalnız aynı para birimindeki bakiyeye mahsup edilir.": [
+"finance.ts:229"
+],
+"Depozito, açık bakiyeye mahsup edildi (gelir sayılmaz; kalan iade edilir).": [
+"finance.ts:245"
+],
+"Depozito kalanı iadesi ${rental.no}": [
+"finance.ts:251"
+],
+"İade talebi": [
+"finance.ts:263"
+],
+"İade tutarı sıfırdan büyük olmalı.": [
+"finance.ts:264"
+],
+"Gerekçe yazın.": [
+"finance.ts:265",
+"finance.ts:318",
+"rentals.ts:469"
+],
+"İade bulunamadı.": [
+"finance.ts:275"
+],
+"İade önce Onay Merkezi\\'nde onaylanıp uygulanmalı.": [
+"finance.ts:277"
+],
+"${r!.amount.cur} nakit kasası kapalı veya tanımsız; nakit iade yapılamaz.": [
+"finance.ts:282"
+],
+"Kasada yeterli nakit yok.": [
+"finance.ts:283",
+"finance.ts:322"
+],
+"Müşteri iadesi ${r!.no}": [
+"finance.ts:285"
+],
+"${r!.no} iade edildi (kayıt)": [
+"finance.ts:289"
+],
+"Kasa açma": [
+"finance.ts:295"
+],
+"Kasa bulunamadı.": [
+"finance.ts:297"
+],
+"Bu kasanın açık oturumu var.": [
+"finance.ts:298"
+],
+"Açılış bakiyesi negatif olamaz.": [
+"finance.ts:299"
+],
+"Geçersiz tutar": [
+"finance.ts:299",
+"finance.ts:332"
+],
+"${dr!.name} açıldı · açılış ${fmt(openingMinor, dr!.currency)}": [
+"finance.ts:304"
+],
+"Kasa kapalı.": [
+"finance.ts:309"
+],
+"Kasa kapalı. Önce oturum açın.": [
+"finance.ts:321"
+],
+"Beklenen bakiyeyi aşıyor": [
+"finance.ts:322"
+],
+"${kind === 'in' ? 'Giriş' : 'Çıkış'} · ${reason}": [
+"finance.ts:324"
+],
+"Kasa kapanışı": [
+"finance.ts:328"
+],
+"Kasa zaten kapalı.": [
+"finance.ts:331"
+],
+"Sayılan bakiye negatif olamaz.": [
+"finance.ts:332"
+],
+"Fark ${fmt(variance, dr!.currency)}; eşiği (${fmt(limit, dr!.currency)}) aşıyor. Gerekçe yazın.": [
+"finance.ts:336"
+],
+"Fark gerekçesi zorunlu": [
+"finance.ts:336"
+],
+"${dr!.name} kapandı · beklenen ${fmt(expected, dr!.currency)} · sayılan ${fmt(countedMinor, dr!.currency)} · fark ${fmt(variance, dr!.currency)}": [
+"finance.ts:347"
+],
+"Araç bulunamadı.": [
+"fleet.ts:14",
+"rentals.ts:48",
+"rentals.ts:722",
+"rentals.ts:729"
+],
+"Araç ekleme": [
+"fleet.ts:34"
+],
+"Geçerli bir plaka girin": [
+"fleet.ts:37"
+],
+"Bu plaka zaten kayıtlı": [
+"fleet.ts:38"
+],
+"Geçerli bir yıl girin": [
+"fleet.ts:41"
+],
+"Kilometre geçersiz": [
+"fleet.ts:42"
+],
+"Yeni araç: hazırlık kontrolü bekliyor": [
+"fleet.ts:60"
+],
+"Araç düzenleme": [
+"fleet.ts:73"
+],
+"Araç şu an müşteride; hizmet dışı yapılamaz.": [
+"fleet.ts:76"
+],
+"${v.plate} güncellendi": [
+"fleet.ts:78"
+],
+"Kilometre girişi": [
+"fleet.ts:83"
+],
+"Kilometre mevcut değerden (${v.odometerKm}) küçük olamaz. Düzeltme gerekiyorsa gerekçeli düzeltme kaydı açın.": [
+"fleet.ts:85"
+],
+"Geçersiz kilometre": [
+"fleet.ts:85",
+"fleet.ts:157",
+"rentals.ts:568"
+],
+"Konum güncelleme": [
+"fleet.ts:92"
+],
+"Konum güncelleme gerekçesi yazın.": [
+"fleet.ts:94"
+],
+"${v.plate} fiziksel konum: ${location}. Ana şube değişmedi.": [
+"fleet.ts:97"
+],
+"Belge adı gerekli.": [
+"fleet.ts:103"
+],
+"Belge adı gerekli": [
+"fleet.ts:103"
+],
+"${v.plate} · ${kind} v${version} (demo belge, dosya içermez)": [
+"fleet.ts:106"
+],
+"Bakım planlama": [
+"fleet.ts:122"
+],
+"Bitiş, başlangıçtan sonra olmalı.": [
+"fleet.ts:124"
+],
+"Bakım gerekçesi yazın.": [
+"fleet.ts:125"
+],
+"${v.plate} bu aralıkta bakıma ayrılamaz: ${blocking.map((c) => c.label).join(', ')} ile çakışıyor. Önce çakışan kaydı çözün.": [
+"fleet.ts:129"
+],
+"Araç bu aralıkta müsait değil": [
+"fleet.ts:129"
+],
+"Planlandı": [
+"fleet.ts:132"
+],
+"${v.plate} için bakım planlandı: araç bu aralıkta uygunluktan düşer.": [
+"fleet.ts:132"
+],
+"Yalnız planlı bakım servise alınır.": [
+"fleet.ts:140"
+],
+"Araç şu an müşteride; servise alınamaz.": [
+"fleet.ts:142"
+],
+"Bakım ${m!.no}": [
+"fleet.ts:146"
+],
+"Servise alındı": [
+"fleet.ts:147"
+],
+"${v.plate} servise alındı.": [
+"fleet.ts:147"
+],
+"${m!.no} başladı": [
+"fleet.ts:148"
+],
+"Bakım tamamlama": [
+"fleet.ts:152"
+],
+"Yalnız devam eden bakım tamamlanır.": [
+"fleet.ts:154"
+],
+"Kilometre mevcut değerden (${v.odometerKm}) küçük olamaz.": [
+"fleet.ts:157"
+],
+"Bakım sonrası hazırlık kontrolü bekliyor": [
+"fleet.ts:172"
+],
+"Bakım tamamlandı ${m!.no}": [
+"fleet.ts:173"
+],
+"Tamamlandı": [
+"fleet.ts:174",
+"fleet.ts:477"
+],
+"Bakım tamamlandı${input.cost ? ": [
+"fleet.ts:174"
+],
+" : ''}. Araç otomatik hazır sayılmaz; hazırlık kontrolü gerekir.": [
+"fleet.ts:174"
+],
+"${m!.no} bakım kaydından": [
+"fleet.ts:177"
+],
+"${m!.no} tamamlandı": [
+"fleet.ts:179"
+],
+"Bakım iptali": [
+"fleet.ts:183"
+],
+"Bu bakım iptal edilemez.": [
+"fleet.ts:185"
+],
+"İptal edildi": [
+"fleet.ts:188",
+"rentals.ts:194",
+"rentals.ts:337"
+],
+"Hasar açıklamasını yazın.": [
+"fleet.ts:197"
+],
+"Hasar kaydı açıldı; bu bir bulgudur, müşteriye borç yazmaz.": [
+"fleet.ts:218"
+],
+"Hasar bulunamadı.": [
+"fleet.ts:226",
+"fleet.ts:240",
+"fleet.ts:261",
+"fleet.ts:276",
+"fleet.ts:286"
+],
+"Kapatmadan önce sorumluluk belirlenmeli.": [
+"fleet.ts:228"
+],
+"Araç engeli kalkmadan hasar kapatılamaz (engeli kaldırmak ikinci bir yetkili ister).": [
+"fleet.ts:229"
+],
+"İnceleniyor": [
+"fleet.ts:232",
+"fleet.ts:328"
+],
+"Hasar kapatıldı.": [
+"fleet.ts:232"
+],
+"İnceleme başladı.": [
+"fleet.ts:232"
+],
+"Bir sorumluluk seçin.": [
+"fleet.ts:241"
+],
+"Sorumluluk için onarım tahmini girin.": [
+"fleet.ts:242"
+],
+"Tahmin zorunlu": [
+"fleet.ts:242"
+],
+"Müşteri sorumlu (sigorta muafiyeti kadar).": [
+"fleet.ts:246"
+],
+"Sigorta/üçüncü taraf sorumlu.": [
+"fleet.ts:246"
+],
+"Şirket üstleniyor.": [
+"fleet.ts:246"
+],
+"Hasar ücreti": [
+"fleet.ts:259"
+],
+"Hasar bir kiralamaya bağlı değil.": [
+"fleet.ts:262"
+],
+"Müşteri sorumluluğu belirlenmeden ücret yazılamaz.": [
+"fleet.ts:264"
+],
+"Hasar tahmini kiralama para biriminde olmalı (kur dönüşümü yapılmaz).": [
+"fleet.ts:266"
+],
+"Bu hasar için müşteri kalemi zaten yazıldı (tek kalem).": [
+"fleet.ts:267"
+],
+"Hasar katılımı ${dm!.no}": [
+"fleet.ts:268"
+],
+"Müşteri kalemi": [
+"fleet.ts:270",
+"fleet.ts:381"
+],
+"${fmt(share!.minor, share!.cur)} hesap kalemi yazıldı (${c.no}).": [
+"fleet.ts:270"
+],
+"Sigorta tahsilatı": [
+"fleet.ts:274"
+],
+"Sigorta dosya referansını girin.": [
+"fleet.ts:277"
+],
+"Sigorta geri ödemesi": [
+"fleet.ts:279"
+],
+"${fmt(amount.minor, amount.cur)} · ${received ? 'alındı' : 'bekleniyor'} · ayrı finans hareketi, müşteri kalemi değil.": [
+"fleet.ts:279"
+],
+"${dm!.no} sigorta geri ödemesi": [
+"fleet.ts:280"
+],
+"Onarım planlama": [
+"fleet.ts:284"
+],
+"Hasar onarımı ${dm!.no}": [
+"fleet.ts:287"
+],
+"Onarım bağlandı": [
+"fleet.ts:289"
+],
+"${m.no} bakım kaydı bağlandı. Onarım maliyeti bakım kaydından gelir.": [
+"fleet.ts:289"
+],
+"Engel kaldırma": [
+"fleet.ts:294"
+],
+"Bu hasarda açık engel yok.": [
+"fleet.ts:296"
+],
+"Hasarı bildiren kişi engeli kaldıramaz: ikinci bir yetkili gerekir (dört göz).": [
+"fleet.ts:298"
+],
+"Engel kaldırıldı": [
+"fleet.ts:300"
+],
+"Araç engeli kaldırıldı. Araç başka kayıtlar nedeniyle yine uygun olmayabilir; hazırlık ayrıca kontrol edilir.": [
+"fleet.ts:300"
+],
+"${dm!.no} engeli kaldırıldı": [
+"fleet.ts:301"
+],
+"Olay kaydı": [
+"fleet.ts:307"
+],
+"Olay başlığı yazın.": [
+"fleet.ts:308"
+],
+"Olay açıklaması yazın.": [
+"fleet.ts:309"
+],
+"Açıldı": [
+"fleet.ts:314"
+],
+"Olay açıldı; sorumlu: ${userName(d, input.ownerId)}.": [
+"fleet.ts:314"
+],
+"Size yeni bir olay atandı: ${inc.no}": [
+"fleet.ts:316"
+],
+"Olay bulunamadı.": [
+"fleet.ts:323",
+"fleet.ts:335"
+],
+"Çözüm / kapanış notunu yazın.": [
+"fleet.ts:324"
+],
+"Kapatmadan önce olay çözüldü olarak işaretlenmeli.": [
+"fleet.ts:325"
+],
+"Çözüldü": [
+"fleet.ts:328",
+"rentals.ts:618"
+],
+"Yeniden açıldı": [
+"fleet.ts:328"
+],
+"Kanıt ekleme": [
+"fleet.ts:333"
+],
+"Kanıt adı yazın.": [
+"fleet.ts:336"
+],
+"Kanıt eklendi": [
+"fleet.ts:338"
+],
+"${label} (demo yer tutucu, dosya içermez)": [
+"fleet.ts:338"
+],
+"Ceza kaydı": [
+"fleet.ts:344"
+],
+"Resmî referansı girin.": [
+"fleet.ts:346"
+],
+"Bu resmî referans (${ref}) zaten kayıtlı: aynı ceza iki kez girilemez.": [
+"fleet.ts:347"
+],
+"Mükerrer referans": [
+"fleet.ts:347"
+],
+"Ceza tutarı sıfırdan büyük olmalı.": [
+"fleet.ts:348"
+],
+"Tutar zorunlu": [
+"fleet.ts:348"
+],
+"Tarih ${cand.no} kiralamasıyla örtüşüyor: atama önerisi (onay bekliyor).": [
+"fleet.ts:354"
+],
+"Eşleşen kiralama bulunamadı.": [
+"fleet.ts:354"
+],
+"Ceza ataması": [
+"fleet.ts:360"
+],
+"Ceza bulunamadı.": [
+"fleet.ts:362",
+"fleet.ts:388",
+"fleet.ts:402",
+"fleet.ts:410"
+],
+"Kiralama bu aracın kiralaması değil.": [
+"fleet.ts:364"
+],
+"Kiralamaya atandı": [
+"fleet.ts:367"
+],
+"${r!.no} sorumlu olarak atandı (elle onay).": [
+"fleet.ts:367"
+],
+"Ceza ücreti": [
+"fleet.ts:373"
+],
+"Önce cezayı bir kiralamaya atayın.": [
+"fleet.ts:375"
+],
+"Ceza para birimi kiralama para biriminden farklı: kur dönüşümü yapılmaz, elle kalem ekleyin.": [
+"fleet.ts:377"
+],
+"Bu ceza için müşteri kalemi zaten yazıldı.": [
+"fleet.ts:378"
+],
+"Trafik cezası ${f!.authorityRef}": [
+"fleet.ts:379"
+],
+"${fmt(f!.amount.minor, f!.amount.cur)} hesap kalemi yazıldı (${c.no}); resmî kuruma ödeme ayrı işlemdir.": [
+"fleet.ts:381"
+],
+"Otorite ödemesi": [
+"fleet.ts:386"
+],
+"Bu ceza zaten otoriteye ödenmiş.": [
+"fleet.ts:389"
+],
+"${f!.no} otorite ödemesi": [
+"fleet.ts:392"
+],
+"Otoriteye ödendi": [
+"fleet.ts:395"
+],
+"${fmt(f!.amount.minor, f!.amount.cur)} otoriteye ödendi (şirket gideri ${ex.no}); müşteri tahsilatı değildir.": [
+"fleet.ts:395"
+],
+"${f!.no} otoriteye ödendi": [
+"fleet.ts:396"
+],
+"İtiraz": [
+"fleet.ts:400",
+"fleet.ts:404"
+],
+"İtiraz durumu: ${dispute}": [
+"fleet.ts:404"
+],
+"Ceza otoriteye ödenmeden veya itiraz kabul edilmeden kapatılamaz.": [
+"fleet.ts:411"
+],
+"Ceza kaydı kapatıldı.": [
+"fleet.ts:413"
+],
+"Görev oluşturma": [
+"fleet.ts:431"
+],
+"Görev başlığı yazın.": [
+"fleet.ts:432"
+],
+"Bir sorumlu seçin veya görevi açık havuza koyun.": [
+"fleet.ts:433"
+],
+"Sorumlu veya havuz seçin": [
+"fleet.ts:433"
+],
+"Oluşturuldu": [
+"fleet.ts:436",
+"rentals.ts:125"
+],
+"Açık havuza eklendi (uygun personel üstlenebilir).": [
+"fleet.ts:436"
+],
+"Atandı: ${[input.ownerId, ...input.recipientIds].filter(Boolean).map((u) => userName(d, u as Id)).join(', ')}": [
+"fleet.ts:436"
+],
+"Yeni görev: ${t.title}": [
+"fleet.ts:438"
+],
+"Görev bulunamadı.": [
+"fleet.ts:444",
+"fleet.ts:459",
+"fleet.ts:470"
+],
+"Bu görev açık havuzda değil veya zaten üstlenilmiş.": [
+"fleet.ts:445"
+],
+"Görevleri görme yetkiniz yok.": [
+"fleet.ts:447"
+],
+"Bu görev şubenizin kapsamında değil.": [
+"fleet.ts:448"
+],
+"Üstlenildi": [
+"fleet.ts:452"
+],
+"${me.name} görevi üstlendi.": [
+"fleet.ts:452"
+],
+"${t!.no} üstlenildi": [
+"fleet.ts:453"
+],
+"Görev devri": [
+"fleet.ts:457"
+],
+"Tamamlanan görev devredilemez.": [
+"fleet.ts:460"
+],
+"Görev size devredildi: ${t!.title}": [
+"fleet.ts:465"
+],
+"Bu görevi yalnız sorumlusu veya yönetici güncelleyebilir.": [
+"fleet.ts:473"
+],
+"Güncellendi": [
+"fleet.ts:477"
+],
+"Görev tamamlandı. Bağlı kayıt ayrıca işlem gerektirir.": [
+"fleet.ts:477"
+],
+"Araç zaten bu şubede.": [
+"fleet.ts:486"
+],
+"Hasar engeli olan araç normal transferle gönderilemez.": [
+"fleet.ts:489"
+],
+"Transfer çıkışı": [
+"fleet.ts:496"
+],
+"Transfer çıkışa hazır değil.": [
+"fleet.ts:498"
+],
+"Transfer varışı": [
+"fleet.ts:504"
+],
+"Transfer yolda değil.": [
+"fleet.ts:506"
+],
+"Boş": [
+"fleet.ts:515"
+],
+"${corp.name} için ${cur} kredi limiti tanımlı değil. Limit yoksa sınırsız sayılmaz: kurumsal hesapta ${cur} limiti tanımlayın.": [
+"rentals.ts:40"
+],
+"${corp.name} ${cur} kredi limitini aşıyor (kalan ${fmt(row!.headroomMinor, cur)}, bu işlem ${fmt(addMinor, cur)}). Limit aşımı yalnız Onay Merkezi'nde \"Kurumsal Kredi İstisnası\" ile geçilir.": [
+"rentals.ts:42"
+],
+"${v!.plate} seçilen aralıkta uygun değil: ${res.conflicts.map((c) => c.label).join(', ')}.": [
+"rentals.ts:50"
+],
+"Araç uygun değil": [
+"rentals.ts:50"
+],
+"${branch.name} · ${d.classes.find((c) => c.id === r.classId)?.name} sınıfı ${day} günü için kapasite yetersiz (müsait ${cell.available}).": [
+"rentals.ts:62"
+],
+"İade, tesliminden sonra olmalı": [
+"rentals.ts:90"
+],
+"Rezervasyon oluşturma": [
+"rentals.ts:94"
+],
+"Müşteri seçin.": [
+"rentals.ts:96"
+],
+"Müşteri seçin": [
+"rentals.ts:96"
+],
+"Rezervasyon oluşturuldu (${input.vehicleId ? 'araç atanmış' : 'yalnız sınıf'}); Pending kapasite tutmaz.": [
+"rentals.ts:125"
+],
+"${res.no} oluşturuldu": [
+"rentals.ts:126"
+],
+"Rezervasyon düzenleme": [
+"rentals.ts:136"
+],
+"Rezervasyon bulunamadı.": [
+"rentals.ts:138",
+"rentals.ts:159",
+"rentals.ts:174",
+"rentals.ts:187",
+"rentals.ts:202",
+"rentals.ts:290"
+],
+"Bu rezervasyon artık düzenlenemez.": [
+"rentals.ts:139"
+],
+"Fiyat hesaplanamadı: ${snap.blockers[0]}": [
+"rentals.ts:145",
+"rentals.ts:246"
+],
+"Fiyat değişiyor: ${fmt(old.grossMinor, old.cur)} → ${fmt(snap.grossMinor, snap.cur)}. Onaylamak için \"yeni fiyatı kabul ediyorum\" işaretleyin.": [
+"rentals.ts:147"
+],
+"Düzenlendi": [
+"rentals.ts:151"
+],
+"Plan/fiyat güncellendi${old && old.grossMinor !== snap.grossMinor ? ": [
+"rentals.ts:151"
+],
+"${r!.no} düzenlendi": [
+"rentals.ts:152"
+],
+"Rezervasyon onayı": [
+"rentals.ts:157"
+],
+"Yalnız bekleyen (Pending) rezervasyon onaylanır.": [
+"rentals.ts:160"
+],
+"Fiyat hesaplanamadı: ${r!.price.blockers[0]}": [
+"rentals.ts:161"
+],
+"Rezervasyon onaylandı; araç tahsisi kapasite tutuyor.": [
+"rentals.ts:166"
+],
+"Rezervasyon onaylandı; yalnız sınıf: belirli bir araç tahsis edilmedi.": [
+"rentals.ts:166"
+],
+"${r!.no} onaylandı": [
+"rentals.ts:167"
+],
+"Araç atama": [
+"rentals.ts:172"
+],
+"Bu rezervasyona araç atanamaz.": [
+"rentals.ts:175"
+],
+"Seçilen araç rezervasyonun sınıfında değil.": [
+"rentals.ts:177"
+],
+"Araç atandı": [
+"rentals.ts:179"
+],
+"${v.plate} atandı (sınıf rezervasyonu belirli araca bağlandı).": [
+"rentals.ts:179"
+],
+"İptal": [
+"rentals.ts:185"
+],
+"Kiralamaya dönüşmüş rezervasyon iptal edilemez; kiralamayı iptal edin.": [
+"rentals.ts:188"
+],
+"Zaten iptal edilmiş.": [
+"rentals.ts:189"
+],
+" · ${held.length} kaparo tutuluyor: iade için Onay Merkezi'nde iade talebi açın.": [
+"rentals.ts:194"
+],
+"Gelmedi işlemi": [
+"rentals.ts:200"
+],
+"Yalnız onaylı rezervasyon \"gelmedi\" yapılabilir.": [
+"rentals.ts:203"
+],
+"Teslim zamanı henüz gelmedi.": [
+"rentals.ts:204"
+],
+"Müşteri gelmedi; araç tahsisi serbest bırakıldı. Kaparo otomatik gelir sayılmaz.": [
+"rentals.ts:206"
+],
+"Kiralama hazırlama": [
+"rentals.ts:239"
+],
+"Araç seçilen sınıfta değil.": [
+"rentals.ts:242"
+],
+"Hazırlandı": [
+"rentals.ts:281"
+],
+"Kiralama hazırlandı · ${vehicle.plate}${input.reservationId ? ' · rezervasyondan dönüştürüldü' : ''}. Teslim için Teslim Masası kontrolleri gerekir.": [
+"rentals.ts:281"
+],
+"${rental.no} hazırlandı · ${vehicle.plate}": [
+"rentals.ts:282"
+],
+"Kiralamaya dönüştürme": [
+"rentals.ts:288"
+],
+"Yalnız onaylı rezervasyon kiralamaya dönüştürülür.": [
+"rentals.ts:291"
+],
+"Sınıf rezervasyonuna önce belirli bir araç atayın; tek tıkla sınıf kiralaması açılmaz.": [
+"rentals.ts:292"
+],
+"Araç atayın": [
+"rentals.ts:292"
+],
+"Kiralamaya dönüştürüldü": [
+"rentals.ts:317"
+],
+"${rental.no} oluşturuldu. Kaparo ayrıca aktarılır; hesap kalemi Teslim'de doğar.": [
+"rentals.ts:317"
+],
+"Teslim kontrolü": [
+"rentals.ts:323"
+],
+"Kiralama teslime hazır değil.": [
+"rentals.ts:325",
+"rentals.ts:468"
+],
+"Yalnız teslim öncesi (hazırlanan) kiralama iptal edilir. Teslim edilmiş kiralama iade veya istisnai kapanış ile sonlanır.": [
+"rentals.ts:333"
+],
+"Sözleşme düzenleme": [
+"rentals.ts:352"
+],
+"Şablon bulunamadı.": [
+"rentals.ts:356"
+],
+"Şablonda sözleşme numara serisi tanımlı değil (Ayarlar → Sözleşme Dilleri).": [
+"rentals.ts:357"
+],
+"İmzalı sözleşme değiştirilemez; yeni sürüm için önce kiralama koşullarını düzeltin ve yeni sürüm üretin (imza miras alınmaz).": [
+"rentals.ts:362"
+],
+" + ${rental!.drivers.length - 1} ek sürücü": [
+"rentals.ts:379"
+],
+"${fmt(price.grossMinor, price.cur)} (KDV ${price.taxLines[0]?.mode === 'exclusive' ? 'hariç' : 'dahil'})": [
+"rentals.ts:382"
+],
+"Hesaplanmadı": [
+"rentals.ts:382"
+],
+"Sigorta paketi seçilmedi": [
+"rentals.ts:383"
+],
+"Depozito yok": [
+"rentals.ts:384"
+],
+"${contract.no} (sürüm ${contract.version}) üretildi; imza bekliyor.": [
+"rentals.ts:389"
+],
+"Sözleşme imzası": [
+"rentals.ts:396"
+],
+"Önce sözleşme üretin.": [
+"rentals.ts:399"
+],
+"Bu sözleşme sürümü imzaya açık değil.": [
+"rentals.ts:400"
+],
+"İmza atan kişi kiracı adıyla (\"${customer.name}\") aynı olmalı.": [
+"rentals.ts:402"
+],
+"Kiracı adını yazın": [
+"rentals.ts:402"
+],
+"Kiracının sözleşmeyi okuduğunu onaylayın.": [
+"rentals.ts:403"
+],
+"Sözleşme imzalandı": [
+"rentals.ts:411"
+],
+"${contract!.no} yüz yüze (cihaz üzerinde) imzalandı; personel onayı: ${meOf(d).name}.": [
+"rentals.ts:411"
+],
+"${contract!.no} imzalandı": [
+"rentals.ts:412"
+],
+"${c.name}: ${DOC_LABEL[chk.kind] ?? chk.kind} ${chk.state === 'missing' ? 'eksik' : 'geçersiz'}": [
+"rentals.ts:438"
+],
+"Sürücü belgeleri": [
+"rentals.ts:439"
+],
+"Belgeler kontrol edildi (personel beyanı)": [
+"rentals.ts:439"
+],
+"Belgeler geçerli; personel kontrolünü işaretleyin": [
+"rentals.ts:439"
+],
+"Sürücü uygunluğu (yaş, ehliyet yılı)": [
+"rentals.ts:443"
+],
+"Uygun (personel beyanı)": [
+"rentals.ts:443"
+],
+"Uygun; personel onayını işaretleyin": [
+"rentals.ts:443"
+],
+"Araç hazırlığı": [
+"rentals.ts:447"
+],
+"Araç teslime hazır": [
+"rentals.ts:447"
+],
+"Araç uygunluğu": [
+"rentals.ts:450"
+],
+"Çakışan kayıt yok": [
+"rentals.ts:450"
+],
+"Sözleşme ve imza": [
+"rentals.ts:453"
+],
+"Sözleşme üretilmedi": [
+"rentals.ts:453"
+],
+"${c.no} imzalandı": [
+"rentals.ts:453"
+],
+"Depozito kararı": [
+"rentals.ts:457"
+],
+"Muaf (gerekçeli)": [
+"rentals.ts:457"
+],
+"${fmt(r.deposit.required.minor, r.deposit.required.cur)} depozito alınmadı": [
+"rentals.ts:457"
+],
+"Teslim kanıtı (km, yakıt, 4–5 fotoğraf)": [
+"rentals.ts:461"
+],
+"Kilometre mevcut değerden (${v.odometerKm}) küçük olamaz": [
+"rentals.ts:461"
+],
+"Fotoğraf ${ph}/4": [
+"rentals.ts:461"
+],
+"Muafiyet gerekçesi yazın.": [
+"rentals.ts:470"
+],
+"Sağ": [
+"rentals.ts:486"
+],
+"İç mekan": [
+"rentals.ts:486"
+],
+"Kilometre göstergesi": [
+"rentals.ts:486"
+],
+"Fotoğraf ${i + 1}": [
+"rentals.ts:492"
+],
+"Araç teslimi": [
+"rentals.ts:500"
+],
+"Bu kiralama zaten teslim edilmiş veya kapanmış (tek teslim, tek hesap kalemi).": [
+"rentals.ts:503"
+],
+"Teslim yapılamaz: ${blocker.label} — ${blocker.detail}": [
+"rentals.ts:506"
+],
+"Kiralama bedeli · ${r!.price?.days ?? 0} gün (fiyat sürümü ${r!.price?.revisionId})": [
+"rentals.ts:518"
+],
+"${v.plate} müşteriye teslim edildi · ${input.km} km · yakıt ${input.fuel}. Kiralama bedeli hesap kalemi olarak kaydedildi (bir kez).": [
+"rentals.ts:520"
+],
+"Geç iade · ${hours} saat": [
+"rentals.ts:545"
+],
+"Yakıt farkı · ${steps} çeyrek": [
+"rentals.ts:551"
+],
+"Km aşımı · ${over} km": [
+"rentals.ts:556"
+],
+"Araç iadesi": [
+"rentals.ts:562"
+],
+"Yalnız teslim edilmiş kiralama iade alınır.": [
+"rentals.ts:565"
+],
+"İade kilometresi teslim kilometresinden (${startKm}) küçük olamaz.": [
+"rentals.ts:568"
+],
+"İade ${r!.no}": [
+"rentals.ts:581"
+],
+"Geç": [
+"rentals.ts:583"
+],
+"İade kontrolü": [
+"rentals.ts:588"
+],
+"İade kontrolünde yeni bulgu": [
+"rentals.ts:588"
+],
+" Hasar dosyası ${dmg.no} açıldı (ücret otomatik yazılmadı).": [
+"rentals.ts:589"
+],
+"İade alındı": [
+"rentals.ts:591"
+],
+"${v.plate} iade alındı · ${input.km} km · yakıt ${input.fuel}.${fees.length ? ": [
+"rentals.ts:591"
+],
+" : ''}${damageNote} Araç hazır değil: temizlik/hazırlık kontrolü gerekir.": [
+"rentals.ts:591"
+],
+"${r!.no} iade alındı · ${v.plate}": [
+"rentals.ts:592"
+],
+"Operasyonel kapanış": [
+"rentals.ts:598",
+"rentals.ts:604"
+],
+"Yalnız iade alınmış kiralama operasyonel olarak kapatılır.": [
+"rentals.ts:601"
+],
+"Kiralama operasyonel olarak kapandı. Finansal kapanış ayrıdır; borç otomatik silinmez.": [
+"rentals.ts:604"
+],
+"${r!.no} operasyonel kapandı": [
+"rentals.ts:605"
+],
+"Durum: ${({ prepared: 'Hazırlanıyor', delivered: 'Teslim edildi (araç müşteride)', returned: 'İade alındı, kapanmadı', closed: 'Kapandı', cancelled: 'İptal', exception_closed: 'İstisnai kapandı', loss_closed: 'Kayıp kapanışı' } as Record<string, string>)[r.status] ?? r.status}": [
+"rentals.ts:614"
+],
+"Açık bakiye": [
+"rentals.ts:615"
+],
+"${fmt(f.outstandingMinor, f.cur)} ödenmemiş": [
+"rentals.ts:615"
+],
+"Bakiye yok": [
+"rentals.ts:615"
+],
+"Uygulanmamış ödeme": [
+"rentals.ts:616"
+],
+"${fmt(f.unappliedMinor, f.cur)} uygulanmadı": [
+"rentals.ts:616"
+],
+"Depozito çözümü": [
+"rentals.ts:618"
+],
+"${openAppr.length} onay tamamlanmadı": [
+"rentals.ts:620"
+],
+"Sonuçlanmamış iade": [
+"rentals.ts:622"
+],
+"Finansal kapanış": [
+"rentals.ts:627",
+"rentals.ts:634"
+],
+"Finansal kapanış yapılamaz: ${bad.label} — ${bad.detail}": [
+"rentals.ts:632"
+],
+"Finans dosyası kapandı.": [
+"rentals.ts:634"
+],
+"${r!.no} finansal kapandı": [
+"rentals.ts:635"
+],
+"Finansı yeniden açma": [
+"rentals.ts:639"
+],
+"Finans dosyası kapalı değil.": [
+"rentals.ts:641"
+],
+"Yeniden açma gerekçesi yazın.": [
+"rentals.ts:642"
+],
+"Finans yeniden açıldı": [
+"rentals.ts:644"
+],
+"${r!.no} finansı yeniden açıldı": [
+"rentals.ts:645"
+],
+"Yalnız hazırlanan veya teslim edilmiş kiralama uzatılır.": [
+"rentals.ts:652"
+],
+"Yeni iade zamanı mevcut planlanan iadeden sonra olmalı.": [
+"rentals.ts:653"
+],
+"Daha geç bir zaman seçin": [
+"rentals.ts:653"
+],
+"Uzatma gerekçesi yazın.": [
+"rentals.ts:654"
+],
+"Uzatma fiyatı hesaplanamadı: ${next.blockers[0]}": [
+"rentals.ts:658"
+],
+"Uzatma farkı · ${ext.id}": [
+"rentals.ts:664"
+],
+"Uzatıldı": [
+"rentals.ts:667"
+],
+"İade ${fmt(delta, r!.currency)} farkla uzatıldı (${note}). Sigorta ve depozito yeniden değerlendirildi${dep.ok && dep.required.minor !== r!.deposit.required.minor ? ": [
+"rentals.ts:667"
+],
+" : ': değişiklik yok'}.": [
+"rentals.ts:667"
+],
+"${r!.no} uzatıldı": [
+"rentals.ts:668"
+],
+"Araç değişimi": [
+"rentals.ts:673"
+],
+"Yalnız hazırlanan veya teslim edilmiş kiralamada araç değişir.": [
+"rentals.ts:676"
+],
+"Değişim gerekçesi yazın.": [
+"rentals.ts:677"
+],
+"Aynı aracı seçtiniz.": [
+"rentals.ts:678"
+],
+"${nv.plate} hazır değil: ${ready.items.filter((i) => !i.ok && i.severity === 'blocker').map((i) => i.label).join(', ')}.": [
+"rentals.ts:681"
+],
+"Araç değişti": [
+"rentals.ts:692"
+],
+"${old.plate} → ${nv.plate} (${reason}). Sigorta ve fiyat anlaşması korundu; fiyat farkı varsa elle kalem eklenir.": [
+"rentals.ts:692"
+],
+"İstisnai kapanış": [
+"rentals.ts:698",
+"rentals.ts:712"
+],
+"İstisnai kapanış yalnız teslim edilmiş (araç müşteride) kiralama için yapılır.": [
+"rentals.ts:701"
+],
+"Gerekçeyi en az 10 karakterle açıklayın.": [
+"rentals.ts:702"
+],
+"Kayıp kapanışı": [
+"rentals.ts:712"
+],
+"${reason}. Normal iade kanıtı zorlanmadı; borç ve depozito ayrıca çözülür.": [
+"rentals.ts:712"
+],
+"${r!.no} ${kind === 'loss' ? 'kayıp' : 'istisnai'} kapandı": [
+"rentals.ts:713"
+],
+"${r!.no} istisnai kapandı: finans ve depozito çözümü bekliyor.": [
+"rentals.ts:714"
+],
+"Hazırlık kaydı": [
+"rentals.ts:720"
+],
+"${v!.plate} hazırlandı (temizlik kontrolü)": [
+"rentals.ts:724"
+],
+"Yakıt güncelleme": [
+"rentals.ts:727"
+],
+"${v!.plate} yakıt: ${level}": [
+"rentals.ts:732"
+],
+"${partner.name} · ${rental.no} komisyonu doğdu (ödenmedi)": [
+"rentals.ts:745"
+]
+}
