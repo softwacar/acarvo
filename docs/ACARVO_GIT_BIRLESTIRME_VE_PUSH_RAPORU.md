@@ -65,15 +65,33 @@ Başka kullanıcı değişikliği yoktu. **Silmeler yeni main commit'ine dahil e
 
 ## 7. GitHub push
 
-Bu rapor push edilen commit'e dahildir. **Sonuç bu commit'ten sonra doğrulanıp bir sonraki commit'le eklenecektir** (bir commit kendi hash'ini içeremez).
+**Başarılı.** Normal `git push origin main` (force yok): `2f60233..2911fdd`. Doğrulama (`git fetch` + `git ls-remote`):
+
+| | Commit |
+|---|---|
+| Yerel `main` (push anında) | `2911fdd024ceed5db546f57e9d6a72ac0c169fa5` |
+| `origin/main` (GitHub) | `2911fdd024ceed5db546f57e9d6a72ac0c169fa5` |
+| Son frontend commit'i | `136ae12` (birleştirme `3bc8d1f` ile main'de) |
+| Remote'tan önce alınan commit'ler | `d42dbf4`, `2f60233` (korundu) |
+
+`main...origin/main` = 0/0. Push öncesi `origin/main` hâlâ `2f60233` idi (beklenmedik ilerleme yok), branch protection engeli çıkmadı. `2911fdd` bu raporu içerir; bu bölüm push sonrası eklenen sonraki commit'tedir.
 
 ## 8. Worktree'ler
 
-Push sonrası eklenecek.
+Her iki yardımcı worktree **Git'in kendi komutuyla, `--force` olmadan** kaldırıldı (`git worktree remove`):
+
+| Worktree | Kaldırma öncesi kontrol | Sonuç |
+|---|---|---|
+| `acarvo-frontend-v1` (`136ae12`) | temiz; dal main'e birleşmiş; yalnız ignore edilen üretilmiş dosyalar (derleme/test çıktıları, `node_modules`) | **kaldırıldı** |
+| `acarvo-demo-ui` (`9d7fa45`) | dal main'e birleşmiş. 2 izlenmeyen belge (`ACARVO_KAPSAMLI_URUN_ANALIZ_RAPORU.md`, `ACARVO_V1_URUN_MIMARISI_VE_KARARLAR.md`): **main'deki sürümleriyle blob hash'i birebir aynı**; yine de önce `.git/acarvo-yedek-demo-ui-ignored/` içine kopyalandı. İgnore edilen denetim aracı çıktıları (`crawl-*.json/log`, `dialogs-*.json`, `entext*.json`, `langswitch-*.json`, 13 dosya) aynı klasöre yedeklendi. `.auth`, test raporu ve derleme klasörleri yeniden üretilebilir (yedeklenmedi) | **kaldırıldı** |
+
+Kaldırmadan sonra her iki klasörde yalnız hedefleri artık olmayan `node_modules@acarvo*` çalışma alanı bağlantıları (junction) kalmıştı; yalnız bu bağlantılar ve boş klasörler tek tek silindi (içeriği takip eden toplu silme yapılmadı). Test için geçici açtığım `.tmp-old-main` worktree'si de kaldırıldı. **Silinen hiçbir dal yok:** `frontend-prototip-v1` (`9d7fa45`), `frontend-v1-urun-uygulama` (`136ae12`) ve eski tüm dallar duruyor.
 
 ## 9. Masaüstünde kalan klasörler
 
-Push sonrası eklenecek.
+Masaüstünde `acarvo` (ana proje, `main`, `2911fdd`) kaldı. Masaüstünde ayrıca **`Acar`** adlı başka bir klasör var; bu işin parçası değildir, içeriğine bakılmadı ve dokunulmadı.
+
+Korunanlar: `stash@{0}` ve `backup/silinen-6-dosya-2026-10-22` (6 silinmiş dosya), `.git/acarvo-silinen-dosyalar.{txt,patch}`, `.git/acarvo-pre-merge-status.txt`, `.git/acarvo-yedek-demo-ui-ignored/`. **Altı dosya hakkındaki karar hâlâ beklemektedir.**
 
 ## 10. Sonraki geliştirmeler için tek proje çalışma düzeni
 
