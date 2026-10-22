@@ -96,7 +96,10 @@ beforeAll(async () => {
       name: 'Finans EUR',
       currency: 'EUR',
       priority: 10,
-      dayMethod: 'rolling_24h',
+      // Calendar days, not elapsed 24-hour periods: these tests are about finance, and "day after tomorrow 10:00 to the day after
+      // that" must be two days on every date. With elapsed time the week of a clock change has a 49-hour (3-day) window
+      // (see tests/date-robustness.test.ts).
+      dayMethod: 'calendar_day',
       graceMinutes: 0,
       minDays: 1,
       taxMode: 'exclusive',

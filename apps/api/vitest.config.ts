@@ -11,6 +11,8 @@ try {
 export default defineConfig({
   test: {
     // All files share one test database.
+    // ACARVO_TEST_NOW (tests/setup-clock.ts) moves the JavaScript clock to another day; unset, nothing changes.
+    setupFiles: ['./tests/setup-clock.ts'],
     fileParallelism: false,
     testTimeout: 20_000,
     hookTimeout: 30_000,

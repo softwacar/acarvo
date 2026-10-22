@@ -1,10 +1,11 @@
 import { randomUUID } from 'node:crypto'
 import { Writable } from 'node:stream'
-import { CHECKLIST_ITEMS, type RentalDetail, type RentalListResponse, todayIn } from '@acarvo/shared'
+import { CHECKLIST_ITEMS, type RentalDetail, type RentalListResponse, todayIn, wallTimeInstant } from '@acarvo/shared'
 import type { FastifyInstance } from 'fastify'
 import sharp from 'sharp'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { appPool, asApp, asOwner, Client, type DevData, EMAILS, makeApp, ownerPool, resetDatabase } from './helpers'
+import { addDays, nextClockChange } from './test-dates'
 
 // Rentals, handover and return V1 on the test database: synthetic customers, fleet, reservations and rentals
 // (seed/test-rentals.ts): K-000001 active (T75-E-410, SAC), K-000002 overdue (O21-M-985, SAC), K-000003 prepared
@@ -250,8 +251,8 @@ describe('create, convert and the shared vehicle allocation', () => {
       asApp(data.companies.drina, (c) =>
         c.query(
           `insert into reservations (company_id, reservation_no, status, source, customer_id, vehicle_class_id, vehicle_id, pickup_branch_id, return_branch_id, pickup_at, return_at, pickup_timezone, return_timezone, confirmed_at)
-           values ($1, 'R-999001', 'confirmed', 'phone', $2, $3, $4, $5, $5, now() + interval '6 days', now() + interval '8 days', 'Europe/Sarajevo', 'Europe/Sarajevo', now())`,
-          [data.companies.drina, ids.mirza, ids.orta, ids.octavia, ids.sjj],
+           values ($1, 'R-999001', 'confirmed', 'phone', $2, $3, $4, $5, $5, $6::timestamptz, $7::timestamptz, 'Europe/Sarajevo', 'Europe/Sarajevo', now())`,
+          [data.companies.drina, ids.mirza, ids.orta, ids.octavia, ids.sjj, wallTimeInstant(local(6, '09:00'), TZ), wallTimeInstant(local(8, '09:00'), TZ)],
         ),
       ),
     ).rejects.toMatchObject({ constraint: 'reservations_vehicle_rented' })
@@ -647,16 +648,20 @@ describe('return and close', () => {
 
 describe('time zones', () => {
   it('a time that never happened is refused; a doubled time needs a choice and is stored as chosen', async () => {
-    const skipped = await adnan.post('/api/rentals', direct({ vehicleId: ids.duster, vehicleClassId: ids.suv, pickupBranchId: ids.mst, returnBranchId: ids.mst, pickupLocal: '2027-03-27T10:00', returnLocal: '2027-03-28T02:30' }))
+    // The next real clock changes of the company zone, far enough ahead (90+ days) not to meet any rental the other tests place near today.
+    const spring = nextClockChange(TZ, addDays(todayIn(TZ), 90), 'spring')
+    const autumn = nextClockChange(TZ, addDays(todayIn(TZ), 90), 'autumn')
+    const skipped = await adnan.post('/api/rentals', direct({ vehicleId: ids.duster, vehicleClassId: ids.suv, pickupBranchId: ids.mst, returnBranchId: ids.mst, pickupLocal: `${addDays(spring.day, -1)}T10:00`, returnLocal: `${spring.day}T02:30` }))
     expect(skipped.statusCode).toBe(400)
     expect(skipped.json().error.fields.returnLocal).toMatch(/yaşanmadı/)
-    const body = direct({ vehicleId: ids.duster, vehicleClassId: ids.suv, pickupBranchId: ids.mst, returnBranchId: ids.mst, pickupLocal: '2026-10-24T10:00', returnLocal: '2026-10-25T02:30' })
+    const body = direct({ vehicleId: ids.duster, vehicleClassId: ids.suv, pickupBranchId: ids.mst, returnBranchId: ids.mst, pickupLocal: `${addDays(autumn.day, -1)}T10:00`, returnLocal: `${autumn.day}T02:30` })
     const doubled = await adnan.post('/api/rentals', body)
     expect(doubled.statusCode).toBe(400)
     expect(doubled.json().error.code).toBe('AMBIGUOUS_TIME')
     const later = await adnan.post('/api/rentals', { ...body, returnChoice: 'later' })
     expect(later.statusCode, later.body).toBe(201)
-    expect(later.json().plannedReturn).toMatchObject({ at: '2026-10-25T01:30:00.000Z', local: '2026-10-25T02:30', timeZone: 'Europe/Sarajevo' })
+    // 02:30 happens twice; "later" is the one after the clocks went back (01:30 UTC), "earlier" would be 00:30 UTC
+    expect(later.json().plannedReturn).toMatchObject({ at: `${autumn.day}T01:30:00.000Z`, local: `${autumn.day}T02:30`, timeZone: 'Europe/Sarajevo' })
   })
 })
 

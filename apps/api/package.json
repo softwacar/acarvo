@@ -11,6 +11,7 @@
     "db:migrate:test": "tsx --env-file=../../.env src/db/migrate.ts --test",
     "db:seed": "tsx --env-file=../../.env seed/seed.ts",
     "test": "vitest run",
+    "test:dates": "node scripts/test-dates.mjs",
     "typecheck": "tsc --noEmit",
     "keys:check": "tsx --env-file=../../.env src/db/customer-keys.ts check",
     "keys:reencrypt": "tsx --env-file=../../.env src/db/customer-keys.ts reencrypt"
